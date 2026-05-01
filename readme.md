@@ -1,9 +1,8 @@
-# 🧠 Consistify - A Habit Tracker
+# Consistify - A Habit Tracker
 
-A modern, analytics-driven Habit Tracking web application built with Django.  
-It helps users build consistency, track daily habits, and analyze their performance through smart metrics, streaks, and visual insights.
+A modern, analytics-driven Habit Tracking web application built with Django. It helps users build consistency, track daily habits, and analyze their performance through smart metrics, streaks, and visual insights.
 
----
+<br>
 
 ## 🚀 Project Overview
 
@@ -16,7 +15,8 @@ The system focuses on:
 - Visual progress tracking
 - Discipline measurement
 
----
+
+<br>
 
 ## ✨ Key Features
 
@@ -24,7 +24,8 @@ The system focuses on:
 - User registration and login system
 - Secure user-specific habit management
 
----
+
+<br>
 
 ### 🧩 Habit Management
 Users can create multiple habits with different tracking types:
@@ -44,13 +45,15 @@ Users can create multiple habits with different tracking types:
 - Based on:
   - Current value / Target value → percentage completion
 
----
+
+<br>
 
 ### 📊 Unified Tracking System
 - All habits are tracked using a **single field: `completion_percentage`**
 - All performance metrics are derived from this unified model
 
----
+
+<br>
 
 ### 📈 Analytics & Insights
 
@@ -76,26 +79,8 @@ Users can create multiple habits with different tracking types:
 - Completion trends over time
 - Missed vs completed analysis
 
----
 
-### 🗂 Organization System
-- Categories:
-  - Health
-  - Study
-  - Work
-  - Personal
-
-- Tags support:
-  - #morning
-  - #focus
-  - #fitness
-
-- Priority levels:
-  - High
-  - Medium
-  - Low
-
----
+<br>
 
 ### 📱 UI/UX Features
 - Fully responsive design (mobile-friendly)
@@ -104,7 +89,8 @@ Users can create multiple habits with different tracking types:
 - Drag & drop habit ordering
 - Progress visualization using charts and graphs
 
----
+
+<br>
 
 ### 📊 Habit Detail Page
 Each habit includes:
@@ -114,7 +100,8 @@ Each habit includes:
 - Consistency score
 - Performance charts (trend visualization)
 
----
+
+<br>
 
 ### 🌍 Global Dashboard
 - Overview of all habits
