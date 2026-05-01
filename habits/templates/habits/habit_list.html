@@ -28,16 +28,7 @@
         {% if scheduled_habits %}
             <ul class="habit-list">
                 {% for item in scheduled_habits %}
-                    <li class="habit-row" style="--i: {{ forloop.counter0 }};">
-                        <form method="post" action="{% url 'habits:toggle_completion' item.habit.id %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="date" value="{{ target_date|date:'Y-m-d' }}">
-                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <label class="checkbox">
-                                <input type="checkbox" {% if item.completed %}checked{% endif %} onchange="this.form.submit()">
-                                <span></span>
-                            </label>
-                        </form>
+                    <li class="habit-row progress-row" style="--i: {{ forloop.counter0 }};">
                         <div class="habit-info">
                             <a class="habit-name" href="{% url 'habits:habit_detail' item.habit.id %}">{{ item.habit.name }}</a>
                             <p class="habit-meta">{{ item.habit.schedule_summary }}</p>
@@ -49,7 +40,37 @@
                                 {% endfor %}
                             </div>
                         </div>
-                        <a class="link" href="{% url 'habits:habit_edit' item.habit.id %}">Edit</a>
+                        <div class="habit-progress">
+                            <form method="post" action="{% url 'habits:update_progress' item.habit.id %}" class="progress-form" data-progress-form data-habit-type="{{ item.habit.habit_type }}" data-target-value="{{ item.habit.target_value|default_if_none:0|floatformat:0 }}" data-unit="{{ item.habit.unit }}">
+                                {% csrf_token %}
+                                <input type="hidden" name="date" value="{{ target_date|date:'Y-m-d' }}">
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <div class="progress-visual">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" data-progress-fill style="width: {{ item.completion_percentage|floatformat:0 }}%;"></div>
+                                    </div>
+                                    <span class="progress-percent" data-progress-percent>{{ item.completion_percentage|floatformat:0 }}%</span>
+                                </div>
+                                <div class="progress-controls">
+                                    {% if item.habit.habit_type == "binary" %}
+                                        <label class="checkbox">
+                                            <input type="checkbox" name="completed" value="1" {% if item.completed %}checked{% endif %} data-progress-checkbox>
+                                            <span></span>
+                                        </label>
+                                    {% elif item.habit.habit_type == "partial" %}
+                                        <input type="range" class="progress-range" min="0" max="100" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-range>
+                                        <input type="number" class="progress-input" name="completion_percentage" min="0" max="100" step="1" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-input>
+                                    {% else %}
+                                        <button type="button" class="step-button" data-step="-1" aria-label="Decrease value">-</button>
+                                        <input type="number" class="progress-input" name="current_value" min="0" step="1" {% if item.habit.target_value %}max="{{ item.habit.target_value|floatformat:0 }}"{% endif %} value="{{ item.raw_value|default_if_none:0|floatformat:0 }}" data-quant-input>
+                                        <button type="button" class="step-button" data-step="1" aria-label="Increase value">+</button>
+                                        <div class="progress-caption inline" data-progress-caption>
+                                            {{ item.raw_value|default_if_none:0|floatformat:0 }} / {{ item.habit.target_value|default_if_none:0|floatformat:0 }} {{ item.habit.unit }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </form>
+                        </div>
                     </li>
                 {% endfor %}
             </ul>

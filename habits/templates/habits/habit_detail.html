@@ -38,6 +38,20 @@
                 <span class="stat-value">{{ stats.completion_rate }}%</span>
             </div>
             <div class="stat">
+                <span class="stat-label">Avg completion</span>
+                <span class="stat-value">{{ stats.average_completion|floatformat:1 }}%</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Avg daily value</span>
+                <span class="stat-value">
+                    {% if habit.habit_type == "quantitative" %}
+                        {{ stats.average_value|floatformat:0 }} {{ habit.unit }}
+                    {% else %}
+                        {{ stats.average_value|floatformat:1 }}%
+                    {% endif %}
+                </span>
+            </div>
+            <div class="stat">
                 <span class="stat-label">Next due</span>
                 <span class="stat-value">{% if next_due %}{{ next_due|date:"M d" }}{% else %}--{% endif %}</span>
             </div>
@@ -47,13 +61,7 @@
             </div>
         </div>
         {% if is_scheduled_today %}
-            <form method="post" action="{% url 'habits:toggle_completion' habit.id %}" class="inline-form">
-                {% csrf_token %}
-                <input type="hidden" name="date" value="{{ today|date:'Y-m-d' }}">
-                <button class="btn primary" type="submit">
-                    {% if today_completed %}Mark as not done today{% else %}Mark as done today{% endif %}
-                </button>
-            </form>
+            <p class="help">Update today's progress from the Today view.</p>
         {% endif %}
     </div>
 
@@ -67,7 +75,10 @@
                 {% for item in history %}
                     <li class="history-item {% if item.completed %}done{% endif %}">
                         <span class="history-date">{{ item.date|date:"M d" }}</span>
-                        <span class="history-status">{% if item.completed %}Done{% else %}Missed{% endif %}</span>
+                        <span class="history-status">
+                            {% if item.completed %}Done{% else %}Missed{% endif %}
+                            <span class="history-percent">{{ item.completion_percentage|floatformat:0 }}%</span>
+                        </span>
                     </li>
                 {% endfor %}
             </ul>
@@ -92,9 +103,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     const chartLabels = {{ chart_labels|safe }};
-    const chartCompleted = {{ chart_completed|safe }};
+    const chartPercentages = {{ chart_percentages|safe }};
     if (chartLabels.length && window.ConsistifyCharts) {
-        window.ConsistifyCharts.renderCompletionLine("habitChart", chartLabels, chartCompleted);
+        window.ConsistifyCharts.renderRateLine("habitChart", chartLabels, chartPercentages);
     }
 </script>
 {% endblock %}

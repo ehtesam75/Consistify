@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib import messages
 from django.contrib.auth import login
@@ -23,7 +24,7 @@ from .services import (
     calculate_streaks,
     compare_habits,
     completion_stats,
-    get_completion_map,
+    get_completion_maps,
     get_next_scheduled_date,
     habit_performance_metrics,
     iter_scheduled_dates,
@@ -45,20 +46,33 @@ def habit_list(request):
     target_date = _get_date_from_request(request)
     habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
     completions = HabitCompletion.objects.filter(habit__in=habits, date=target_date)
-    completion_map = {completion.habit_id: completion.completed for completion in completions}
+    completion_map = {completion.habit_id: completion for completion in completions}
 
     scheduled_habits = []
     for habit in habits:
         if habit.is_scheduled_on(target_date):
+            completion = completion_map.get(habit.id)
+            completion_percentage = (
+                float(completion.completion_percentage) if completion else 0.0
+            )
+            raw_value = None
+            if completion and completion.raw_value is not None:
+                raw_value = float(completion.raw_value)
+                if habit.habit_type == Habit.HABIT_QUANTITATIVE:
+                    raw_value = int(raw_value)
             scheduled_habits.append(
                 {
                     "habit": habit,
-                    "completed": completion_map.get(habit.id, False),
+                    "completed": completion_percentage >= 100,
+                    "completion_percentage": completion_percentage,
+                    "raw_value": raw_value,
                     "tags": habit.get_tags(),
                 }
             )
 
-    completed_count = sum(1 for item in scheduled_habits if item["completed"])
+    completed_count = sum(
+        1 for item in scheduled_habits if item["completion_percentage"] >= 100
+    )
 
     context = {
         "target_date": target_date,
@@ -78,22 +92,16 @@ def dashboard(request):
     today = timezone.localdate()
     window_start = today - timedelta(days=29)
     habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
-    completions = HabitCompletion.objects.filter(
-        habit__in=habits,
-        date__range=(window_start, today),
-        completed=True,
-    )
-    completion_by_date = {}
-    for completion in completions:
-        completion_by_date[completion.date] = completion_by_date.get(completion.date, 0) + 1
 
     habit_cards = []
     total_scheduled = 0
+    total_completion = 0.0
     total_completed = 0
 
     for habit in habits:
         metrics = habit_performance_metrics(habit, window_start, today)
         total_scheduled += metrics["scheduled_total"]
+        total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
         total_completed += metrics["completed_total"]
         habit_cards.append(
             {
@@ -105,9 +113,7 @@ def dashboard(request):
             }
         )
 
-    overall_rate = (
-        round((total_completed / total_scheduled) * 100, 1) if total_scheduled else 0.0
-    )
+    overall_rate = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
     overall_consistency = calculate_overall_consistency(habits, window_start, today)
 
     doing_well = [card for card in habit_cards if card["scheduled"] and card["rate"] >= 80]
@@ -117,14 +123,23 @@ def dashboard(request):
     chart_start = today - timedelta(days=chart_days - 1)
     chart_labels = []
     chart_rates = []
+    recent_completions = HabitCompletion.objects.filter(
+        habit__in=habits,
+        date__range=(chart_start, today),
+    )
+    completion_map = {
+        (completion.habit_id, completion.date): float(completion.completion_percentage or 0)
+        for completion in recent_completions
+    }
 
     for offset in range(chart_days):
         current_day = chart_start + timedelta(days=offset)
-        scheduled_count = sum(1 for habit in habits if habit.is_scheduled_on(current_day))
-        completed_count = completion_by_date.get(current_day, 0)
-        rate = (
-            round((completed_count / scheduled_count) * 100, 1) if scheduled_count else 0.0
-        )
+        daily_values = []
+        for habit in habits:
+            if not habit.is_scheduled_on(current_day):
+                continue
+            daily_values.append(completion_map.get((habit.id, current_day), 0.0))
+        rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else 0.0
         chart_labels.append(current_day.strftime("%b %d"))
         chart_rates.append(rate)
 
@@ -152,28 +167,54 @@ def habit_detail(request, habit_id):
     history_dates = list(iter_scheduled_dates(habit, history_start, today))
     recent_dates = history_dates[-30:]
 
-    completion_map = get_completion_map(habit, history_start, today)
+    completion_map, value_map = get_completion_maps(habit, history_start, today)
     history = [
         {
             "date": scheduled_date,
-            "completed": completion_map.get(scheduled_date, False),
+            "completion_percentage": completion_map.get(scheduled_date, 0),
+            "completed": completion_map.get(scheduled_date, 0) >= 100,
         }
         for scheduled_date in recent_dates
     ]
 
     window_start = today - timedelta(days=29)
-    window_completion_map = {date: True for date in completion_map if date >= window_start}
-    stats = completion_stats(habit, window_start, today, window_completion_map)
-    detailed_metrics = habit_performance_metrics(habit, window_start, today, window_completion_map)
+    window_completion_map = {
+        date: value for date, value in completion_map.items() if date >= window_start
+    }
+    window_value_map = {
+        date: value for date, value in value_map.items() if date >= window_start
+    }
+    stats = completion_stats(
+        habit,
+        window_start,
+        today,
+        window_completion_map,
+        window_value_map,
+    )
+    detailed_metrics = habit_performance_metrics(
+        habit,
+        window_start,
+        today,
+        window_completion_map,
+        window_value_map,
+    )
     current_streak, max_streak = calculate_streaks(habit, today)
 
     today_completion = HabitCompletion.objects.filter(habit=habit, date=today).first()
-    today_completed = today_completion.completed if today_completion else False
+    today_completion_percentage = (
+        float(today_completion.completion_percentage) if today_completion else 0.0
+    )
+    today_raw_value = None
+    if today_completion and today_completion.raw_value is not None:
+        today_raw_value = float(today_completion.raw_value)
+        if habit.habit_type == Habit.HABIT_QUANTITATIVE:
+            today_raw_value = int(today_raw_value)
+    today_completed = today_completion_percentage >= 100
     is_scheduled_today = habit.is_scheduled_on(today)
     next_due = get_next_scheduled_date(habit, today)
 
     chart_labels = json.dumps([date.strftime("%b %d") for date in recent_dates])
-    chart_completed = json.dumps([1 if completion_map.get(date) else 0 for date in recent_dates])
+    chart_percentages = json.dumps([completion_map.get(date, 0) for date in recent_dates])
 
     context = {
         "habit": habit,
@@ -184,10 +225,12 @@ def habit_detail(request, habit_id):
         "max_streak": max_streak,
         "today": today,
         "today_completed": today_completed,
+        "today_completion_percentage": today_completion_percentage,
+        "today_raw_value": today_raw_value,
         "is_scheduled_today": is_scheduled_today,
         "next_due": next_due,
         "chart_labels": chart_labels,
-        "chart_completed": chart_completed,
+        "chart_percentages": chart_percentages,
         "tags": habit.get_tags(),
     }
     return render(request, "habits/habit_detail.html", context)
@@ -249,7 +292,7 @@ def habit_edit(request, habit_id):
 
 @login_required
 @require_POST
-def toggle_completion(request, habit_id):
+def update_progress(request, habit_id):
     habit = get_object_or_404(Habit, id=habit_id, user=request.user)
     target_date = _get_date_from_request(request)
 
@@ -257,15 +300,38 @@ def toggle_completion(request, habit_id):
         messages.error(request, "This habit is not scheduled for that day.")
         return redirect("habits:today")
 
-    completion, created = HabitCompletion.objects.get_or_create(
+    completion, _ = HabitCompletion.objects.get_or_create(
         habit=habit,
         date=target_date,
-        defaults={"completed": True},
     )
 
-    if not created:
-        completion.completed = not completion.completed
-        completion.save(update_fields=["completed"])
+    completion_percentage = Decimal("0")
+    raw_value = None
+
+    if habit.habit_type == Habit.HABIT_BINARY:
+        is_done = request.POST.get("completed") is not None
+        completion_percentage = Decimal("100") if is_done else Decimal("0")
+        raw_value = completion_percentage
+    elif habit.habit_type == Habit.HABIT_PARTIAL:
+        completion_percentage = _clamp_percentage(request.POST.get("completion_percentage"))
+        raw_value = completion_percentage
+    else:
+        if not habit.target_value or habit.target_value <= 0:
+            messages.error(request, "Add a target value before logging progress.")
+            next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
+            return redirect(next_url or reverse("habits:today"))
+        target_value = habit.target_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        raw_value = _parse_decimal(request.POST.get("current_value")) or Decimal("0")
+        raw_value = raw_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        if raw_value < 0:
+            raw_value = Decimal("0")
+        if raw_value > target_value:
+            raw_value = target_value
+        completion_percentage = _percentage_from_value(raw_value, target_value)
+
+    completion.completion_percentage = completion_percentage
+    completion.raw_value = raw_value
+    completion.save(update_fields=["completion_percentage", "raw_value"])
 
     next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
     return redirect(next_url or reverse("habits:today"))
@@ -364,19 +430,19 @@ def profile(request):
 
     total_habits = len(habits)
     total_scheduled = 0
+    total_completion = 0.0
     total_completed = 0
     best_streak = 0
 
     for habit in habits:
         metrics = habit_performance_metrics(habit, start_date, today)
         total_scheduled += metrics["scheduled_total"]
+        total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
         total_completed += metrics["completed_total"]
         if metrics["max_streak"] > best_streak:
             best_streak = metrics["max_streak"]
 
-    overall_completion = (
-        round((total_completed / total_scheduled) * 100, 1) if total_scheduled else 0.0
-    )
+    overall_completion = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
     consistency_score = calculate_overall_consistency(habits, start_date, today)
 
     monthly_reports = build_monthly_reports(habits, months=12, today=today)
@@ -410,6 +476,35 @@ def signup(request):
         form = UserCreationForm()
 
     return render(request, "registration/signup.html", {"form": form})
+
+
+def _parse_decimal(raw_value):
+    try:
+        return Decimal(str(raw_value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _clamp_percentage(raw_value):
+    value = _parse_decimal(raw_value)
+    if value is None:
+        return Decimal("0")
+    if value < 0:
+        value = Decimal("0")
+    if value > 100:
+        value = Decimal("100")
+    return value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+
+
+def _percentage_from_value(current_value, target_value):
+    if not target_value or target_value <= 0:
+        return Decimal("0")
+    percentage = (current_value / target_value) * Decimal("100")
+    if percentage < 0:
+        percentage = Decimal("0")
+    if percentage > 100:
+        percentage = Decimal("100")
+    return percentage.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _get_date_from_request(request):

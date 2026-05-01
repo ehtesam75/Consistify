@@ -1,3 +1,5 @@
+from decimal import Decimal, ROUND_HALF_UP
+
 from django import forms
 
 from .models import Habit
@@ -27,12 +29,30 @@ class HabitForm(forms.ModelForm):
         ),
         help_text="Use comma-separated tags.",
     )
+    target_value = forms.DecimalField(
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(
+            attrs={"class": "input", "min": 0, "step": "1"}
+        ),
+        help_text="Only used for quantitative habits.",
+    )
+    unit = forms.CharField(
+        required=False,
+        widget=forms.TextInput(
+            attrs={"class": "input", "placeholder": "glasses, hours, steps"}
+        ),
+        help_text="Only used for quantitative habits.",
+    )
 
     class Meta:
         model = Habit
         fields = [
             "name",
             "description",
+            "habit_type",
+            "target_value",
+            "unit",
             "schedule_type",
             "category",
             "priority",
@@ -45,6 +65,7 @@ class HabitForm(forms.ModelForm):
         widgets = {
             "name": forms.TextInput(attrs={"class": "input"}),
             "description": forms.Textarea(attrs={"class": "textarea", "rows": 4}),
+            "habit_type": forms.Select(attrs={"class": "select"}),
             "schedule_type": forms.Select(attrs={"class": "select"}),
             "category": forms.Select(attrs={"class": "select"}),
             "priority": forms.Select(attrs={"class": "select"}),
@@ -57,6 +78,8 @@ class HabitForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["interval_days"].required = False
         self.fields["weekly_interval"].required = False
+        self.fields["target_value"].required = False
+        self.fields["unit"].required = False
         if self.instance and self.instance.days_of_week:
             self.initial["days_of_week"] = self.instance.days_of_week.split(",")
         if self.instance and self.instance.tags:
@@ -70,6 +93,9 @@ class HabitForm(forms.ModelForm):
         interval_days = cleaned_data.get("interval_days") or 0
         weekly_interval = cleaned_data.get("weekly_interval") or 0
         days_of_week = cleaned_data.get("days_of_week") or []
+        habit_type = cleaned_data.get("habit_type")
+        target_value = cleaned_data.get("target_value")
+        unit = (cleaned_data.get("unit") or "").strip()
 
         if schedule_type == Habit.SCHEDULE_INTERVAL and interval_days < 1:
             self.add_error("interval_days", "Interval must be at least 1 day.")
@@ -80,6 +106,17 @@ class HabitForm(forms.ModelForm):
         if schedule_type == Habit.SCHEDULE_DAYS and not days_of_week:
             self.add_error("days_of_week", "Select at least one day.")
 
+        if habit_type == Habit.HABIT_QUANTITATIVE:
+            if not target_value or target_value <= 0:
+                self.add_error("target_value", "Target value must be greater than 0.")
+            if not unit:
+                self.add_error("unit", "Unit is required for quantitative habits.")
+            if target_value:
+                target_value = target_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        else:
+            target_value = None
+            unit = ""
+
         raw_tags = cleaned_data.get("tags", "")
         normalized_tags = []
         if raw_tags:
@@ -88,6 +125,8 @@ class HabitForm(forms.ModelForm):
                 if tag:
                     normalized_tags.append(tag)
         cleaned_data["tags"] = ",".join(dict.fromkeys(normalized_tags))
+        cleaned_data["unit"] = unit
+        cleaned_data["target_value"] = target_value
 
         cleaned_data["days_of_week"] = ",".join(days_of_week) if days_of_week else ""
         return cleaned_data
@@ -102,6 +141,9 @@ class HabitForm(forms.ModelForm):
         if schedule_type != Habit.SCHEDULE_DAYS:
             habit.days_of_week = ""
         habit.tags = self.cleaned_data.get("tags", "")
+        if habit.habit_type != Habit.HABIT_QUANTITATIVE:
+            habit.target_value = None
+            habit.unit = ""
 
         if commit:
             habit.save()

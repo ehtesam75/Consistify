@@ -38,6 +38,32 @@
 
         <div class="form-panel">
             <div class="panel-header">
+                <h2 class="panel-title">Tracking type</h2>
+                <p class="panel-subtitle">Choose how progress is measured.</p>
+            </div>
+            <div class="field">
+                <label for="{{ form.habit_type.id_for_label }}">Habit type</label>
+                {{ form.habit_type }}
+                {{ form.habit_type.errors }}
+            </div>
+            <div class="field-row" data-field="quantitative">
+                <div class="field">
+                    <label for="{{ form.target_value.id_for_label }}">Target value</label>
+                    {{ form.target_value }}
+                    <p class="help">Set the goal amount for quantitative habits.</p>
+                    {{ form.target_value.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.unit.id_for_label }}">Unit</label>
+                    {{ form.unit }}
+                    <p class="help">Examples: glasses, hours, steps.</p>
+                    {{ form.unit.errors }}
+                </div>
+            </div>
+        </div>
+
+        <div class="form-panel">
+            <div class="panel-header">
                 <h2 class="panel-title">Schedule and focus</h2>
                 <p class="panel-subtitle">When this habit appears and how important it is.</p>
             </div>
@@ -116,6 +142,8 @@
     const weeklyField = document.querySelector("[data-field='weekly']");
     const intervalField = document.querySelector("[data-field='interval']");
     const daysField = document.querySelector("[data-field='days']");
+    const habitTypeSelect = document.getElementById("id_habit_type");
+    const quantitativeFields = document.querySelectorAll("[data-field='quantitative']");
 
     function updateScheduleFields() {
         if (!scheduleSelect) {
@@ -130,6 +158,21 @@
     if (scheduleSelect) {
         scheduleSelect.addEventListener("change", updateScheduleFields);
         updateScheduleFields();
+    }
+
+    function updateHabitTypeFields() {
+        if (!habitTypeSelect) {
+            return;
+        }
+        const showQuant = habitTypeSelect.value === "quantitative";
+        quantitativeFields.forEach((field) => {
+            field.style.display = showQuant ? "grid" : "none";
+        });
+    }
+
+    if (habitTypeSelect) {
+        habitTypeSelect.addEventListener("change", updateHabitTypeFields);
+        updateHabitTypeFields();
     }
 </script>
 {% endblock %}

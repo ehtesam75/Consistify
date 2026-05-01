@@ -1,9 +1,21 @@
+from decimal import Decimal
+
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
 
 class Habit(models.Model):
+    HABIT_BINARY = "binary"
+    HABIT_PARTIAL = "partial"
+    HABIT_QUANTITATIVE = "quantitative"
+    HABIT_TYPE_CHOICES = [
+        (HABIT_BINARY, "Binary (Done / Not Done)"),
+        (HABIT_PARTIAL, "Partial (0-100%)"),
+        (HABIT_QUANTITATIVE, "Quantitative (Target value)"),
+    ]
+
     SCHEDULE_DAILY = "daily"
     SCHEDULE_WEEKLY = "weekly"
     SCHEDULE_DAYS = "days"
@@ -39,6 +51,18 @@ class Habit(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
+    habit_type = models.CharField(
+        max_length=14,
+        choices=HABIT_TYPE_CHOICES,
+        default=HABIT_BINARY,
+    )
+    target_value = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    unit = models.CharField(max_length=24, blank=True)
     schedule_type = models.CharField(max_length=12, choices=SCHEDULE_CHOICES)
     category = models.CharField(
         max_length=12,
@@ -124,7 +148,18 @@ class Habit(models.Model):
 class HabitCompletion(models.Model):
     habit = models.ForeignKey(Habit, on_delete=models.CASCADE)
     date = models.DateField()
-    completed = models.BooleanField(default=True)
+    completion_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0"),
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    raw_value = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -136,3 +171,7 @@ class HabitCompletion(models.Model):
 
     def __str__(self):
         return f"{self.habit.name} - {self.date}"
+
+    @property
+    def is_completed(self):
+        return self.completion_percentage == Decimal("100")

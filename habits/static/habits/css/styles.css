@@ -423,6 +423,118 @@ main > section + section {
     background: var(--surface-alt);
 }
 
+.progress-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+    align-items: center;
+    gap: 1.2rem;
+}
+
+.habit-progress {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.habit-progress .link {
+    align-self: flex-end;
+}
+
+.progress-form {
+    display: grid;
+    gap: 0.45rem;
+    width: 100%;
+}
+
+.detail-progress {
+    margin-top: 1rem;
+}
+
+.progress-visual {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(47, 111, 109, 0.12);
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: var(--teal);
+    transition: width 0.2s ease;
+}
+
+.progress-percent {
+    min-width: 42px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 0.82rem;
+}
+
+.progress-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    justify-content: flex-end;
+}
+
+.progress-range {
+    width: 110px;
+    accent-color: var(--accent);
+}
+
+.progress-input {
+    width: 60px;
+    padding: 0.4rem 0.55rem;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.progress-input:focus {
+    outline: 2px solid rgba(176, 122, 55, 0.2);
+    border-color: var(--accent);
+}
+
+.step-button {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--ink);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.step-button:hover {
+    box-shadow: var(--shadow-soft);
+}
+
+.progress-caption {
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+}
+
+.progress-caption.inline {
+    width: 100%;
+    text-align: right;
+}
+
 .habit-row.compact {
     padding: 0.6rem 0.9rem;
 }
@@ -642,6 +754,12 @@ main > section + section {
     display: block;
     font-size: 0.85rem;
     color: var(--ink-soft);
+}
+
+.history-percent {
+    margin-left: 0.35rem;
+    font-weight: 600;
+    color: var(--teal);
 }
 
 .chart-wrap {
@@ -969,6 +1087,16 @@ main > section + section {
     .table-row {
         grid-template-columns: 1fr;
         gap: 0.2rem;
+    }
+
+    .habit-progress {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .progress-row {
+        grid-template-columns: 1fr;
+        align-items: flex-start;
     }
 
     .habit-form-grid {

@@ -54,13 +54,25 @@ def iter_scheduled_dates(habit, start_date, end_date):
     return []
 
 
-def get_completion_map(habit, start_date, end_date):
+def get_completion_maps(habit, start_date, end_date):
     completions = HabitCompletion.objects.filter(
         habit=habit,
         date__range=(start_date, end_date),
-        completed=True,
     )
-    return {completion.date: True for completion in completions}
+    completion_map = {}
+    value_map = {}
+    for completion in completions:
+        completion_map[completion.date] = float(completion.completion_percentage or 0)
+        if completion.raw_value is not None:
+            if habit.habit_type == Habit.HABIT_QUANTITATIVE:
+                value_map[completion.date] = int(completion.raw_value)
+            else:
+                value_map[completion.date] = float(completion.raw_value)
+    return completion_map, value_map
+
+
+def _is_completed(percentage_value):
+    return percentage_value >= 100
 
 
 def _streak_metrics(scheduled_dates, completion_map):
@@ -70,7 +82,7 @@ def _streak_metrics(scheduled_dates, completion_map):
     completed_total = 0
 
     for scheduled_date in scheduled_dates:
-        if completion_map.get(scheduled_date):
+        if _is_completed(completion_map.get(scheduled_date, 0)):
             completed_total += 1
             current_run += 1
             if current_run > max_streak:
@@ -82,7 +94,7 @@ def _streak_metrics(scheduled_dates, completion_map):
 
     current_streak = 0
     for scheduled_date in reversed(scheduled_dates):
-        if completion_map.get(scheduled_date):
+        if _is_completed(completion_map.get(scheduled_date, 0)):
             current_streak += 1
         else:
             break
@@ -95,22 +107,16 @@ def _streak_metrics(scheduled_dates, completion_map):
     }
 
 
-def _consistency_score(completion_ratio, streak_stability, missed_ratio):
-    # Weighted blend of success rate, streak stability, and missed-session penalty.
-    raw_score = (
-        completion_ratio * 0.6
-        + streak_stability * 0.25
-        + (1 - missed_ratio) * 0.15
-    )
-    return round(raw_score * 100, 1)
+def _consistency_score(completed_ratio):
+    return round(completed_ratio * 100, 1)
 
 
-def habit_performance_metrics(habit, start_date, end_date, completion_map=None):
+def habit_performance_metrics(habit, start_date, end_date, completion_map=None, value_map=None):
     scheduled_dates = list(iter_scheduled_dates(habit, start_date, end_date))
     scheduled_total = len(scheduled_dates)
 
-    if completion_map is None:
-        completion_map = get_completion_map(habit, start_date, end_date)
+    if completion_map is None or value_map is None:
+        completion_map, value_map = get_completion_maps(habit, start_date, end_date)
 
     if scheduled_total == 0:
         return {
@@ -122,26 +128,32 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None):
             "max_streak": 0,
             "streak_stability": 0.0,
             "consistency_score": 0.0,
+            "average_completion": 0.0,
+            "average_value": 0.0,
         }
 
     streaks = _streak_metrics(scheduled_dates, completion_map)
     completed_total = streaks["completed_total"]
     missed_total = scheduled_total - completed_total
-    completion_ratio = completed_total / scheduled_total
-    completion_rate = round(completion_ratio * 100, 1)
+    total_completion = 0.0
+    total_value = 0.0
+    for scheduled_date in scheduled_dates:
+        total_completion += completion_map.get(scheduled_date, 0) or 0
+        total_value += value_map.get(scheduled_date, 0) or 0
+    average_completion = round(total_completion / scheduled_total, 1)
+    completion_rate = average_completion
+    if habit.habit_type == Habit.HABIT_QUANTITATIVE:
+        average_value = round(total_value / scheduled_total)
+    else:
+        average_value = round(total_value / scheduled_total, 2)
 
     if scheduled_total == 1:
         streak_stability = 1.0 if completed_total else 0.0
     else:
         break_ratio = streaks["streak_breaks"] / (scheduled_total - 1)
         streak_stability = max(0.0, round(1 - break_ratio, 4))
-    missed_ratio = missed_total / scheduled_total
-
-    consistency_score = _consistency_score(
-        completion_ratio=completion_ratio,
-        streak_stability=streak_stability,
-        missed_ratio=missed_ratio,
-    )
+    completed_ratio = completed_total / scheduled_total
+    consistency_score = _consistency_score(completed_ratio=completed_ratio)
 
     return {
         "scheduled_total": scheduled_total,
@@ -152,6 +164,8 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None):
         "max_streak": streaks["max_streak"],
         "streak_stability": round(streak_stability * 100, 1),
         "consistency_score": consistency_score,
+        "average_completion": average_completion,
+        "average_value": average_value,
     }
 
 
@@ -163,12 +177,20 @@ def calculate_streaks(habit, up_to_date=None):
     return metrics["current_streak"], metrics["max_streak"]
 
 
-def completion_stats(habit, start_date, end_date, completion_map=None):
-    metrics = habit_performance_metrics(habit, start_date, end_date, completion_map)
+def completion_stats(habit, start_date, end_date, completion_map=None, value_map=None):
+    metrics = habit_performance_metrics(
+        habit,
+        start_date,
+        end_date,
+        completion_map,
+        value_map,
+    )
     return {
         "scheduled_total": metrics["scheduled_total"],
         "completed_total": metrics["completed_total"],
         "completion_rate": metrics["completion_rate"],
+        "average_completion": metrics["average_completion"],
+        "average_value": metrics["average_value"],
     }
 
 
@@ -210,6 +232,7 @@ def compare_habits(habit_a, habit_b, start_date, end_date):
 def _build_period_snapshot(habits, start_date, end_date, label):
     total_scheduled = 0
     total_completed = 0
+    total_completion = 0.0
     tracked_habits = 0
     sum_current_streak = 0
     sum_max_streak = 0
@@ -222,13 +245,12 @@ def _build_period_snapshot(habits, start_date, end_date, label):
         tracked_habits += 1
         total_scheduled += metrics["scheduled_total"]
         total_completed += metrics["completed_total"]
+        total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
         sum_current_streak += metrics["current_streak"]
         sum_max_streak += metrics["max_streak"]
         consistency_weight += metrics["consistency_score"] * metrics["scheduled_total"]
 
-    completion_rate = (
-        round((total_completed / total_scheduled) * 100, 1) if total_scheduled else 0.0
-    )
+    completion_rate = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
     average_current_streak = (
         round(sum_current_streak / tracked_habits, 1) if tracked_habits else 0.0
     )
