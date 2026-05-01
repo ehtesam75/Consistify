@@ -1,9 +1,8 @@
-# 🧠 Consistify - A Habit Tracker
+# Consistify - A Habit Tracker
 
-A modern, analytics-driven Habit Tracking web application built with Django.  
-It helps users build consistency, track daily habits, and analyze their performance through smart metrics, streaks, and visual insights.
+A modern, analytics-driven Habit Tracking web application built with Django. It helps users build consistency, track daily habits, and analyze their performance through smart metrics, streaks, and visual insights.
 
----
+<br>
 
 ## 🚀 Project Overview
 
@@ -16,7 +15,8 @@ The system focuses on:
 - Visual progress tracking
 - Discipline measurement
 
----
+
+<br>
 
 ## ✨ Key Features
 
@@ -24,7 +24,8 @@ The system focuses on:
 - User registration and login system
 - Secure user-specific habit management
 
----
+
+<br>
 
 ### 🧩 Habit Management
 Users can create multiple habits with different tracking types:
@@ -44,15 +45,17 @@ Users can create multiple habits with different tracking types:
 - Based on:
   - Current value / Target value → percentage completion
 
----
+
+<br>
 
 ### 📊 Unified Tracking System
 - All habits are tracked using a **single field: `completion_percentage`**
 - All performance metrics are derived from this unified model
 
----
 
-### 📈 Analytics & Insights
+<br>
+
+## 📈 Analytics & Insights
 
 #### 📊 Average Daily Value
 - Overall completion is calculated using **average daily performance**
@@ -76,37 +79,20 @@ Users can create multiple habits with different tracking types:
 - Completion trends over time
 - Missed vs completed analysis
 
----
 
-### 🗂 Organization System
-- Categories:
-  - Health
-  - Study
-  - Work
-  - Personal
+<br>
 
-- Tags support:
-  - #morning
-  - #focus
-  - #fitness
-
-- Priority levels:
-  - High
-  - Medium
-  - Low
-
----
-
-### 📱 UI/UX Features
+## 📱 UI/UX Features
 - Fully responsive design (mobile-friendly)
 - Dark mode support 🌙
 - Clean dashboard-style interface
 - Drag & drop habit ordering
 - Progress visualization using charts and graphs
 
----
 
-### 📊 Habit Detail Page
+<br>
+
+## 📊 Habit Detail Page
 Each habit includes:
 - Completion history
 - Current & longest streak
@@ -114,9 +100,10 @@ Each habit includes:
 - Consistency score
 - Performance charts (trend visualization)
 
----
 
-### 🌍 Global Dashboard
+<br>
+
+## 🌍 Global Dashboard
 - Overview of all habits
 - Highlights:
   - Best performing habits
