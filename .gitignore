@@ -1,8 +1,5 @@
-db.sqlite3
-db.sqlite3-journal
-*.sqlite3-journal
 __pycache__/
 *.pyc
 .venv/
-db.sqlite3
+/staticfiles/
 db.sqlite3
