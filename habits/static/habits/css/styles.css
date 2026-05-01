@@ -107,7 +107,8 @@ a {
 .nav {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 1.2rem;
     padding: 1rem 0;
 }
 
@@ -122,6 +123,21 @@ a {
     gap: 1.2rem;
     align-items: center;
     font-weight: 500;
+    flex: 1;
+    margin-left: 0.2rem;
+}
+
+.nav-primary {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    margin-right: auto;
+}
+
+.nav-utility {
+    display: flex;
+    gap: 0.9rem;
+    align-items: center;
 }
 
 .theme-toggle {
@@ -142,9 +158,89 @@ a {
     color: var(--ink);
 }
 
+.icon-toggle {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 999px;
+    display: inline-grid;
+    place-items: center;
+    position: relative;
+    font-size: 0.78rem;
+}
+
+.theme-icon {
+    position: absolute;
+    line-height: 1;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.theme-icon-light {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.theme-icon-dark {
+    opacity: 0;
+    transform: scale(0.85);
+}
+
+:root[data-theme="dark"] .theme-icon-light {
+    opacity: 0;
+    transform: scale(0.85);
+}
+
+:root[data-theme="dark"] .theme-icon-dark {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.theme-svg {
+    width: 13px;
+    height: 13px;
+    display: block;
+}
+
 .nav-links a {
     color: var(--ink-soft);
     transition: color 0.2s ease;
+}
+
+.nav-primary .nav-link {
+    font-family: "Playfair Display", serif;
+    font-size: 0.98rem;
+    line-height: 1.05;
+    padding: 0.14rem 0.2rem 0.52rem;
+    font-weight: 500;
+    position: relative;
+}
+
+.nav-primary .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    width: 18px;
+    bottom: 0;
+    height: 2px;
+    background: transparent;
+    border-radius: 999px;
+    transform: translateX(-50%) scaleX(0);
+    transform-origin: center;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.nav-primary .nav-link.active {
+    color: var(--accent-strong);
+}
+
+.nav-primary .nav-link.active::after {
+    background: var(--accent-strong);
+    transform: translateX(-50%) scaleX(1);
+}
+
+.nav-primary .nav-link:hover::after {
+    background: rgba(47, 111, 109, 0.42);
+    transform: translateX(-50%) scaleX(0.75);
 }
 
 .nav-links form {
@@ -172,6 +268,10 @@ a {
 
 main {
     padding: 2.5rem 0 3rem;
+}
+
+main > section + section {
+    margin-top: 1.6rem;
 }
 
 .hero {
@@ -335,6 +435,14 @@ main {
 .habit-meta {
     margin: 0.2rem 0 0;
     font-size: 0.85rem;
+}
+
+.meta-inline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin-top: 0.25rem;
 }
 
 .habit-flags {
@@ -543,6 +651,86 @@ main {
     gap: 1.2rem;
 }
 
+.habit-form-card {
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+.habit-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.2rem;
+}
+
+.field-span-2 {
+    grid-column: 1 / -1;
+}
+
+.modern-form-card {
+    padding: 1.9rem;
+}
+
+.habit-form-head {
+    margin-bottom: 1rem;
+}
+
+.modern-form-grid {
+    gap: 1rem 1rem;
+}
+
+.form-panel {
+    background: var(--surface-alt);
+    border: 1px solid rgba(228, 222, 212, 0.75);
+    border-radius: 18px;
+    padding: 1rem;
+    display: grid;
+    gap: 0.85rem;
+}
+
+.panel-header {
+    display: block;
+    margin-bottom: 0.2rem;
+}
+
+.panel-title {
+    display: block;
+    margin: 0;
+    font-size: 1.12rem;
+    letter-spacing: 0.01em;
+}
+
+.panel-subtitle {
+    display: block;
+    margin: 0;
+    margin-top: 0.18rem;
+    font-size: 0.86rem;
+    color: var(--ink-soft);
+}
+
+.field-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+.schedule-panel {
+    padding-top: 0.9rem;
+}
+
+.modern-form-actions {
+    justify-content: flex-end;
+    margin-top: 0.2rem;
+    padding-top: 0.4rem;
+}
+
+.modern-form-card .textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+:root[data-theme="dark"] .form-panel {
+    border-color: rgba(59, 71, 95, 0.9);
+}
+
 .field label {
     display: block;
     font-weight: 600;
@@ -645,6 +833,52 @@ main {
     background: var(--surface-alt);
 }
 
+.day-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.65rem;
+    margin-top: 0.45rem;
+}
+
+.day-chip {
+    position: relative;
+    display: block;
+}
+
+.day-chip input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.day-chip span {
+    display: inline-flex;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+    padding: 0.62rem 0.75rem;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink-soft);
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.day-chip input[type="checkbox"]:checked + span {
+    border-color: var(--accent);
+    color: var(--ink);
+    background: rgba(176, 122, 55, 0.16);
+    box-shadow: 0 8px 18px rgba(176, 122, 55, 0.18);
+}
+
+.day-chip input[type="checkbox"]:focus-visible + span {
+    outline: 2px solid rgba(176, 122, 55, 0.35);
+    outline-offset: 1px;
+}
+
 .table-row.five-cols {
     grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
 }
@@ -719,11 +953,34 @@ main {
     .nav-links {
         gap: 0.8rem;
         flex-wrap: wrap;
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .nav-primary,
+    .nav-utility {
+        flex-wrap: wrap;
     }
 
     .table-row {
         grid-template-columns: 1fr;
         gap: 0.2rem;
+    }
+
+    .habit-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .field-span-2 {
+        grid-column: auto;
+    }
+
+    .field-row {
+        grid-template-columns: 1fr;
+    }
+
+    .modern-form-actions {
+        justify-content: flex-start;
     }
 
     .footer-inner {

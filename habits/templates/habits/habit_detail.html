@@ -94,7 +94,7 @@
     const chartLabels = {{ chart_labels|safe }};
     const chartCompleted = {{ chart_completed|safe }};
     if (chartLabels.length && window.ConsistifyCharts) {
-        window.ConsistifyCharts.renderCompletionBars("habitChart", chartLabels, chartCompleted);
+        window.ConsistifyCharts.renderCompletionLine("habitChart", chartLabels, chartCompleted);
     }
 </script>
 {% endblock %}

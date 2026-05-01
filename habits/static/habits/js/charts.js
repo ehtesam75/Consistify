@@ -129,6 +129,69 @@ window.ConsistifyCharts = (() => {
         });
     }
 
+    function renderCompletionLine(canvasId, labels, values) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !window.Chart) {
+            return;
+        }
+
+        const ctx = canvas.getContext("2d");
+        const gradient = buildGradient(ctx, canvas.height || 240);
+
+        new window.Chart(ctx, {
+            type: "line",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "Completion status",
+                        data: values,
+                        backgroundColor: gradient,
+                        borderColor: palette.teal,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 3,
+                        pointBackgroundColor: palette.teal,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        min: 0,
+                        max: 1,
+                        ticks: {
+                            stepSize: 1,
+                            callback: (value) => (value ? "Done" : "Missed"),
+                        },
+                        grid: {
+                            color: palette.grid,
+                        },
+                    },
+                    x: {
+                        grid: {
+                            display: false,
+                        },
+                    },
+                },
+                plugins: {
+                    legend: {
+                        display: false,
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => (context.raw ? "Completed" : "Missed"),
+                        },
+                    },
+                },
+            },
+        });
+    }
+
     function renderTrendLine(
         canvasId,
         labels,
@@ -198,6 +261,20 @@ window.ConsistifyCharts = (() => {
                         },
                     },
                     x: {
+                        ticks: {
+                            callback: (value, index) => {
+                                const label = labels[index];
+                                if (typeof label !== "string") {
+                                    return label;
+                                }
+                                if (label.includes(" - ")) {
+                                    return label.split(" - ")[0];
+                                }
+                                return label;
+                            },
+                            maxRotation: 0,
+                            minRotation: 0,
+                        },
                         grid: {
                             display: false,
                         },
@@ -217,6 +294,7 @@ window.ConsistifyCharts = (() => {
 
     return {
         renderCompletionBars,
+        renderCompletionLine,
         renderRateLine,
         renderTrendLine,
     };

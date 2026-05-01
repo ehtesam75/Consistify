@@ -23,7 +23,10 @@ window.ConsistifyUI = (() => {
         document.documentElement.setAttribute("data-theme", theme);
         const toggle = document.getElementById("themeToggle");
         if (toggle) {
-            toggle.textContent = theme === THEME_DARK ? "Light mode" : "Dark mode";
+            const label =
+                theme === THEME_DARK ? "Switch to light mode" : "Switch to dark mode";
+            toggle.setAttribute("aria-label", label);
+            toggle.setAttribute("title", label);
         }
     }
 

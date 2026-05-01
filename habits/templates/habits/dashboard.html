@@ -64,9 +64,6 @@
                         <div>
                             <a class="habit-name" href="{% url 'habits:habit_detail' card.habit.id %}">{{ card.habit.name }}</a>
                             <p class="habit-meta">{{ card.rate }}% complete</p>
-                            <div class="habit-flags">
-                                <span class="badge priority {{ card.habit.priority }}">{{ card.habit.get_priority_display }}</span>
-                            </div>
                         </div>
                         <span class="tag">{{ card.completed }}/{{ card.scheduled }}</span>
                     </li>
@@ -89,9 +86,6 @@
                         <div>
                             <a class="habit-name" href="{% url 'habits:habit_detail' card.habit.id %}">{{ card.habit.name }}</a>
                             <p class="habit-meta">{{ card.rate }}% complete</p>
-                            <div class="habit-flags">
-                                <span class="badge priority {{ card.habit.priority }}">{{ card.habit.get_priority_display }}</span>
-                            </div>
                         </div>
                         <span class="tag">{{ card.completed }}/{{ card.scheduled }}</span>
                     </li>
