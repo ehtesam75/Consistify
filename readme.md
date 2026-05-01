@@ -55,7 +55,7 @@ Users can create multiple habits with different tracking types:
 
 <br>
 
-### 📈 Analytics & Insights
+## 📈 Analytics & Insights
 
 #### 📊 Average Daily Value
 - Overall completion is calculated using **average daily performance**
@@ -82,7 +82,7 @@ Users can create multiple habits with different tracking types:
 
 <br>
 
-### 📱 UI/UX Features
+## 📱 UI/UX Features
 - Fully responsive design (mobile-friendly)
 - Dark mode support 🌙
 - Clean dashboard-style interface
@@ -92,7 +92,7 @@ Users can create multiple habits with different tracking types:
 
 <br>
 
-### 📊 Habit Detail Page
+## 📊 Habit Detail Page
 Each habit includes:
 - Completion history
 - Current & longest streak
@@ -103,7 +103,7 @@ Each habit includes:
 
 <br>
 
-### 🌍 Global Dashboard
+## 🌍 Global Dashboard
 - Overview of all habits
 - Highlights:
   - Best performing habits
