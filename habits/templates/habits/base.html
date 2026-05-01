@@ -15,7 +15,7 @@
     <header class="site-header">
         <div class="container nav">
             <a class="brand" href="{% url 'habits:today' %}">Consistify</a>
-            <nav class="nav-links">
+            <nav class="nav-links {% if not request.user.is_authenticated %}nav-links-guest{% endif %}">
                 {% if request.user.is_authenticated %}
                     <div class="nav-primary">
                         <a class="nav-link {% if request.resolver_match.url_name == 'today' or request.resolver_match.url_name == 'habit_detail' or request.resolver_match.url_name == 'habit_edit' or request.resolver_match.url_name == 'habit_create' %}active{% endif %}" href="{% url 'habits:today' %}">Today</a>

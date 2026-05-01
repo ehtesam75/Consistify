@@ -127,10 +127,14 @@ a {
     margin-left: 0.2rem;
 }
 
+.nav-links-guest {
+    justify-content: flex-end;
+}
+
 .nav-primary {
     display: flex;
     gap: 1rem;
-    align-items: baseline;
+    align-items: center;
     margin-right: auto;
 }
 
@@ -234,8 +238,8 @@ a {
 }
 
 .nav-primary .nav-link.active::after {
-    background: var(--accent-strong);
-    transform: translateX(-50%) scaleX(1);
+    background: transparent;
+    transform: translateX(-50%) scaleX(0);
 }
 
 .nav-primary .nav-link:hover::after {
