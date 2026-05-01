@@ -1,0 +1,91 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<section class="card narrow">
+    <div class="card-header">
+        <h1>{{ title }}</h1>
+        <p class="subtitle">Define a schedule that matches your rhythm.</p>
+    </div>
+
+    <form method="post" class="form-grid">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-error">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="field">
+            <label for="{{ form.name.id_for_label }}">Habit name</label>
+            {{ form.name }}
+            {{ form.name.errors }}
+        </div>
+
+        <div class="field">
+            <label for="{{ form.description.id_for_label }}">Description</label>
+            {{ form.description }}
+            {{ form.description.errors }}
+        </div>
+
+        <div class="field">
+            <label for="{{ form.schedule_type.id_for_label }}">Schedule type</label>
+            {{ form.schedule_type }}
+            {{ form.schedule_type.errors }}
+        </div>
+
+        <div class="field">
+            <label for="{{ form.start_date.id_for_label }}">Start date</label>
+            {{ form.start_date }}
+            {{ form.start_date.errors }}
+        </div>
+
+        <div class="field" data-field="weekly">
+            <label for="{{ form.weekly_interval.id_for_label }}">Weekly interval</label>
+            {{ form.weekly_interval }}
+            <p class="help">Every N weeks on the start date weekday.</p>
+            {{ form.weekly_interval.errors }}
+        </div>
+
+        <div class="field" data-field="interval">
+            <label for="{{ form.interval_days.id_for_label }}">Custom interval</label>
+            {{ form.interval_days }}
+            <p class="help">Every N days starting from the start date.</p>
+            {{ form.interval_days.errors }}
+        </div>
+
+        <div class="field" data-field="days">
+            <label>Specific days of the week</label>
+            {{ form.days_of_week }}
+            <p class="help">Choose the days this habit should appear.</p>
+            {{ form.days_of_week.errors }}
+        </div>
+
+        <div class="form-actions">
+            <button class="btn primary" type="submit">{{ submit_label }}</button>
+            <a class="btn ghost" href="{% url 'habits:today' %}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const scheduleSelect = document.getElementById("id_schedule_type");
+    const weeklyField = document.querySelector("[data-field='weekly']");
+    const intervalField = document.querySelector("[data-field='interval']");
+    const daysField = document.querySelector("[data-field='days']");
+
+    function updateScheduleFields() {
+        if (!scheduleSelect) {
+            return;
+        }
+        const selected = scheduleSelect.value;
+        weeklyField.style.display = selected === "weekly" ? "block" : "none";
+        intervalField.style.display = selected === "interval" ? "block" : "none";
+        daysField.style.display = selected === "days" ? "block" : "none";
+    }
+
+    if (scheduleSelect) {
+        scheduleSelect.addEventListener("change", updateScheduleFields);
+        updateScheduleFields();
+    }
+</script>
+{% endblock %}

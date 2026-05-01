@@ -1,0 +1,30 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<section class="card narrow">
+    <div class="card-header">
+        <h1>Welcome back</h1>
+        <p class="subtitle">Log in to keep your streaks alive.</p>
+    </div>
+    <form method="post" class="form-grid">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-error">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <div class="field">
+            <label for="{{ form.username.id_for_label }}">Username</label>
+            {{ form.username }}
+            {{ form.username.errors }}
+        </div>
+        <div class="field">
+            <label for="{{ form.password.id_for_label }}">Password</label>
+            {{ form.password }}
+            {{ form.password.errors }}
+        </div>
+        <div class="form-actions">
+            <button class="btn primary" type="submit">Log in</button>
+            <a class="btn ghost" href="{% url 'habits:signup' %}">Create account</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

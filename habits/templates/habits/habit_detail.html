@@ -1,0 +1,89 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<section class="hero compact">
+    <div>
+        <p class="eyebrow">Habit focus</p>
+        <h1>{{ habit.name }}</h1>
+        <p class="subtitle">{{ habit.schedule_summary }}</p>
+    </div>
+    <div class="hero-actions">
+        <a class="btn ghost" href="{% url 'habits:habit_edit' habit.id %}">Edit habit</a>
+        <a class="btn ghost" href="{% url 'habits:today' %}">Back to today</a>
+    </div>
+</section>
+
+<section class="card-grid">
+    <div class="card" style="--i: 0;">
+        <h2>Overview</h2>
+        <p class="description">{{ habit.description|default:"No description yet." }}</p>
+        <div class="stats-grid">
+            <div class="stat">
+                <span class="stat-label">Current streak</span>
+                <span class="stat-value">{{ current_streak }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Best streak</span>
+                <span class="stat-value">{{ max_streak }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">30 day completion</span>
+                <span class="stat-value">{{ stats.completion_rate }}%</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Next due</span>
+                <span class="stat-value">{% if next_due %}{{ next_due|date:"M d" }}{% else %}--{% endif %}</span>
+            </div>
+        </div>
+        {% if is_scheduled_today %}
+            <form method="post" action="{% url 'habits:toggle_completion' habit.id %}" class="inline-form">
+                {% csrf_token %}
+                <input type="hidden" name="date" value="{{ today|date:'Y-m-d' }}">
+                <button class="btn primary" type="submit">
+                    {% if today_completed %}Mark as not done today{% else %}Mark as done today{% endif %}
+                </button>
+            </form>
+        {% endif %}
+    </div>
+
+    <div class="card" style="--i: 1;">
+        <div class="card-header">
+            <h2>Completion history</h2>
+            <span class="tag">Last {{ history|length }} scheduled dates</span>
+        </div>
+        {% if history %}
+            <ul class="history-grid">
+                {% for item in history %}
+                    <li class="history-item {% if item.completed %}done{% endif %}">
+                        <span class="history-date">{{ item.date|date:"M d" }}</span>
+                        <span class="history-status">{% if item.completed %}Done{% else %}Missed{% endif %}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">No scheduled dates yet. Your first run starts soon.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="card" style="--i: 2;">
+    <div class="card-header">
+        <h2>Progress trend</h2>
+        <span class="tag">Last 30 scheduled occurrences</span>
+    </div>
+    <div class="chart-wrap">
+        <canvas id="habitChart"></canvas>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const chartLabels = {{ chart_labels|safe }};
+    const chartCompleted = {{ chart_completed|safe }};
+    if (chartLabels.length && window.ConsistifyCharts) {
+        window.ConsistifyCharts.renderCompletionBars("habitChart", chartLabels, chartCompleted);
+    }
+</script>
+{% endblock %}

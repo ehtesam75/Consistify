@@ -1,0 +1,132 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Global insights</p>
+        <h1>Performance dashboard</h1>
+        <p class="subtitle">{{ today|date:"F j, Y" }}</p>
+    </div>
+    <div class="hero-actions">
+        <a class="btn primary" href="{% url 'habits:habit_create' %}">Create habit</a>
+        <a class="btn ghost" href="{% url 'habits:today' %}">Back to today</a>
+    </div>
+</section>
+
+<section class="stats-grid wide">
+    <div class="stat-card">
+        <span class="stat-label">Overall completion</span>
+        <span class="stat-value">{{ overall_rate }}%</span>
+        <span class="stat-note">Last 30 days</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Scheduled sessions</span>
+        <span class="stat-value">{{ total_scheduled }}</span>
+        <span class="stat-note">Across all habits</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Completed sessions</span>
+        <span class="stat-value">{{ total_completed }}</span>
+        <span class="stat-note">Across all habits</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Active habits</span>
+        <span class="stat-value">{{ habits|length }}</span>
+        <span class="stat-note">Currently tracked</span>
+    </div>
+</section>
+
+<section class="card" style="--i: 0;">
+    <div class="card-header">
+        <h2>Consistency trend</h2>
+        <span class="tag">Last 14 days</span>
+    </div>
+    <div class="chart-wrap">
+        <canvas id="dashboardChart"></canvas>
+    </div>
+</section>
+
+<section class="card-grid">
+    <div class="card" style="--i: 1;">
+        <div class="card-header">
+            <h2>Habits going strong</h2>
+            <span class="tag">80% and above</span>
+        </div>
+        {% if doing_well %}
+            <ul class="habit-list">
+                {% for card in doing_well %}
+                    <li class="habit-row compact">
+                        <div>
+                            <a class="habit-name" href="{% url 'habits:habit_detail' card.habit.id %}">{{ card.habit.name }}</a>
+                            <p class="habit-meta">{{ card.rate }}% complete</p>
+                        </div>
+                        <span class="tag">{{ card.completed }}/{{ card.scheduled }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">No habits in this tier yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="card" style="--i: 2;">
+        <div class="card-header">
+            <h2>Needs more attention</h2>
+            <span class="tag">Below 50%</span>
+        </div>
+        {% if needs_focus %}
+            <ul class="habit-list">
+                {% for card in needs_focus %}
+                    <li class="habit-row compact">
+                        <div>
+                            <a class="habit-name" href="{% url 'habits:habit_detail' card.habit.id %}">{{ card.habit.name }}</a>
+                            <p class="habit-meta">{{ card.rate }}% complete</p>
+                        </div>
+                        <span class="tag">{{ card.completed }}/{{ card.scheduled }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">Everything is holding steady.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="card" style="--i: 3;">
+    <div class="card-header">
+        <h2>All habits</h2>
+        <span class="tag">30 day snapshot</span>
+    </div>
+    {% if habit_cards %}
+        <div class="table">
+            <div class="table-row table-header">
+                <span>Habit</span>
+                <span>Scheduled</span>
+                <span>Completed</span>
+                <span>Rate</span>
+            </div>
+            {% for card in habit_cards %}
+                <div class="table-row">
+                    <a class="table-link" href="{% url 'habits:habit_detail' card.habit.id %}">{{ card.habit.name }}</a>
+                    <span>{{ card.scheduled }}</span>
+                    <span>{{ card.completed }}</span>
+                    <span>{{ card.rate }}%</span>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty">Create a habit to see analytics here.</p>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const chartLabels = {{ chart_labels|safe }};
+    const chartRates = {{ chart_rates|safe }};
+    if (chartLabels.length && window.ConsistifyCharts) {
+        window.ConsistifyCharts.renderRateLine("dashboardChart", chartLabels, chartRates);
+    }
+</script>
+{% endblock %}

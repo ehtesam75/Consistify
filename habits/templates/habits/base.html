@@ -1,0 +1,59 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Consistify</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'habits/css/styles.css' %}">
+</head>
+<body>
+    <div class="ambient-bg"></div>
+    <header class="site-header">
+        <div class="container nav">
+            <a class="brand" href="{% url 'habits:today' %}">Consistify</a>
+            <nav class="nav-links">
+                {% if request.user.is_authenticated %}
+                    <a href="{% url 'habits:today' %}">Today</a>
+                    <a href="{% url 'habits:dashboard' %}">Dashboard</a>
+                    <a href="{% url 'habits:habit_create' %}">New habit</a>
+                    <form class="logout-form" method="post" action="{% url 'habits:logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="link-button">Log out</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'habits:login' %}">Log in</a>
+                    <a class="btn small" href="{% url 'habits:signup' %}">Sign up</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+
+    {% if messages %}
+        <div class="container">
+            <div class="flash">
+                {% for message in messages %}
+                    <div class="flash-item">{{ message }}</div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-inner">
+            <span>Consistify</span>
+            <span>Build steady momentum.</span>
+        </div>
+    </footer>
+
+    <script src="{% static 'habits/js/charts.js' %}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,76 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Daily focus</p>
+        <h1>Today</h1>
+        <p class="subtitle">{{ target_date|date:"l, F j, Y" }}</p>
+    </div>
+    <div class="hero-actions">
+        <a class="btn primary" href="{% url 'habits:habit_create' %}">Create habit</a>
+        <a class="btn ghost" href="{% url 'habits:dashboard' %}">View dashboard</a>
+    </div>
+</section>
+
+<div class="date-nav">
+    <a class="btn ghost small" href="?date={{ prev_date|date:'Y-m-d' }}">Previous</a>
+    <span class="date-chip">{{ target_date|date:"M d, Y" }}</span>
+    <a class="btn ghost small" href="?date={{ next_date|date:'Y-m-d' }}">Next</a>
+</div>
+
+<section class="card-grid">
+    <div class="card" style="--i: 0;">
+        <div class="card-header">
+            <h2>Scheduled habits</h2>
+            <span class="tag">{{ completed_count }}/{{ scheduled_count }} completed</span>
+        </div>
+        {% if scheduled_habits %}
+            <ul class="habit-list">
+                {% for item in scheduled_habits %}
+                    <li class="habit-row" style="--i: {{ forloop.counter0 }};">
+                        <form method="post" action="{% url 'habits:toggle_completion' item.habit.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="date" value="{{ target_date|date:'Y-m-d' }}">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <label class="checkbox">
+                                <input type="checkbox" {% if item.completed %}checked{% endif %} onchange="this.form.submit()">
+                                <span></span>
+                            </label>
+                        </form>
+                        <div class="habit-info">
+                            <a class="habit-name" href="{% url 'habits:habit_detail' item.habit.id %}">{{ item.habit.name }}</a>
+                            <p class="habit-meta">{{ item.habit.schedule_summary }}</p>
+                        </div>
+                        <a class="link" href="{% url 'habits:habit_edit' item.habit.id %}">Edit</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">No habits scheduled for this day.</p>
+        {% endif %}
+    </div>
+
+    <div class="card" style="--i: 1;">
+        <div class="card-header">
+            <h2>All habits</h2>
+            <span class="tag">{{ all_count }} total</span>
+        </div>
+        {% if habits %}
+            <ul class="habit-list">
+                {% for habit in habits %}
+                    <li class="habit-row compact" style="--i: {{ forloop.counter0 }};">
+                        <div>
+                            <a class="habit-name" href="{% url 'habits:habit_detail' habit.id %}">{{ habit.name }}</a>
+                            <p class="habit-meta">{{ habit.schedule_summary }}</p>
+                        </div>
+                        <a class="link" href="{% url 'habits:habit_edit' habit.id %}">Edit</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">Create your first habit to build momentum.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

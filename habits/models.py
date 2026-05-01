@@ -1,0 +1,101 @@
+from django.conf import settings
+from django.db import models
+from django.utils import timezone
+
+
+class Habit(models.Model):
+    SCHEDULE_DAILY = "daily"
+    SCHEDULE_WEEKLY = "weekly"
+    SCHEDULE_DAYS = "days"
+    SCHEDULE_INTERVAL = "interval"
+
+    SCHEDULE_CHOICES = [
+        (SCHEDULE_DAILY, "Daily"),
+        (SCHEDULE_WEEKLY, "Weekly"),
+        (SCHEDULE_DAYS, "Specific days"),
+        (SCHEDULE_INTERVAL, "Custom interval"),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    schedule_type = models.CharField(max_length=12, choices=SCHEDULE_CHOICES)
+    start_date = models.DateField(default=timezone.localdate)
+    interval_days = models.PositiveSmallIntegerField(default=1)
+    weekly_interval = models.PositiveSmallIntegerField(default=1)
+    days_of_week = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def get_days_of_week_set(self):
+        if not self.days_of_week:
+            return set()
+        return {int(value) for value in self.days_of_week.split(",") if value.strip()}
+
+    def is_scheduled_on(self, target_date):
+        if target_date < self.start_date:
+            return False
+        if self.schedule_type == self.SCHEDULE_DAILY:
+            return True
+        if self.schedule_type == self.SCHEDULE_WEEKLY:
+            interval = max(1, self.weekly_interval) * 7
+            return (target_date - self.start_date).days % interval == 0
+        if self.schedule_type == self.SCHEDULE_INTERVAL:
+            interval = max(1, self.interval_days)
+            return (target_date - self.start_date).days % interval == 0
+        if self.schedule_type == self.SCHEDULE_DAYS:
+            return target_date.weekday() in self.get_days_of_week_set()
+        return False
+
+    @property
+    def schedule_summary(self):
+        if self.schedule_type == self.SCHEDULE_DAILY:
+            return "Every day"
+        if self.schedule_type == self.SCHEDULE_WEEKLY:
+            day_label = self.start_date.strftime("%A")
+            if self.weekly_interval == 1:
+                return f"Every week on {day_label}"
+            return f"Every {self.weekly_interval} weeks on {day_label}"
+        if self.schedule_type == self.SCHEDULE_INTERVAL:
+            if self.interval_days == 1:
+                return "Every day"
+            return f"Every {self.interval_days} days"
+        if self.schedule_type == self.SCHEDULE_DAYS:
+            days = self.get_days_of_week_set()
+            if not days:
+                return "Specific days"
+            labels = [
+                "Mon",
+                "Tue",
+                "Wed",
+                "Thu",
+                "Fri",
+                "Sat",
+                "Sun",
+            ]
+            ordered = [labels[idx] for idx in range(7) if idx in days]
+            return "Every " + ", ".join(ordered)
+        return ""
+
+
+class HabitCompletion(models.Model):
+    habit = models.ForeignKey(Habit, on_delete=models.CASCADE)
+    date = models.DateField()
+    completed = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("habit", "date")
+        ordering = ["-date"]
+        indexes = [
+            models.Index(fields=["habit", "date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.habit.name} - {self.date}"
