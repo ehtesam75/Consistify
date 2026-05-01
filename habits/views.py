@@ -18,10 +18,12 @@ from django.views.decorators.http import require_POST
 from .forms import HabitForm
 from .models import Habit, HabitCompletion
 from .services import (
+    ANALYTICS_START_DATE,
     build_monthly_reports,
     build_weekly_reports,
     calculate_overall_consistency,
     calculate_streaks,
+    clamp_analytics_start,
     compare_habits,
     completion_stats,
     get_completion_maps,
@@ -90,7 +92,7 @@ def habit_list(request):
 @login_required
 def dashboard(request):
     today = timezone.localdate()
-    window_start = today - timedelta(days=29)
+    window_start = clamp_analytics_start(today - timedelta(days=29))
     habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
 
     habit_cards = []
@@ -120,7 +122,7 @@ def dashboard(request):
     needs_focus = [card for card in habit_cards if card["scheduled"] and card["rate"] < 50]
 
     chart_days = 14
-    chart_start = today - timedelta(days=chart_days - 1)
+    chart_start = clamp_analytics_start(today - timedelta(days=chart_days - 1))
     chart_labels = []
     chart_rates = []
     recent_completions = HabitCompletion.objects.filter(
@@ -163,7 +165,7 @@ def dashboard(request):
 def habit_detail(request, habit_id):
     habit = get_object_or_404(Habit, id=habit_id, user=request.user)
     today = timezone.localdate()
-    history_start = today - timedelta(days=120)
+    history_start = clamp_analytics_start(today - timedelta(days=120))
     history_dates = list(iter_scheduled_dates(habit, history_start, today))
     recent_dates = history_dates[-30:]
 
@@ -177,7 +179,7 @@ def habit_detail(request, habit_id):
         for scheduled_date in recent_dates
     ]
 
-    window_start = today - timedelta(days=29)
+    window_start = clamp_analytics_start(today - timedelta(days=29))
     window_completion_map = {
         date: value for date, value in completion_map.items() if date >= window_start
     }
@@ -390,7 +392,7 @@ def reports(request):
 def habit_compare(request):
     habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
     today = timezone.localdate()
-    window_start = today - timedelta(days=89)
+    window_start = clamp_analytics_start(today - timedelta(days=89))
 
     habit_a = None
     habit_b = None
@@ -424,9 +426,9 @@ def profile(request):
     habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
 
     if habits:
-        start_date = min(habit.start_date for habit in habits)
+        start_date = clamp_analytics_start(min(habit.start_date for habit in habits))
     else:
-        start_date = today
+        start_date = clamp_analytics_start(today)
 
     total_habits = len(habits)
     total_scheduled = 0
@@ -451,6 +453,7 @@ def profile(request):
 
     context = {
         "today": today,
+        "analytics_start_date": ANALYTICS_START_DATE,
         "total_habits": total_habits,
         "overall_completion": overall_completion,
         "best_streak": best_streak,

@@ -105,9 +105,10 @@ a {
 }
 
 .nav {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: space-between;
     gap: 1.2rem;
     padding: 1rem 0;
 }
@@ -118,30 +119,28 @@ a {
     letter-spacing: 0.4px;
 }
 
-.nav-links {
-    display: flex;
-    gap: 1.2rem;
-    align-items: center;
-    font-weight: 500;
-    flex: 1;
-    margin-left: 0.2rem;
-}
-
-.nav-links-guest {
-    justify-content: flex-end;
-}
-
 .nav-primary {
     display: flex;
     gap: 1rem;
     align-items: center;
-    margin-right: auto;
+    justify-self: center;
 }
 
 .nav-utility {
     display: flex;
     gap: 0.9rem;
     align-items: center;
+    justify-self: end;
+    font-weight: 500;
+}
+
+.nav-utility-guest {
+    grid-column: 3;
+}
+
+.nav-profile {
+    font-family: "Playfair Display", serif;
+    font-size: 0.95rem;
 }
 
 .theme-toggle {
@@ -205,7 +204,8 @@ a {
     display: block;
 }
 
-.nav-links a {
+.nav-primary a,
+.nav-utility a {
     color: var(--ink-soft);
     transition: color 0.2s ease;
 }
@@ -247,7 +247,7 @@ a {
     transform: translateX(-50%) scaleX(0.75);
 }
 
-.nav-links form {
+.nav-utility form {
     margin: 0;
 }
 
@@ -266,7 +266,8 @@ a {
     color: var(--ink);
 }
 
-.nav-links a:hover {
+.nav-primary a:hover,
+.nav-utility a:hover {
     color: var(--ink);
 }
 
@@ -437,6 +438,10 @@ main > section + section {
     gap: 0.5rem;
 }
 
+.progress-row .habit-progress {
+    align-items: flex-end;
+}
+
 .habit-progress .link {
     align-self: flex-end;
 }
@@ -447,6 +452,10 @@ main > section + section {
     width: 100%;
 }
 
+.progress-row .progress-form {
+    justify-items: end;
+}
+
 .detail-progress {
     margin-top: 1rem;
 }
@@ -455,6 +464,11 @@ main > section + section {
     display: flex;
     align-items: center;
     gap: 0.6rem;
+}
+
+.scheduled-progress-visual {
+    width: 100%;
+    justify-content: flex-end;
 }
 
 .progress-bar {
@@ -471,6 +485,10 @@ main > section + section {
     border-radius: 999px;
     background: var(--teal);
     transition: width 0.2s ease;
+}
+
+.scheduled-progress-bar {
+    flex: 0 0 140px;
 }
 
 .progress-percent {
@@ -632,6 +650,28 @@ main > section + section {
 .link {
     font-weight: 600;
     color: var(--accent-strong);
+}
+
+.icon-link {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--ink-soft);
+    display: inline-grid;
+    place-items: center;
+    transition: color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.icon-link svg {
+    width: 13px;
+    height: 13px;
+}
+
+.icon-link:hover {
+    color: var(--ink);
+    box-shadow: var(--shadow-soft);
 }
 
 .checkbox {
@@ -1072,16 +1112,20 @@ main > section + section {
         align-items: flex-start;
     }
 
-    .nav-links {
-        gap: 0.8rem;
-        flex-wrap: wrap;
-        width: 100%;
-        margin-left: 0;
-    }
-
     .nav-primary,
     .nav-utility {
         flex-wrap: wrap;
+    }
+
+    .nav {
+        grid-template-columns: 1fr;
+        justify-items: flex-start;
+    }
+
+    .nav-primary,
+    .nav-utility,
+    .nav-utility-guest {
+        justify-self: flex-start;
     }
 
     .table-row {
@@ -1123,6 +1167,7 @@ main > section + section {
 
 @media (max-width: 520px) {
     .nav {
+        display: flex;
         flex-direction: column;
         align-items: flex-start;
         gap: 0.8rem;

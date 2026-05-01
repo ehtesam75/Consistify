@@ -93,8 +93,24 @@
     const monthlyConsistency = {{ monthly_consistency|safe }};
 
     if (window.ConsistifyCharts) {
-        window.ConsistifyCharts.renderTrendLine("weeklyReportChart", weeklyLabels, weeklyRates, weeklyStreak, "Completion %", "Avg streak");
-        window.ConsistifyCharts.renderTrendLine("monthlyReportChart", monthlyLabels, monthlyRates, monthlyConsistency, "Completion %", "Consistency");
+        window.ConsistifyCharts.renderTrendLine(
+            "weeklyReportChart",
+            weeklyLabels,
+            weeklyRates,
+            weeklyStreak,
+            "Completion %",
+            "Avg streak",
+            { min: 0, max: 1, stepSize: 0.2 }
+        );
+        window.ConsistifyCharts.renderTrendLine(
+            "monthlyReportChart",
+            monthlyLabels,
+            monthlyRates,
+            monthlyConsistency,
+            "Completion %",
+            "Consistency",
+            { min: 0, max: 100, stepSize: 20, tickFormatter: (value) => `${value}%` }
+        );
     }
 </script>
 {% endblock %}

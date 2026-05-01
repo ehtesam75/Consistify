@@ -6,6 +6,7 @@
         <p class="eyebrow">User profile</p>
         <h1>Progress profile</h1>
         <p class="subtitle">Long-term summary as of {{ today|date:"F j, Y" }}</p>
+        <p class="subtitle">Signed in as <strong>{{ request.user.username }}</strong></p>
     </div>
 </section>
 

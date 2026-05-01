@@ -108,6 +108,7 @@ window.ConsistifyCharts = (() => {
                         beginAtZero: true,
                         max: 100,
                         ticks: {
+                            stepSize: 20,
                             callback: (value) => value + "%",
                         },
                         grid: {
@@ -198,7 +199,8 @@ window.ConsistifyCharts = (() => {
         primaryValues,
         secondaryValues,
         primaryLabel,
-        secondaryLabel
+        secondaryLabel,
+        secondaryAxisConfig = {}
     ) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !window.Chart) {
@@ -247,6 +249,7 @@ window.ConsistifyCharts = (() => {
                         beginAtZero: true,
                         max: 100,
                         ticks: {
+                            stepSize: 20,
                             callback: (value) => value + "%",
                         },
                         grid: {
@@ -255,7 +258,13 @@ window.ConsistifyCharts = (() => {
                     },
                     y1: {
                         beginAtZero: true,
+                        min: secondaryAxisConfig.min,
+                        max: secondaryAxisConfig.max,
                         position: "right",
+                        ticks: {
+                            stepSize: secondaryAxisConfig.stepSize,
+                            callback: secondaryAxisConfig.tickFormatter,
+                        },
                         grid: {
                             drawOnChartArea: false,
                         },

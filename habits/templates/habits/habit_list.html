@@ -45,8 +45,8 @@
                                 {% csrf_token %}
                                 <input type="hidden" name="date" value="{{ target_date|date:'Y-m-d' }}">
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <div class="progress-visual">
-                                    <div class="progress-bar">
+                                <div class="progress-visual scheduled-progress-visual">
+                                    <div class="progress-bar scheduled-progress-bar">
                                         <div class="progress-fill" data-progress-fill style="width: {{ item.completion_percentage|floatformat:0 }}%;"></div>
                                     </div>
                                     <span class="progress-percent" data-progress-percent>{{ item.completion_percentage|floatformat:0 }}%</span>
@@ -99,7 +99,12 @@
                                 {% endfor %}
                             </div>
                         </div>
-                        <a class="link" href="{% url 'habits:habit_edit' habit.id %}">Edit</a>
+                        <a class="icon-link" href="{% url 'habits:habit_edit' habit.id %}" aria-label="Edit {{ habit.name }}" title="Edit {{ habit.name }}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 20h9"></path>
+                                <path d="m16.5 3.5 4 4L8 20l-4 1 1-4 11.5-13.5z"></path>
+                            </svg>
+                        </a>
                     </li>
                 {% endfor %}
             </ul>

@@ -15,68 +15,66 @@
     <header class="site-header">
         <div class="container nav">
             <a class="brand" href="{% url 'habits:today' %}">Consistify</a>
-            <nav class="nav-links {% if not request.user.is_authenticated %}nav-links-guest{% endif %}">
-                {% if request.user.is_authenticated %}
-                    <div class="nav-primary">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'today' or request.resolver_match.url_name == 'habit_detail' or request.resolver_match.url_name == 'habit_edit' or request.resolver_match.url_name == 'habit_create' %}active{% endif %}" href="{% url 'habits:today' %}">Today</a>
-                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'habits:dashboard' %}">Dashboard</a>
-                        <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'habits:reports' %}">Reports</a>
-                        <a class="nav-link {% if request.resolver_match.url_name == 'habit_compare' %}active{% endif %}" href="{% url 'habits:habit_compare' %}">Compare</a>
-                        <a class="nav-link {% if request.resolver_match.url_name == 'profile' %}active{% endif %}" href="{% url 'habits:profile' %}">Profile</a>
-                    </div>
-                    <div class="nav-utility">
-                        <button id="themeToggle" type="button" class="theme-toggle icon-toggle" aria-label="Switch to dark mode" title="Switch to dark mode">
-                            <span class="theme-icon theme-icon-light" aria-hidden="true">
-                                <svg class="theme-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                                    <circle cx="12" cy="12" r="4"></circle>
-                                    <path d="M12 2.75v2"></path>
-                                    <path d="M12 19.25v2"></path>
-                                    <path d="M2.75 12h2"></path>
-                                    <path d="M19.25 12h2"></path>
-                                    <path d="m5.47 5.47 1.45 1.45"></path>
-                                    <path d="m17.08 17.08 1.45 1.45"></path>
-                                    <path d="m17.08 6.92 1.45-1.45"></path>
-                                    <path d="m5.47 18.53 1.45-1.45"></path>
-                                </svg>
-                            </span>
-                            <span class="theme-icon theme-icon-dark" aria-hidden="true">
-                                <svg class="theme-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
-                                </svg>
-                            </span>
-                        </button>
-                        <form class="logout-form" method="post" action="{% url 'habits:logout' %}">
-                            {% csrf_token %}
-                            <button type="submit" class="link-button">Log out</button>
-                        </form>
-                    </div>
-                {% else %}
-                    <div class="nav-utility">
-                        <a href="{% url 'habits:login' %}">Log in</a>
-                        <a class="btn small" href="{% url 'habits:signup' %}">Sign up</a>
-                        <button id="themeToggle" type="button" class="theme-toggle icon-toggle" aria-label="Switch to dark mode" title="Switch to dark mode">
-                            <span class="theme-icon theme-icon-light" aria-hidden="true">
-                                <svg class="theme-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                                    <circle cx="12" cy="12" r="4"></circle>
-                                    <path d="M12 2.75v2"></path>
-                                    <path d="M12 19.25v2"></path>
-                                    <path d="M2.75 12h2"></path>
-                                    <path d="M19.25 12h2"></path>
-                                    <path d="m5.47 5.47 1.45 1.45"></path>
-                                    <path d="m17.08 17.08 1.45 1.45"></path>
-                                    <path d="m17.08 6.92 1.45-1.45"></path>
-                                    <path d="m5.47 18.53 1.45-1.45"></path>
-                                </svg>
-                            </span>
-                            <span class="theme-icon theme-icon-dark" aria-hidden="true">
-                                <svg class="theme-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
-                                </svg>
-                            </span>
-                        </button>
-                    </div>
-                {% endif %}
-            </nav>
+            {% if request.user.is_authenticated %}
+                <nav class="nav-primary">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'today' or request.resolver_match.url_name == 'habit_detail' or request.resolver_match.url_name == 'habit_edit' or request.resolver_match.url_name == 'habit_create' %}active{% endif %}" href="{% url 'habits:today' %}">Today</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'habits:dashboard' %}">Dashboard</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'habits:reports' %}">Reports</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'habit_compare' %}active{% endif %}" href="{% url 'habits:habit_compare' %}">Compare</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'profile' %}active{% endif %}" href="{% url 'habits:profile' %}">Profile</a>
+                </nav>
+                <div class="nav-utility">
+                    <button id="themeToggle" type="button" class="theme-toggle icon-toggle" aria-label="Switch to dark mode" title="Switch to dark mode">
+                        <span class="theme-icon theme-icon-light" aria-hidden="true">
+                            <svg class="theme-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <circle cx="12" cy="12" r="4"></circle>
+                                <path d="M12 2.75v2"></path>
+                                <path d="M12 19.25v2"></path>
+                                <path d="M2.75 12h2"></path>
+                                <path d="M19.25 12h2"></path>
+                                <path d="m5.47 5.47 1.45 1.45"></path>
+                                <path d="m17.08 17.08 1.45 1.45"></path>
+                                <path d="m17.08 6.92 1.45-1.45"></path>
+                                <path d="m5.47 18.53 1.45-1.45"></path>
+                            </svg>
+                        </span>
+                        <span class="theme-icon theme-icon-dark" aria-hidden="true">
+                            <svg class="theme-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
+                            </svg>
+                        </span>
+                    </button>
+                    <form class="logout-form" method="post" action="{% url 'habits:logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="link-button">Log out</button>
+                    </form>
+                </div>
+            {% else %}
+                <div class="nav-utility nav-utility-guest">
+                    <a href="{% url 'habits:login' %}">Log in</a>
+                    <a class="btn small" href="{% url 'habits:signup' %}">Sign up</a>
+                    <button id="themeToggle" type="button" class="theme-toggle icon-toggle" aria-label="Switch to dark mode" title="Switch to dark mode">
+                        <span class="theme-icon theme-icon-light" aria-hidden="true">
+                            <svg class="theme-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <circle cx="12" cy="12" r="4"></circle>
+                                <path d="M12 2.75v2"></path>
+                                <path d="M12 19.25v2"></path>
+                                <path d="M2.75 12h2"></path>
+                                <path d="M19.25 12h2"></path>
+                                <path d="m5.47 5.47 1.45 1.45"></path>
+                                <path d="m17.08 17.08 1.45 1.45"></path>
+                                <path d="m17.08 6.92 1.45-1.45"></path>
+                                <path d="m5.47 18.53 1.45-1.45"></path>
+                            </svg>
+                        </span>
+                        <span class="theme-icon theme-icon-dark" aria-hidden="true">
+                            <svg class="theme-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+            {% endif %}
         </div>
     </header>
 
