@@ -79,12 +79,10 @@
     </header>
 
     {% if messages %}
-        <div class="container">
-            <div class="flash">
-                {% for message in messages %}
-                    <div class="flash-item">{{ message }}</div>
-                {% endfor %}
-            </div>
+        <div class="toast-stack" aria-live="polite" aria-atomic="true">
+            {% for message in messages %}
+                <div class="toast toast-{{ message.tags|default:'info' }}">{{ message }}</div>
+            {% endfor %}
         </div>
     {% endif %}
 
@@ -92,12 +90,14 @@
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="site-footer">
-        <div class="container footer-inner">
-            <span>Consistify</span>
-            <span>Build steady momentum.</span>
-        </div>
-    </footer>
+    {% if not request.user.is_authenticated %}
+        <footer class="site-footer">
+            <div class="container footer-inner">
+                <span>Consistify</span>
+                <span>Build steady momentum.</span>
+            </div>
+        </footer>
+    {% endif %}
 
     <script src="{% static 'habits/js/charts.js' %}"></script>
     <script src="{% static 'habits/js/ui.js' %}"></script>

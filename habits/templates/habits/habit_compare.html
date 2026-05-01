@@ -4,30 +4,21 @@
 <section class="hero">
     <div>
         <p class="eyebrow">Comparison</p>
-        <h1>Compare two habits</h1>
-        <p class="subtitle">Window: {{ window_start|date:"M d, Y" }} to {{ today|date:"M d, Y" }}</p>
+        <h1>Compare habits</h1>
+        <p class="subtitle">Select up to {{ compare_limit }} habits to compare side by side.</p>
     </div>
 </section>
 
-<section class="card narrow">
-    <form method="get" class="form-grid">
+<section class="card" style="--i: 0;">
+    <form method="get" class="form-grid compare-form-grid">
         <div class="field">
-            <label for="habit_a">Habit A</label>
-            <select id="habit_a" name="habit_a" class="select">
-                <option value="">Select habit</option>
+            <label for="habit_ids">Choose habits (max {{ compare_limit }})</label>
+            <select id="habit_ids" name="habit_ids" class="select compare-multiselect" multiple size="8">
                 {% for habit in habits %}
-                    <option value="{{ habit.id }}" {% if habit_a and habit.id == habit_a.id %}selected{% endif %}>{{ habit.name }}</option>
+                    <option value="{{ habit.id }}" {% if habit.id in selected_ids %}selected{% endif %}>{{ habit.name }}</option>
                 {% endfor %}
             </select>
-        </div>
-        <div class="field">
-            <label for="habit_b">Habit B</label>
-            <select id="habit_b" name="habit_b" class="select">
-                <option value="">Select habit</option>
-                {% for habit in habits %}
-                    <option value="{{ habit.id }}" {% if habit_b and habit.id == habit_b.id %}selected{% endif %}>{{ habit.name }}</option>
-                {% endfor %}
-            </select>
+            <p class="help">Use Ctrl/Cmd + click to select multiple habits.</p>
         </div>
         <div class="form-actions">
             <button class="btn primary" type="submit">Compare</button>
@@ -36,44 +27,152 @@
     </form>
 </section>
 
-{% if comparison %}
+{% if comparison_rows %}
+<section class="stats-grid wide compare-stats-grid">
+    {% for row in comparison_rows %}
+        <div class="stat-card">
+            <span class="stat-label">{{ row.habit.name }}</span>
+            <span class="stat-value">{{ row.metrics_90.completion_rate }}%</span>
+            <span class="stat-note">Completion (last 90 days)</span>
+            <span class="stat-note">Avg daily value: {{ row.avg_daily_30 }} (30d), {{ row.avg_daily_all }} (all time)</span>
+        </div>
+    {% endfor %}
+</section>
+
 <section class="card" style="--i: 1;">
     <div class="card-header">
-        <h2>{{ comparison.habit_a.name }} vs {{ comparison.habit_b.name }}</h2>
+        <h2>Side-by-side metrics</h2>
         <span class="tag">90 day analytics</span>
     </div>
     <div class="table">
-        <div class="table-row table-header">
-            <span>Metric</span>
-            <span>{{ comparison.habit_a.name }}</span>
-            <span>{{ comparison.habit_b.name }}</span>
-            <span>Difference (A-B)</span>
-        </div>
-        <div class="table-row">
-            <span>Completion rate</span>
-            <span>{{ comparison.metrics_a.completion_rate }}%</span>
-            <span>{{ comparison.metrics_b.completion_rate }}%</span>
-            <span>{% if comparison.completion_diff > 0 %}+{% endif %}{{ comparison.completion_diff }}</span>
-        </div>
-        <div class="table-row">
+        <div class="table-row table-header five-cols">
+            <span>Habit</span>
+            <span>Completion</span>
             <span>Current streak</span>
-            <span>{{ comparison.metrics_a.current_streak }}</span>
-            <span>{{ comparison.metrics_b.current_streak }}</span>
-            <span>{% if comparison.current_streak_diff > 0 %}+{% endif %}{{ comparison.current_streak_diff }}</span>
-        </div>
-        <div class="table-row">
             <span>Best streak</span>
-            <span>{{ comparison.metrics_a.max_streak }}</span>
-            <span>{{ comparison.metrics_b.max_streak }}</span>
-            <span>{% if comparison.max_streak_diff > 0 %}+{% endif %}{{ comparison.max_streak_diff }}</span>
+            <span>Consistency</span>
         </div>
-        <div class="table-row">
-            <span>Consistency score</span>
-            <span>{{ comparison.metrics_a.consistency_score }}</span>
-            <span>{{ comparison.metrics_b.consistency_score }}</span>
-            <span>{% if comparison.consistency_diff > 0 %}+{% endif %}{{ comparison.consistency_diff }}</span>
-        </div>
+        {% for row in comparison_rows %}
+            <div class="table-row five-cols">
+                <span>{{ row.habit.name }}</span>
+                <span>{{ row.metrics_90.completion_rate }}%</span>
+                <span>{{ row.metrics_90.current_streak }}</span>
+                <span>{{ row.metrics_90.max_streak }}</span>
+                <span>{{ row.metrics_90.consistency_score }}</span>
+            </div>
+        {% endfor %}
     </div>
 </section>
+
+<section class="card" style="--i: 2;">
+    <div class="card-header">
+        <h2>Average daily value</h2>
+        <div class="compare-timeframe">
+            <button type="button" class="btn ghost small compare-time-btn active" data-timeframe="last30">Last 30 days</button>
+            <button type="button" class="btn ghost small compare-time-btn" data-timeframe="all">All time</button>
+        </div>
+    </div>
+    <div class="chart-wrap">
+        <canvas id="compareValueChart"></canvas>
+    </div>
+</section>
+{% elif selected_habits|length == 1 %}
+<section class="card">
+    <p class="empty">Select at least two habits to compare.</p>
+</section>
+{% else %}
+<section class="card">
+    <p class="empty">Pick two to four habits and click Compare to see side-by-side insights and chart trends.</p>
+</section>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const compareSelect = document.getElementById("habit_ids");
+    if (compareSelect) {
+        compareSelect.addEventListener("change", () => {
+            const selectedOptions = [...compareSelect.selectedOptions];
+            if (selectedOptions.length > {{ compare_limit }}) {
+                selectedOptions[selectedOptions.length - 1].selected = false;
+            }
+        });
+    }
+
+    const payload = {{ chart_payload|safe }};
+    const chartCanvas = document.getElementById("compareValueChart");
+    const timeButtons = document.querySelectorAll(".compare-time-btn");
+    let compareChart = null;
+    const palette = ["#2f6f6d", "#b07a37", "#5f7bb6", "#7d5fb6"];
+
+    function buildDatasets(datasets) {
+        return datasets.map((item, idx) => ({
+            label: item.label,
+            data: item.data,
+            borderColor: palette[idx % palette.length],
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            tension: 0.25,
+            pointRadius: 2,
+            spanGaps: true,
+        }));
+    }
+
+    function renderCompareChart(timeframe) {
+        if (!chartCanvas || !window.Chart || !payload[timeframe]) {
+            return;
+        }
+        const chartData = payload[timeframe];
+        if (compareChart) {
+            compareChart.destroy();
+        }
+        compareChart = new window.Chart(chartCanvas.getContext("2d"), {
+            type: "line",
+            data: {
+                labels: chartData.labels,
+                datasets: buildDatasets(chartData.datasets),
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            stepSize: 20,
+                            callback: (value) => value + "%",
+                        },
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { maxRotation: 0, minRotation: 0 },
+                    },
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: { usePointStyle: true },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.dataset.label}: ${context.raw ?? "-"}%`,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    timeButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            timeButtons.forEach((item) => item.classList.remove("active"));
+            btn.classList.add("active");
+            renderCompareChart(btn.dataset.timeframe);
+        });
+    });
+
+    renderCompareChart("last30");
+</script>
 {% endblock %}

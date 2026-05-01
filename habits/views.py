@@ -24,7 +24,6 @@ from .services import (
     calculate_overall_consistency,
     calculate_streaks,
     clamp_analytics_start,
-    compare_habits,
     completion_stats,
     get_completion_maps,
     get_next_scheduled_date,
@@ -393,31 +392,84 @@ def habit_compare(request):
     habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
     today = timezone.localdate()
     window_start = clamp_analytics_start(today - timedelta(days=89))
-
-    habit_a = None
-    habit_b = None
-    comparison = None
-
-    habit_a_id = request.GET.get("habit_a")
-    habit_b_id = request.GET.get("habit_b")
-
-    if habit_a_id and habit_b_id and habit_a_id != habit_b_id:
+    habits_by_id = {habit.id: habit for habit in habits}
+    selected_ids = []
+    for raw_id in request.GET.getlist("habit_ids"):
         try:
-            habit_a = Habit.objects.get(id=int(habit_a_id), user=request.user)
-            habit_b = Habit.objects.get(id=int(habit_b_id), user=request.user)
-            comparison = compare_habits(habit_a, habit_b, window_start, today)
-        except (ValueError, Habit.DoesNotExist):
-            comparison = None
+            habit_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if habit_id in habits_by_id and habit_id not in selected_ids:
+            selected_ids.append(habit_id)
+    selected_ids = selected_ids[:4]
+    selected_habits = [habits_by_id[habit_id] for habit_id in selected_ids]
+
+    comparison_rows = []
+    chart_payload = {"last30": {"labels": [], "datasets": []}, "all": {"labels": [], "datasets": []}}
+    if selected_habits:
+        chart_payload = _build_compare_chart_payload(selected_habits, today)
+
+    if len(selected_habits) >= 2:
+        for habit in selected_habits:
+            metrics_90 = habit_performance_metrics(habit, window_start, today)
+            all_time_start = clamp_analytics_start(habit.start_date)
+            metrics_all = habit_performance_metrics(habit, all_time_start, today)
+            comparison_rows.append(
+                {
+                    "habit": habit,
+                    "metrics_90": metrics_90,
+                    "metrics_all": metrics_all,
+                    "avg_daily_30": round(metrics_90["average_completion"], 1),
+                    "avg_daily_all": round(metrics_all["average_completion"], 1),
+                }
+            )
 
     context = {
         "habits": habits,
-        "habit_a": habit_a,
-        "habit_b": habit_b,
-        "comparison": comparison,
+        "selected_ids": selected_ids,
+        "selected_habits": selected_habits,
+        "comparison_rows": comparison_rows,
+        "compare_limit": 4,
+        "chart_payload": json.dumps(chart_payload),
         "window_start": window_start,
         "today": today,
     }
     return render(request, "habits/habit_compare.html", context)
+
+
+def _build_compare_chart_payload(selected_habits, today):
+    def _build_range(start_date):
+        if start_date > today:
+            return [today]
+        days = (today - start_date).days + 1
+        return [start_date + timedelta(days=offset) for offset in range(days)]
+
+    def _build_timeframe_series(start_date):
+        labels = [day.strftime("%b %d") for day in _build_range(start_date)]
+        datasets = []
+        for habit in selected_habits:
+            completion_map, _ = get_completion_maps(habit, start_date, today)
+            running_total = 0.0
+            scheduled_count = 0
+            points = []
+            for day in _build_range(start_date):
+                if day < habit.start_date:
+                    points.append(None)
+                    continue
+                if habit.is_scheduled_on(day):
+                    running_total += completion_map.get(day, 0.0)
+                    scheduled_count += 1
+                average_value = round(running_total / scheduled_count, 1) if scheduled_count else None
+                points.append(average_value)
+            datasets.append({"label": habit.name, "data": points})
+        return {"labels": labels, "datasets": datasets}
+
+    last30_start = clamp_analytics_start(today - timedelta(days=29))
+    all_time_start = clamp_analytics_start(min(habit.start_date for habit in selected_habits))
+    return {
+        "last30": _build_timeframe_series(last30_start),
+        "all": _build_timeframe_series(all_time_start),
+    }
 
 
 @login_required
