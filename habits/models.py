@@ -16,10 +16,42 @@ class Habit(models.Model):
         (SCHEDULE_INTERVAL, "Custom interval"),
     ]
 
+    CATEGORY_HEALTH = "health"
+    CATEGORY_STUDY = "study"
+    CATEGORY_WORK = "work"
+    CATEGORY_PERSONAL = "personal"
+    CATEGORY_CHOICES = [
+        (CATEGORY_HEALTH, "Health"),
+        (CATEGORY_STUDY, "Study"),
+        (CATEGORY_WORK, "Work"),
+        (CATEGORY_PERSONAL, "Personal"),
+    ]
+
+    PRIORITY_HIGH = "high"
+    PRIORITY_MEDIUM = "medium"
+    PRIORITY_LOW = "low"
+    PRIORITY_CHOICES = [
+        (PRIORITY_HIGH, "High"),
+        (PRIORITY_MEDIUM, "Medium"),
+        (PRIORITY_LOW, "Low"),
+    ]
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
     schedule_type = models.CharField(max_length=12, choices=SCHEDULE_CHOICES)
+    category = models.CharField(
+        max_length=12,
+        choices=CATEGORY_CHOICES,
+        default=CATEGORY_PERSONAL,
+    )
+    priority = models.CharField(
+        max_length=6,
+        choices=PRIORITY_CHOICES,
+        default=PRIORITY_MEDIUM,
+    )
+    tags = models.CharField(max_length=255, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
     start_date = models.DateField(default=timezone.localdate)
     interval_days = models.PositiveSmallIntegerField(default=1)
     weekly_interval = models.PositiveSmallIntegerField(default=1)
@@ -28,7 +60,7 @@ class Habit(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["sort_order", "name"]
 
     def __str__(self):
         return self.name
@@ -37,6 +69,11 @@ class Habit(models.Model):
         if not self.days_of_week:
             return set()
         return {int(value) for value in self.days_of_week.split(",") if value.strip()}
+
+    def get_tags(self):
+        if not self.tags:
+            return []
+        return [tag.strip() for tag in self.tags.split(",") if tag.strip()]
 
     def is_scheduled_on(self, target_date):
         if target_date < self.start_date:

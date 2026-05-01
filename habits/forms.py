@@ -20,6 +20,13 @@ class HabitForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox-grid"}),
         help_text="Only used for specific-day schedules.",
     )
+    tags = forms.CharField(
+        required=False,
+        widget=forms.TextInput(
+            attrs={"class": "input", "placeholder": "#morning, #focus, #fitness"}
+        ),
+        help_text="Use comma-separated tags.",
+    )
 
     class Meta:
         model = Habit
@@ -27,6 +34,9 @@ class HabitForm(forms.ModelForm):
             "name",
             "description",
             "schedule_type",
+            "category",
+            "priority",
+            "tags",
             "start_date",
             "interval_days",
             "weekly_interval",
@@ -36,6 +46,8 @@ class HabitForm(forms.ModelForm):
             "name": forms.TextInput(attrs={"class": "input"}),
             "description": forms.Textarea(attrs={"class": "textarea", "rows": 4}),
             "schedule_type": forms.Select(attrs={"class": "select"}),
+            "category": forms.Select(attrs={"class": "select"}),
+            "priority": forms.Select(attrs={"class": "select"}),
             "start_date": forms.DateInput(attrs={"class": "input", "type": "date"}),
             "interval_days": forms.NumberInput(attrs={"class": "input", "min": 1}),
             "weekly_interval": forms.NumberInput(attrs={"class": "input", "min": 1}),
@@ -47,6 +59,10 @@ class HabitForm(forms.ModelForm):
         self.fields["weekly_interval"].required = False
         if self.instance and self.instance.days_of_week:
             self.initial["days_of_week"] = self.instance.days_of_week.split(",")
+        if self.instance and self.instance.tags:
+            self.initial["tags"] = ", ".join(
+                [f"#{tag}" for tag in self.instance.get_tags()]
+            )
 
     def clean(self):
         cleaned_data = super().clean()
@@ -64,6 +80,15 @@ class HabitForm(forms.ModelForm):
         if schedule_type == Habit.SCHEDULE_DAYS and not days_of_week:
             self.add_error("days_of_week", "Select at least one day.")
 
+        raw_tags = cleaned_data.get("tags", "")
+        normalized_tags = []
+        if raw_tags:
+            for raw_tag in raw_tags.split(","):
+                tag = raw_tag.strip().lstrip("#").lower()
+                if tag:
+                    normalized_tags.append(tag)
+        cleaned_data["tags"] = ",".join(dict.fromkeys(normalized_tags))
+
         cleaned_data["days_of_week"] = ",".join(days_of_week) if days_of_week else ""
         return cleaned_data
 
@@ -76,6 +101,7 @@ class HabitForm(forms.ModelForm):
 
         if schedule_type != Habit.SCHEDULE_DAYS:
             habit.days_of_week = ""
+        habit.tags = self.cleaned_data.get("tags", "")
 
         if commit:
             habit.save()

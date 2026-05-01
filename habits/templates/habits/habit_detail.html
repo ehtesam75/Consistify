@@ -6,6 +6,13 @@
         <p class="eyebrow">Habit focus</p>
         <h1>{{ habit.name }}</h1>
         <p class="subtitle">{{ habit.schedule_summary }}</p>
+        <div class="habit-flags top-space">
+            <span class="badge category {{ habit.category }}">{{ habit.get_category_display }}</span>
+            <span class="badge priority {{ habit.priority }}">{{ habit.get_priority_display }}</span>
+            {% for tag in tags %}
+                <span class="tag-chip">#{{ tag }}</span>
+            {% endfor %}
+        </div>
     </div>
     <div class="hero-actions">
         <a class="btn ghost" href="{% url 'habits:habit_edit' habit.id %}">Edit habit</a>
@@ -33,6 +40,10 @@
             <div class="stat">
                 <span class="stat-label">Next due</span>
                 <span class="stat-value">{% if next_due %}{{ next_due|date:"M d" }}{% else %}--{% endif %}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Consistency score</span>
+                <span class="stat-value">{{ metrics.consistency_score }}</span>
             </div>
         </div>
         {% if is_scheduled_today %}

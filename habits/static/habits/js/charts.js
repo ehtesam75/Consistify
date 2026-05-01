@@ -129,8 +129,95 @@ window.ConsistifyCharts = (() => {
         });
     }
 
+    function renderTrendLine(
+        canvasId,
+        labels,
+        primaryValues,
+        secondaryValues,
+        primaryLabel,
+        secondaryLabel
+    ) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !window.Chart) {
+            return;
+        }
+
+        const ctx = canvas.getContext("2d");
+        const gradient = buildGradient(ctx, canvas.height || 240);
+
+        new window.Chart(ctx, {
+            type: "line",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: primaryLabel,
+                        data: primaryValues,
+                        borderColor: palette.teal,
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointBackgroundColor: palette.teal,
+                        yAxisID: "y",
+                    },
+                    {
+                        label: secondaryLabel,
+                        data: secondaryValues,
+                        borderColor: palette.accent,
+                        backgroundColor: "rgba(176, 122, 55, 0.08)",
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointBackgroundColor: palette.accent,
+                        yAxisID: "y1",
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: (value) => value + "%",
+                        },
+                        grid: {
+                            color: palette.grid,
+                        },
+                    },
+                    y1: {
+                        beginAtZero: true,
+                        position: "right",
+                        grid: {
+                            drawOnChartArea: false,
+                        },
+                    },
+                    x: {
+                        grid: {
+                            display: false,
+                        },
+                    },
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            usePointStyle: true,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
     return {
         renderCompletionBars,
         renderRateLine,
+        renderTrendLine,
     };
 })();

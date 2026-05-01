@@ -19,7 +19,11 @@
                 {% if request.user.is_authenticated %}
                     <a href="{% url 'habits:today' %}">Today</a>
                     <a href="{% url 'habits:dashboard' %}">Dashboard</a>
+                    <a href="{% url 'habits:reports' %}">Reports</a>
+                    <a href="{% url 'habits:habit_compare' %}">Compare</a>
+                    <a href="{% url 'habits:profile' %}">Profile</a>
                     <a href="{% url 'habits:habit_create' %}">New habit</a>
+                    <button id="themeToggle" type="button" class="theme-toggle" aria-label="Toggle dark mode">Dark mode</button>
                     <form class="logout-form" method="post" action="{% url 'habits:logout' %}">
                         {% csrf_token %}
                         <button type="submit" class="link-button">Log out</button>
@@ -27,6 +31,7 @@
                 {% else %}
                     <a href="{% url 'habits:login' %}">Log in</a>
                     <a class="btn small" href="{% url 'habits:signup' %}">Sign up</a>
+                    <button id="themeToggle" type="button" class="theme-toggle" aria-label="Toggle dark mode">Dark mode</button>
                 {% endif %}
             </nav>
         </div>
@@ -54,6 +59,7 @@
     </footer>
 
     <script src="{% static 'habits/js/charts.js' %}"></script>
+    <script src="{% static 'habits/js/ui.js' %}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

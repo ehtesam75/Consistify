@@ -1,0 +1,100 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Analytics</p>
+        <h1>Weekly and monthly reports</h1>
+        <p class="subtitle">Track completion rates, streak shifts, and long-range consistency trends.</p>
+    </div>
+    <div class="hero-actions">
+        <a class="btn ghost" href="{% url 'habits:dashboard' %}">Back to dashboard</a>
+    </div>
+</section>
+
+<section class="card-grid">
+    <div class="card" style="--i: 0;">
+        <div class="card-header">
+            <h2>Weekly trend</h2>
+            <span class="tag">Last {{ weekly_reports|length }} weeks</span>
+        </div>
+        <div class="chart-wrap">
+            <canvas id="weeklyReportChart"></canvas>
+        </div>
+    </div>
+    <div class="card" style="--i: 1;">
+        <div class="card-header">
+            <h2>Monthly trend</h2>
+            <span class="tag">Last {{ monthly_reports|length }} months</span>
+        </div>
+        <div class="chart-wrap">
+            <canvas id="monthlyReportChart"></canvas>
+        </div>
+    </div>
+</section>
+
+<section class="card" style="--i: 2;">
+    <div class="card-header">
+        <h2>Weekly breakdown</h2>
+    </div>
+    <div class="table">
+        <div class="table-row table-header five-cols">
+            <span>Week</span>
+            <span>Completion</span>
+            <span>Avg streak</span>
+            <span>Change</span>
+            <span>Consistency</span>
+        </div>
+        {% for item in weekly_reports %}
+            <div class="table-row five-cols">
+                <span>{{ item.label }}</span>
+                <span>{{ item.completion_rate }}%</span>
+                <span>{{ item.avg_current_streak }}</span>
+                <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change }}</span>
+                <span>{{ item.consistency_score }}</span>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card" style="--i: 3;">
+    <div class="card-header">
+        <h2>Monthly breakdown</h2>
+    </div>
+    <div class="table">
+        <div class="table-row table-header five-cols">
+            <span>Month</span>
+            <span>Completion</span>
+            <span>Avg streak</span>
+            <span>Change</span>
+            <span>Consistency</span>
+        </div>
+        {% for item in monthly_reports %}
+            <div class="table-row five-cols">
+                <span>{{ item.label }}</span>
+                <span>{{ item.completion_rate }}%</span>
+                <span>{{ item.avg_current_streak }}</span>
+                <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change }}</span>
+                <span>{{ item.consistency_score }}</span>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const weeklyLabels = {{ weekly_labels|safe }};
+    const weeklyRates = {{ weekly_rates|safe }};
+    const weeklyStreak = {{ weekly_streak|safe }};
+    const monthlyLabels = {{ monthly_labels|safe }};
+    const monthlyRates = {{ monthly_rates|safe }};
+    const monthlyConsistency = {{ monthly_consistency|safe }};
+
+    if (window.ConsistifyCharts) {
+        window.ConsistifyCharts.renderTrendLine("weeklyReportChart", weeklyLabels, weeklyRates, weeklyStreak, "Completion %", "Avg streak");
+        window.ConsistifyCharts.renderTrendLine("monthlyReportChart", monthlyLabels, monthlyRates, monthlyConsistency, "Completion %", "Consistency");
+    }
+</script>
+{% endblock %}

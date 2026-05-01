@@ -1,0 +1,79 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Comparison</p>
+        <h1>Compare two habits</h1>
+        <p class="subtitle">Window: {{ window_start|date:"M d, Y" }} to {{ today|date:"M d, Y" }}</p>
+    </div>
+</section>
+
+<section class="card narrow">
+    <form method="get" class="form-grid">
+        <div class="field">
+            <label for="habit_a">Habit A</label>
+            <select id="habit_a" name="habit_a" class="select">
+                <option value="">Select habit</option>
+                {% for habit in habits %}
+                    <option value="{{ habit.id }}" {% if habit_a and habit.id == habit_a.id %}selected{% endif %}>{{ habit.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="habit_b">Habit B</label>
+            <select id="habit_b" name="habit_b" class="select">
+                <option value="">Select habit</option>
+                {% for habit in habits %}
+                    <option value="{{ habit.id }}" {% if habit_b and habit.id == habit_b.id %}selected{% endif %}>{{ habit.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-actions">
+            <button class="btn primary" type="submit">Compare</button>
+            <a class="btn ghost" href="{% url 'habits:habit_compare' %}">Reset</a>
+        </div>
+    </form>
+</section>
+
+{% if comparison %}
+<section class="card" style="--i: 1;">
+    <div class="card-header">
+        <h2>{{ comparison.habit_a.name }} vs {{ comparison.habit_b.name }}</h2>
+        <span class="tag">90 day analytics</span>
+    </div>
+    <div class="table">
+        <div class="table-row table-header">
+            <span>Metric</span>
+            <span>{{ comparison.habit_a.name }}</span>
+            <span>{{ comparison.habit_b.name }}</span>
+            <span>Difference (A-B)</span>
+        </div>
+        <div class="table-row">
+            <span>Completion rate</span>
+            <span>{{ comparison.metrics_a.completion_rate }}%</span>
+            <span>{{ comparison.metrics_b.completion_rate }}%</span>
+            <span>{% if comparison.completion_diff > 0 %}+{% endif %}{{ comparison.completion_diff }}</span>
+        </div>
+        <div class="table-row">
+            <span>Current streak</span>
+            <span>{{ comparison.metrics_a.current_streak }}</span>
+            <span>{{ comparison.metrics_b.current_streak }}</span>
+            <span>{% if comparison.current_streak_diff > 0 %}+{% endif %}{{ comparison.current_streak_diff }}</span>
+        </div>
+        <div class="table-row">
+            <span>Best streak</span>
+            <span>{{ comparison.metrics_a.max_streak }}</span>
+            <span>{{ comparison.metrics_b.max_streak }}</span>
+            <span>{% if comparison.max_streak_diff > 0 %}+{% endif %}{{ comparison.max_streak_diff }}</span>
+        </div>
+        <div class="table-row">
+            <span>Consistency score</span>
+            <span>{{ comparison.metrics_a.consistency_score }}</span>
+            <span>{{ comparison.metrics_b.consistency_score }}</span>
+            <span>{% if comparison.consistency_diff > 0 %}+{% endif %}{{ comparison.consistency_diff }}</span>
+        </div>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

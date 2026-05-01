@@ -1,0 +1,77 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">User profile</p>
+        <h1>Progress profile</h1>
+        <p class="subtitle">Long-term summary as of {{ today|date:"F j, Y" }}</p>
+    </div>
+</section>
+
+<section class="stats-grid wide">
+    <div class="stat-card">
+        <span class="stat-label">Total habits</span>
+        <span class="stat-value">{{ total_habits }}</span>
+        <span class="stat-note">Tracked habits</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Overall completion</span>
+        <span class="stat-value">{{ overall_completion }}%</span>
+        <span class="stat-note">{{ total_completed }}/{{ total_scheduled }} sessions</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Best streak</span>
+        <span class="stat-value">{{ best_streak }}</span>
+        <span class="stat-note">Across all habits</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Consistency score</span>
+        <span class="stat-value">{{ consistency_score }}</span>
+        <span class="stat-note">Global consistency index</span>
+    </div>
+</section>
+
+<section class="card" style="--i: 0;">
+    <div class="card-header">
+        <h2>Long-term progress</h2>
+        <span class="tag">Last 12 months</span>
+    </div>
+    <div class="chart-wrap">
+        <canvas id="profileProgressChart"></canvas>
+    </div>
+</section>
+
+<section class="card" style="--i: 1;">
+    <div class="card-header">
+        <h2>Monthly history</h2>
+    </div>
+    <div class="table">
+        <div class="table-row table-header">
+            <span>Month</span>
+            <span>Completion</span>
+            <span>Streak trend</span>
+            <span>Consistency</span>
+        </div>
+        {% for item in monthly_reports %}
+            <div class="table-row">
+                <span>{{ item.label }}</span>
+                <span>{{ item.completion_rate }}%</span>
+                <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change }}</span>
+                <span>{{ item.consistency_score }}</span>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const progressLabels = {{ progress_labels|safe }};
+    const progressRates = {{ progress_rates|safe }};
+    if (window.ConsistifyCharts) {
+        window.ConsistifyCharts.renderRateLine("profileProgressChart", progressLabels, progressRates);
+    }
+</script>
+{% endblock %}

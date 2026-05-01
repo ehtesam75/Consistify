@@ -34,6 +34,11 @@
         <span class="stat-value">{{ habits|length }}</span>
         <span class="stat-note">Currently tracked</span>
     </div>
+    <div class="stat-card">
+        <span class="stat-label">Consistency score</span>
+        <span class="stat-value">{{ overall_consistency }}</span>
+        <span class="stat-note">Across all habits</span>
+    </div>
 </section>
 
 <section class="card" style="--i: 0;">
@@ -59,6 +64,9 @@
                         <div>
                             <a class="habit-name" href="{% url 'habits:habit_detail' card.habit.id %}">{{ card.habit.name }}</a>
                             <p class="habit-meta">{{ card.rate }}% complete</p>
+                            <div class="habit-flags">
+                                <span class="badge priority {{ card.habit.priority }}">{{ card.habit.get_priority_display }}</span>
+                            </div>
                         </div>
                         <span class="tag">{{ card.completed }}/{{ card.scheduled }}</span>
                     </li>
@@ -81,6 +89,9 @@
                         <div>
                             <a class="habit-name" href="{% url 'habits:habit_detail' card.habit.id %}">{{ card.habit.name }}</a>
                             <p class="habit-meta">{{ card.rate }}% complete</p>
+                            <div class="habit-flags">
+                                <span class="badge priority {{ card.habit.priority }}">{{ card.habit.get_priority_display }}</span>
+                            </div>
                         </div>
                         <span class="tag">{{ card.completed }}/{{ card.scheduled }}</span>
                     </li>
@@ -99,18 +110,20 @@
     </div>
     {% if habit_cards %}
         <div class="table">
-            <div class="table-row table-header">
+            <div class="table-row table-header five-cols">
                 <span>Habit</span>
                 <span>Scheduled</span>
                 <span>Completed</span>
                 <span>Rate</span>
+                <span>Consistency</span>
             </div>
             {% for card in habit_cards %}
-                <div class="table-row">
+                <div class="table-row five-cols">
                     <a class="table-link" href="{% url 'habits:habit_detail' card.habit.id %}">{{ card.habit.name }}</a>
                     <span>{{ card.scheduled }}</span>
                     <span>{{ card.completed }}</span>
                     <span>{{ card.rate }}%</span>
+                    <span>{{ card.consistency }}</span>
                 </div>
             {% endfor %}
         </div>

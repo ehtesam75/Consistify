@@ -5,9 +5,17 @@ from .models import Habit, HabitCompletion
 
 @admin.register(Habit)
 class HabitAdmin(admin.ModelAdmin):
-    list_display = ("name", "user", "schedule_type", "start_date")
-    list_filter = ("schedule_type", "start_date")
-    search_fields = ("name", "description", "user__username")
+    list_display = (
+        "name",
+        "user",
+        "category",
+        "priority",
+        "schedule_type",
+        "start_date",
+        "sort_order",
+    )
+    list_filter = ("category", "priority", "schedule_type", "start_date")
+    search_fields = ("name", "description", "tags", "user__username")
 
 
 @admin.register(HabitCompletion)

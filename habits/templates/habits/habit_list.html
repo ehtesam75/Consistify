@@ -41,6 +41,13 @@
                         <div class="habit-info">
                             <a class="habit-name" href="{% url 'habits:habit_detail' item.habit.id %}">{{ item.habit.name }}</a>
                             <p class="habit-meta">{{ item.habit.schedule_summary }}</p>
+                            <div class="habit-flags">
+                                <span class="badge category {{ item.habit.category }}">{{ item.habit.get_category_display }}</span>
+                                <span class="badge priority {{ item.habit.priority }}">{{ item.habit.get_priority_display }}</span>
+                                {% for tag in item.tags %}
+                                    <span class="tag-chip">#{{ tag }}</span>
+                                {% endfor %}
+                            </div>
                         </div>
                         <a class="link" href="{% url 'habits:habit_edit' item.habit.id %}">Edit</a>
                     </li>
@@ -54,15 +61,22 @@
     <div class="card" style="--i: 1;">
         <div class="card-header">
             <h2>All habits</h2>
-            <span class="tag">{{ all_count }} total</span>
+            <span class="tag">{{ all_count }} total · drag to reorder</span>
         </div>
         {% if habits %}
-            <ul class="habit-list">
+            <ul class="habit-list" id="habitSortList" data-reorder-url="{% url 'habits:reorder_habits' %}">
                 {% for habit in habits %}
-                    <li class="habit-row compact" style="--i: {{ forloop.counter0 }};">
+                    <li class="habit-row compact reorder-item" style="--i: {{ forloop.counter0 }};" draggable="true" data-habit-id="{{ habit.id }}">
                         <div>
                             <a class="habit-name" href="{% url 'habits:habit_detail' habit.id %}">{{ habit.name }}</a>
                             <p class="habit-meta">{{ habit.schedule_summary }}</p>
+                            <div class="habit-flags">
+                                <span class="badge category {{ habit.category }}">{{ habit.get_category_display }}</span>
+                                <span class="badge priority {{ habit.priority }}">{{ habit.get_priority_display }}</span>
+                                {% for tag in habit.get_tags %}
+                                    <span class="tag-chip">#{{ tag }}</span>
+                                {% endfor %}
+                            </div>
                         </div>
                         <a class="link" href="{% url 'habits:habit_edit' habit.id %}">Edit</a>
                     </li>
@@ -73,4 +87,12 @@
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (window.ConsistifyUI) {
+        window.ConsistifyUI.enableHabitDragSort("habitSortList");
+    }
+</script>
 {% endblock %}
