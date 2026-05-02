@@ -166,6 +166,18 @@
                 This habit will appear in your Today list based on the selected schedule.
             {% endif %}
         </p>
+
+        {% if form.instance.pk %}
+            <div class="danger-zone">
+                <h3>Delete habit</h3>
+                <p class="help">Deleting will remove this habit and all tracked history.</p>
+                <form method="post" action="{% url 'habits:habit_delete' form.instance.pk %}" data-confirm-delete data-confirm-message="Delete this habit and all its history? This cannot be undone." onsubmit="return window.confirm('Delete this habit and all its history? This cannot be undone.')">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'habits:today' %}">
+                    <button class="btn danger" type="submit">Delete habit</button>
+                </form>
+            </div>
+        {% endif %}
     </aside>
 </section>
 {% endblock %}

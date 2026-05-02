@@ -81,7 +81,10 @@
     {% if messages %}
         <div class="toast-stack" aria-live="polite" aria-atomic="true">
             {% for message in messages %}
-                <div class="toast toast-{{ message.tags|default:'info' }}">{{ message }}</div>
+                <div class="toast toast-{{ message.tags|default:'info' }}" role="status">
+                    <span class="toast-icon" aria-hidden="true"></span>
+                    <span class="toast-text">{{ message }}</span>
+                </div>
             {% endfor %}
         </div>
     {% endif %}

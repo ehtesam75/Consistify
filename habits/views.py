@@ -48,6 +48,20 @@ def index(request):
 class ConsistifyLoginView(auth_views.LoginView):
     template_name = "registration/login.html"
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Logged in successfully.")
+        return response
+
+
+class ConsistifyLogoutView(auth_views.LogoutView):
+    next_page = "habits:login"
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        messages.success(request, "Logged out successfully.")
+        return response
+
 
 @login_required
 def habit_list(request):
@@ -296,6 +310,18 @@ def habit_edit(request, habit_id):
             "submit_label": "Save changes",
         },
     )
+
+
+@login_required
+@require_POST
+def habit_delete(request, habit_id):
+    habit = get_object_or_404(Habit, id=habit_id, user=request.user)
+    habit_name = habit.name
+    habit.delete()
+    messages.success(request, f'"{habit_name}" deleted.')
+
+    next_url = request.POST.get("next")
+    return redirect(next_url or reverse("habits:today"))
 
 
 @login_required
@@ -551,7 +577,7 @@ def signup(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
-            messages.success(request, "Welcome to Consistify.")
+            messages.success(request, "Signup successful. Welcome to Consistify.")
             return redirect("habits:today")
     else:
         form = UserCreationForm()

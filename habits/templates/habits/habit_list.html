@@ -99,12 +99,25 @@
                                 {% endfor %}
                             </div>
                         </div>
-                        <a class="icon-link" href="{% url 'habits:habit_edit' habit.id %}" aria-label="Edit {{ habit.name }}" title="Edit {{ habit.name }}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M12 20h9"></path>
-                                <path d="m16.5 3.5 4 4L8 20l-4 1 1-4 11.5-13.5z"></path>
-                            </svg>
-                        </a>
+                        <div class="habit-row-actions" data-no-drag draggable="false">
+                            <a class="icon-link" href="{% url 'habits:habit_edit' habit.id %}" aria-label="Edit {{ habit.name }}" title="Edit {{ habit.name }}">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 20h9"></path>
+                                    <path d="m16.5 3.5 4 4L8 20l-4 1 1-4 11.5-13.5z"></path>
+                                </svg>
+                            </a>
+                            <form method="post" action="{% url 'habits:habit_delete' habit.id %}" class="icon-form" data-confirm-delete data-confirm-message="Delete this habit and all its history? This cannot be undone." onsubmit="return window.confirm('Delete this habit and all its history? This cannot be undone.')">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button class="icon-link icon-danger" type="submit" aria-label="Delete {{ habit.name }}" title="Delete {{ habit.name }}" draggable="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
                     </li>
                 {% endfor %}
             </ul>

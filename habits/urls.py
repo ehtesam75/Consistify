@@ -1,4 +1,3 @@
-from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from . import views
@@ -16,10 +15,11 @@ urlpatterns = [
     path("habits/new/", views.habit_create, name="habit_create"),
     path("habits/<int:habit_id>/", views.habit_detail, name="habit_detail"),
     path("habits/<int:habit_id>/edit/", views.habit_edit, name="habit_edit"),
+    path("habits/<int:habit_id>/delete/", views.habit_delete, name="habit_delete"),
     path("habits/<int:habit_id>/toggle/", views.update_progress, name="toggle_completion"),
     path("habits/<int:habit_id>/progress/", views.update_progress, name="update_progress"),
     path("habits/reorder/", views.reorder_habits, name="reorder_habits"),
     path("accounts/signup/", views.signup, name="signup"),
     path("accounts/login/", views.ConsistifyLoginView.as_view(), name="login"),
-    path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("accounts/logout/", views.ConsistifyLogoutView.as_view(), name="logout"),
 ]

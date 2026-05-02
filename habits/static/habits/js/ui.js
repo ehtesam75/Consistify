@@ -90,6 +90,10 @@ window.ConsistifyUI = (() => {
         let draggingItem = null;
 
         list.addEventListener("dragstart", (event) => {
+            if (event.target.closest("[data-no-drag]")) {
+                event.preventDefault();
+                return;
+            }
             const item = event.target.closest(".reorder-item");
             if (!item) {
                 return;
@@ -179,13 +183,24 @@ window.ConsistifyUI = (() => {
             const fill = form.querySelector("[data-progress-fill]");
             const percentLabel = form.querySelector("[data-progress-percent]");
             const caption = form.querySelector("[data-progress-caption]");
-            let submitTimer = null;
+            const usesBlurAutosave =
+                habitType === "partial" || habitType === "quantitative";
+            let allowAutoSubmit = false;
 
-            const scheduleSubmit = (delay = 350) => {
-                if (submitTimer) {
-                    window.clearTimeout(submitTimer);
-                }
-                submitTimer = window.setTimeout(() => submitForm(form), delay);
+            if (usesBlurAutosave) {
+                form.addEventListener("submit", (event) => {
+                    if (!allowAutoSubmit) {
+                        event.preventDefault();
+                    }
+                });
+            }
+
+            const submitProgress = () => {
+                allowAutoSubmit = true;
+                submitForm(form);
+                window.setTimeout(() => {
+                    allowAutoSubmit = false;
+                }, 0);
             };
 
             const updateVisual = (percent, rawValue) => {
@@ -206,7 +221,7 @@ window.ConsistifyUI = (() => {
             if (habitType === "partial") {
                 const range = form.querySelector("[data-progress-range]");
                 const input = form.querySelector("[data-progress-input]");
-                const sync = (value, shouldSubmit) => {
+                const sync = (value) => {
                     const percent = Math.round(
                         clampNumber(parseNumber(value, 0), 0, 100)
                     );
@@ -217,69 +232,167 @@ window.ConsistifyUI = (() => {
                         input.value = percent;
                     }
                     updateVisual(percent, percent);
-                    if (shouldSubmit) {
-                        scheduleSubmit();
-                    }
+                    return percent;
                 };
+                let committedPercent = sync(
+                    input ? input.value : range ? range.value : 0
+                );
 
                 if (range) {
                     range.addEventListener("input", (event) =>
-                        sync(event.target.value, false)
+                        sync(event.target.value)
                     );
                     range.addEventListener("change", (event) =>
-                        sync(event.target.value, true)
+                        sync(event.target.value)
                     );
                 }
                 if (input) {
-                    input.addEventListener("input", (event) =>
-                        sync(event.target.value, true)
+                    let submitFromOutsideClick = false;
+                    const armSubmitOnOutsideClick = (event) => {
+                        if (document.activeElement !== input) {
+                            return;
+                        }
+                        if (event.target === input) {
+                            submitFromOutsideClick = false;
+                            return;
+                        }
+                        submitFromOutsideClick = true;
+                    };
+                    document.addEventListener(
+                        "mousedown",
+                        armSubmitOnOutsideClick,
+                        true
                     );
+                    document.addEventListener(
+                        "touchstart",
+                        armSubmitOnOutsideClick,
+                        true
+                    );
+
+                    input.addEventListener("input", (event) =>
+                        sync(event.target.value)
+                    );
+                    input.addEventListener("keydown", (event) => {
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                        }
+                    });
+                    input.addEventListener("focus", () => {
+                        submitFromOutsideClick = false;
+                    });
+                    input.addEventListener("blur", () => {
+                        const shouldSubmit = submitFromOutsideClick;
+                        submitFromOutsideClick = false;
+                        if (!shouldSubmit) {
+                            return;
+                        }
+                        const rawValue = input.value.trim();
+                        if (rawValue === "") {
+                            sync(committedPercent);
+                            return;
+                        }
+                        const enteredValue = Number(rawValue);
+                        if (!Number.isFinite(enteredValue)) {
+                            sync(committedPercent);
+                            return;
+                        }
+                        const nextPercent = sync(enteredValue);
+                        if (nextPercent !== committedPercent) {
+                            committedPercent = nextPercent;
+                            submitProgress();
+                        }
+                    });
                 }
-                const initial = input ? input.value : range ? range.value : 0;
-                sync(initial, false);
                 return;
             }
 
             if (habitType === "quantitative") {
                 const input = form.querySelector("[data-quant-input]");
+                if (!input) {
+                    return;
+                }
                 const stepButtons = form.querySelectorAll("[data-step]");
-                const stepValue = input ? parseNumber(input.step, 1) : 1;
+                const stepValue = parseNumber(input.step, 1);
+                const minValue = parseNumber(input.min, 0);
+                const maxValue = parseNumber(
+                    input.max,
+                    Number.POSITIVE_INFINITY
+                );
 
-                const update = (shouldSubmit) => {
-                    if (!input) {
-                        return;
-                    }
-                    const current = Math.round(parseNumber(input.value, 0));
+                const sync = (value) => {
+                    const current = Math.round(
+                        clampNumber(parseNumber(value, 0), minValue, maxValue)
+                    );
                     input.value = current;
                     const percent = targetValue > 0 ? (current / targetValue) * 100 : 0;
                     updateVisual(percent, current);
-                    if (shouldSubmit) {
-                        scheduleSubmit(200);
-                    }
+                    return current;
                 };
+                let committedValue = sync(input.value);
 
                 stepButtons.forEach((button) => {
                     button.addEventListener("click", () => {
-                        if (!input) {
-                            return;
-                        }
                         const delta = parseNumber(button.dataset.step, 0) * stepValue;
                         const current = parseNumber(input.value, 0) + delta;
-                        const minValue = parseNumber(input.min, 0);
-                        const maxValue = parseNumber(
-                            input.max,
-                            Number.POSITIVE_INFINITY
-                        );
                         const nextValue = clampNumber(current, minValue, maxValue);
                         input.value = Math.round(nextValue);
-                        update(true);
+                        sync(input.value);
                     });
                 });
 
-                if (input) {
-                    input.addEventListener("input", () => update(true));
-                    update(false);
-                }
+                let submitFromOutsideClick = false;
+                const armSubmitOnOutsideClick = (event) => {
+                    if (document.activeElement !== input) {
+                        return;
+                    }
+                    if (event.target === input) {
+                        submitFromOutsideClick = false;
+                        return;
+                    }
+                    submitFromOutsideClick = true;
+                };
+                document.addEventListener(
+                    "mousedown",
+                    armSubmitOnOutsideClick,
+                    true
+                );
+                document.addEventListener(
+                    "touchstart",
+                    armSubmitOnOutsideClick,
+                    true
+                );
+
+                input.addEventListener("input", () => sync(input.value));
+                input.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                    }
+                });
+                input.addEventListener("focus", () => {
+                    submitFromOutsideClick = false;
+                });
+                input.addEventListener("blur", () => {
+                    const shouldSubmit = submitFromOutsideClick;
+                    submitFromOutsideClick = false;
+                    if (!shouldSubmit) {
+                        return;
+                    }
+                    const rawValue = input.value.trim();
+                    if (rawValue === "") {
+                        sync(committedValue);
+                        return;
+                    }
+                    const enteredValue = Number(rawValue);
+                    if (!Number.isFinite(enteredValue)) {
+                        sync(committedValue);
+                        return;
+                    }
+                    const nextValue = sync(enteredValue);
+                    if (nextValue !== committedValue) {
+                        committedValue = nextValue;
+                        submitProgress();
+                    }
+                });
                 return;
             }
 
@@ -298,9 +411,24 @@ window.ConsistifyUI = (() => {
         });
     }
 
+    function initDeleteConfirmations() {
+        const deleteForms = document.querySelectorAll("[data-confirm-delete]");
+        deleteForms.forEach((form) => {
+            form.addEventListener("submit", (event) => {
+                const message =
+                    form.dataset.confirmMessage ||
+                    "Delete this habit? This cannot be undone.";
+                if (!window.confirm(message)) {
+                    event.preventDefault();
+                }
+            });
+        });
+    }
+
     function initUiFeatures() {
         initThemeToggle();
         initHabitProgressControls();
+        initDeleteConfirmations();
     }
 
     if (document.readyState === "loading") {
