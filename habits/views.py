@@ -1,7 +1,10 @@
 import json
+import logging
+import secrets
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth import views as auth_views
@@ -13,6 +16,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .forms import HabitForm
@@ -30,6 +34,9 @@ from .services import (
     habit_performance_metrics,
     iter_scheduled_dates,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def index(request):
@@ -338,6 +345,25 @@ def update_progress(request, habit_id):
     return redirect(next_url or reverse("habits:today"))
 
 
+@csrf_exempt
+def cron_job(request):
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Method not allowed."}, status=405)
+
+    authorization_header = request.headers.get("Authorization", "")
+    provided_secret = _extract_authorization_token(authorization_header)
+
+    if not settings.CRON_SECRET or not provided_secret or not secrets.compare_digest(
+        provided_secret,
+        settings.CRON_SECRET,
+    ):
+        return JsonResponse({"ok": False, "error": "Unauthorized."}, status=401)
+
+    _run_cron_job()
+    logger.info("Cron job executed successfully.")
+    return JsonResponse({"ok": True, "message": "Cron job executed successfully."})
+
+
 @login_required
 @require_POST
 def reorder_habits(request):
@@ -569,3 +595,18 @@ def _get_date_from_request(request):
         if parsed:
             return parsed
     return timezone.localdate()
+
+
+def _extract_authorization_token(authorization_header):
+    if not authorization_header:
+        return ""
+
+    if authorization_header.startswith("Bearer "):
+        return authorization_header.removeprefix("Bearer ").strip()
+
+    return authorization_header.strip()
+
+
+def _run_cron_job():
+    """Placeholder for cron logic that can be extended later."""
+    return None

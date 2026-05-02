@@ -4,16 +4,26 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def _parse_env_list(raw_value, default_values):
+    values = [item.strip() for item in raw_value.split(",") if item.strip()] if raw_value else []
+    return values + [value for value in default_values if value not in values]
+
 # Security
 SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key')
 
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    'consistify-app.onrender.com',
-]
+ALLOWED_HOSTS = _parse_env_list(
+    os.environ.get('ALLOWED_HOSTS', ''),
+    [
+        'localhost',
+        '127.0.0.1',
+        'consistify-app.onrender.com',
+    ],
+)
+
+CRON_SECRET = os.environ.get('CRON_SECRET', '')
 
 
 # Applications
