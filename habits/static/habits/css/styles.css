@@ -1,4 +1,5 @@
 :root {
+    color-scheme: light;
     --ink: #1c1f24;
     --ink-soft: #4b5566;
     --bg-main: #f2ede3;
@@ -15,6 +16,7 @@
 }
 
 :root[data-theme="dark"] {
+    color-scheme: dark;
     --ink: #e9ebf0;
     --ink-soft: #b7c0d0;
     --bg-main: #141925;

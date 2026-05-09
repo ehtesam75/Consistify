@@ -5,6 +5,25 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Consistify</title>
+    <script>
+        (() => {
+            const key = "consistify-theme";
+            const dark = "dark";
+            const light = "light";
+            let theme = light;
+
+            try {
+                const storedTheme = window.localStorage.getItem(key);
+                if (storedTheme === dark || storedTheme === light) {
+                    theme = storedTheme;
+                }
+            } catch (error) {
+                theme = light;
+            }
+
+            document.documentElement.setAttribute("data-theme", theme);
+        })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
