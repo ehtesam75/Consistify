@@ -1,11 +1,22 @@
 from calendar import monthrange
 from datetime import date, timedelta
+from math import sqrt
 
 from django.utils import timezone
 
 from .models import Habit, HabitCompletion
 
 ANALYTICS_START_DATE = date(2026, 5, 2)
+CONSISTENCY_COMPLETION_QUALITY_WEIGHT = 0.45
+CONSISTENCY_FULL_COMPLETION_WEIGHT = 0.25
+CONSISTENCY_STREAK_STABILITY_WEIGHT = 0.15
+CONSISTENCY_RECENT_MOMENTUM_WEIGHT = 0.15
+RECENT_MOMENTUM_WINDOW = 14
+PRIORITY_SCORE_WEIGHTS = {
+    Habit.PRIORITY_HIGH: 1.3,
+    Habit.PRIORITY_MEDIUM: 1.0,
+    Habit.PRIORITY_LOW: 0.8,
+}
 
 
 def iter_scheduled_dates(habit, start_date, end_date):
@@ -77,6 +88,25 @@ def _is_completed(percentage_value):
     return percentage_value >= 100
 
 
+def _clamped_percentage(percentage_value):
+    return max(0.0, min(100.0, float(percentage_value or 0)))
+
+
+def _has_meaningful_progress(percentage_value):
+    return _clamped_percentage(percentage_value) > 0
+
+
+def _scored_scheduled_dates(scheduled_dates, completion_map, end_date):
+    if not scheduled_dates:
+        return scheduled_dates
+
+    today = timezone.localdate()
+    latest_scheduled_date = scheduled_dates[-1]
+    if end_date == today and latest_scheduled_date == today and today not in completion_map:
+        return scheduled_dates[:-1]
+    return scheduled_dates
+
+
 def _streak_metrics(scheduled_dates, completion_map):
     max_streak = 0
     current_run = 0
@@ -109,16 +139,77 @@ def _streak_metrics(scheduled_dates, completion_map):
     }
 
 
-def _consistency_score(completed_ratio):
-    return round(completed_ratio * 100, 1)
+def _rhythm_stability(scheduled_dates, completion_map):
+    effort_flags = [
+        _has_meaningful_progress(completion_map.get(scheduled_date, 0))
+        for scheduled_date in scheduled_dates
+    ]
+    if not any(effort_flags):
+        return 0.0
+
+    first_effort_index = effort_flags.index(True)
+    scoped_flags = effort_flags[first_effort_index:]
+    if len(scoped_flags) == 1:
+        return 1.0
+
+    break_count = sum(
+        1
+        for previous, current in zip(scoped_flags, scoped_flags[1:])
+        if previous and not current
+    )
+    break_ratio = break_count / (len(scoped_flags) - 1)
+    return max(0.0, round(1 - break_ratio, 4))
+
+
+def _recent_momentum(scheduled_dates, completion_map):
+    recent_dates = scheduled_dates[-RECENT_MOMENTUM_WINDOW:]
+    if not recent_dates:
+        return 0.0
+
+    weighted_completion = 0.0
+    total_weight = 0
+    for index, scheduled_date in enumerate(recent_dates, start=1):
+        weight = index
+        weighted_completion += (
+            _clamped_percentage(completion_map.get(scheduled_date, 0)) / 100
+        ) * weight
+        total_weight += weight
+
+    if total_weight == 0:
+        return 0.0
+    return weighted_completion / total_weight
+
+
+def _consistency_score(
+    completion_quality,
+    full_completion_ratio,
+    streak_stability,
+    recent_momentum,
+):
+    score = (
+        completion_quality * CONSISTENCY_COMPLETION_QUALITY_WEIGHT
+        + full_completion_ratio * CONSISTENCY_FULL_COMPLETION_WEIGHT
+        + streak_stability * CONSISTENCY_STREAK_STABILITY_WEIGHT
+        + recent_momentum * CONSISTENCY_RECENT_MOMENTUM_WEIGHT
+    ) * 100
+    return round(score, 1)
+
+
+def _habit_consistency_weight(habit, scheduled_total):
+    if scheduled_total <= 0:
+        return 0.0
+    priority_weight = PRIORITY_SCORE_WEIGHTS.get(habit.priority, 1.0)
+    return priority_weight * sqrt(scheduled_total)
 
 
 def habit_performance_metrics(habit, start_date, end_date, completion_map=None, value_map=None):
     scheduled_dates = list(iter_scheduled_dates(habit, start_date, end_date))
-    scheduled_total = len(scheduled_dates)
 
     if completion_map is None or value_map is None:
         completion_map, value_map = get_completion_maps(habit, start_date, end_date)
+
+    scheduled_dates = _scored_scheduled_dates(scheduled_dates, completion_map, end_date)
+    scheduled_total = len(scheduled_dates)
 
     if scheduled_total == 0:
         return {
@@ -132,6 +223,9 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
             "consistency_score": 0.0,
             "average_completion": 0.0,
             "average_value": 0.0,
+            "completion_quality": 0.0,
+            "full_completion_reliability": 0.0,
+            "recent_momentum": 0.0,
         }
 
     streaks = _streak_metrics(scheduled_dates, completion_map)
@@ -140,7 +234,7 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
     total_completion = 0.0
     total_value = 0.0
     for scheduled_date in scheduled_dates:
-        total_completion += completion_map.get(scheduled_date, 0) or 0
+        total_completion += _clamped_percentage(completion_map.get(scheduled_date, 0))
         total_value += value_map.get(scheduled_date, 0) or 0
     average_completion = round(total_completion / scheduled_total, 1)
     completion_rate = average_completion
@@ -149,13 +243,16 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
     else:
         average_value = round(total_value / scheduled_total, 2)
 
-    if scheduled_total == 1:
-        streak_stability = 1.0 if completed_total else 0.0
-    else:
-        break_ratio = streaks["streak_breaks"] / (scheduled_total - 1)
-        streak_stability = max(0.0, round(1 - break_ratio, 4))
-    completed_ratio = completed_total / scheduled_total
-    consistency_score = _consistency_score(completed_ratio=completed_ratio)
+    completion_quality = (total_completion / scheduled_total) / 100
+    full_completion_ratio = completed_total / scheduled_total
+    streak_stability = _rhythm_stability(scheduled_dates, completion_map)
+    recent_momentum = _recent_momentum(scheduled_dates, completion_map)
+    consistency_score = _consistency_score(
+        completion_quality=completion_quality,
+        full_completion_ratio=full_completion_ratio,
+        streak_stability=streak_stability,
+        recent_momentum=recent_momentum,
+    )
 
     return {
         "scheduled_total": scheduled_total,
@@ -168,6 +265,9 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
         "consistency_score": consistency_score,
         "average_completion": average_completion,
         "average_value": average_value,
+        "completion_quality": round(completion_quality * 100, 1),
+        "full_completion_reliability": round(full_completion_ratio * 100, 1),
+        "recent_momentum": round(recent_momentum * 100, 1),
     }
 
 
@@ -204,18 +304,19 @@ def completion_stats(habit, start_date, end_date, completion_map=None, value_map
 
 def calculate_overall_consistency(habits, start_date, end_date):
     weighted_score = 0.0
-    weighted_sessions = 0
+    total_weight = 0.0
 
     for habit in habits:
         metrics = habit_performance_metrics(habit, start_date, end_date)
         if metrics["scheduled_total"] == 0:
             continue
-        weighted_sessions += metrics["scheduled_total"]
-        weighted_score += metrics["consistency_score"] * metrics["scheduled_total"]
+        weight = _habit_consistency_weight(habit, metrics["scheduled_total"])
+        total_weight += weight
+        weighted_score += metrics["consistency_score"] * weight
 
-    if weighted_sessions == 0:
+    if total_weight == 0:
         return 0.0
-    return round(weighted_score / weighted_sessions, 1)
+    return round(weighted_score / total_weight, 1)
 
 
 def compare_habits(habit_a, habit_b, start_date, end_date):
@@ -244,7 +345,8 @@ def _build_period_snapshot(habits, start_date, end_date, label):
     tracked_habits = 0
     sum_current_streak = 0
     sum_max_streak = 0
-    consistency_weight = 0.0
+    consistency_weighted_score = 0.0
+    consistency_total_weight = 0.0
 
     for habit in habits:
         metrics = habit_performance_metrics(habit, start_date, end_date)
@@ -256,7 +358,9 @@ def _build_period_snapshot(habits, start_date, end_date, label):
         total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
         sum_current_streak += metrics["current_streak"]
         sum_max_streak += metrics["max_streak"]
-        consistency_weight += metrics["consistency_score"] * metrics["scheduled_total"]
+        consistency_weight = _habit_consistency_weight(habit, metrics["scheduled_total"])
+        consistency_weighted_score += metrics["consistency_score"] * consistency_weight
+        consistency_total_weight += consistency_weight
 
     completion_rate = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
     average_current_streak = (
@@ -264,7 +368,9 @@ def _build_period_snapshot(habits, start_date, end_date, label):
     )
     average_max_streak = round(sum_max_streak / tracked_habits, 1) if tracked_habits else 0.0
     consistency_score = (
-        round(consistency_weight / total_scheduled, 1) if total_scheduled else 0.0
+        round(consistency_weighted_score / consistency_total_weight, 1)
+        if consistency_total_weight
+        else 0.0
     )
 
     return {
