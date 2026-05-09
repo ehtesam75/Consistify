@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 def index(request):
     if request.user.is_authenticated:
         return redirect("habits:today")
-    return redirect("habits:login")
+    return render(request, "habits/home.html")
 
 
 class ConsistifyLoginView(auth_views.LoginView):
@@ -55,7 +55,7 @@ class ConsistifyLoginView(auth_views.LoginView):
 
 
 class ConsistifyLogoutView(auth_views.LogoutView):
-    next_page = "habits:login"
+    next_page = "habits:index"
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)

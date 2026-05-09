@@ -1,0 +1,207 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<div class="home-page">
+    <section class="home-hero" aria-labelledby="home-title">
+        <div class="home-hero-copy">
+            <p class="eyebrow">Habit tracking for steady progress</p>
+            <h1 id="home-title">Consistify</h1>
+            <p class="home-tagline">
+                Plan flexible routines, log daily progress, and turn your consistency into
+                clear, useful feedback.
+            </p>
+            <div class="hero-actions">
+                <a class="btn primary" href="{% url 'habits:signup' %}">Start tracking</a>
+                <a class="btn ghost" href="{% url 'habits:login' %}">Log in</a>
+            </div>
+            <div class="home-hero-points" aria-label="Platform highlights">
+                <span>Daily tracking</span>
+                <span>Streak insights</span>
+                <span>Flexible schedules</span>
+            </div>
+        </div>
+
+        <div class="product-preview" id="preview" aria-label="Consistify dashboard preview">
+            <div class="preview-topbar">
+                <span class="preview-window-dot"></span>
+                <span class="preview-window-dot"></span>
+                <span class="preview-window-dot"></span>
+                <span class="preview-topbar-title">Today</span>
+            </div>
+            <div class="preview-body">
+                <div class="preview-stats">
+                    <div class="preview-stat">
+                        <span class="stat-label">Completion</span>
+                        <strong>87%</strong>
+                    </div>
+                    <div class="preview-stat">
+                        <span class="stat-label">Streak</span>
+                        <strong>14d</strong>
+                    </div>
+                    <div class="preview-stat">
+                        <span class="stat-label">Score</span>
+                        <strong>91</strong>
+                    </div>
+                </div>
+                <div class="preview-chart" aria-hidden="true">
+                    <span style="--bar: 48%;"></span>
+                    <span style="--bar: 68%;"></span>
+                    <span style="--bar: 42%;"></span>
+                    <span style="--bar: 82%;"></span>
+                    <span style="--bar: 76%;"></span>
+                    <span style="--bar: 94%;"></span>
+                    <span style="--bar: 88%;"></span>
+                </div>
+                <div class="preview-habits">
+                    <div class="preview-habit done">
+                        <span class="preview-check"></span>
+                        <div>
+                            <strong>Morning stretch</strong>
+                            <small>Complete</small>
+                        </div>
+                        <span class="tag">Health</span>
+                    </div>
+                    <div class="preview-habit">
+                        <span class="preview-progress"><span></span></span>
+                        <div>
+                            <strong>Read 20 pages</strong>
+                            <small>65% logged</small>
+                        </div>
+                        <span class="tag">Study</span>
+                    </div>
+                    <div class="preview-habit">
+                        <span class="preview-progress alt"><span></span></span>
+                        <div>
+                            <strong>Focus block</strong>
+                            <small>Scheduled tonight</small>
+                        </div>
+                        <span class="tag">Work</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="home-section" id="features" aria-labelledby="features-title">
+        <div class="home-section-header">
+            <p class="eyebrow">Core features</p>
+            <h2 id="features-title">A focused system for building habits that last.</h2>
+            <p>
+                Consistify gives each habit the right amount of structure, then turns
+                your daily check-ins into patterns you can act on.
+            </p>
+        </div>
+        <div class="feature-grid">
+            <article class="feature-card">
+                <span class="feature-icon">01</span>
+                <h3>Habit tracking</h3>
+                <p>Track binary, partial, and measurable habits with clean progress controls.</p>
+            </article>
+            <article class="feature-card">
+                <span class="feature-icon">02</span>
+                <h3>Streaks</h3>
+                <p>See current and best streaks so small wins stay visible.</p>
+            </article>
+            <article class="feature-card">
+                <span class="feature-icon">03</span>
+                <h3>Analytics</h3>
+                <p>Review completion rates across daily, weekly, and monthly windows.</p>
+            </article>
+            <article class="feature-card">
+                <span class="feature-icon">04</span>
+                <h3>Consistency score</h3>
+                <p>Measure dependability across your routines, not just raw totals.</p>
+            </article>
+            <article class="feature-card">
+                <span class="feature-icon">05</span>
+                <h3>Charts</h3>
+                <p>Spot trends with visual reports that make progress easier to compare.</p>
+            </article>
+            <article class="feature-card">
+                <span class="feature-icon">06</span>
+                <h3>Scheduling flexibility</h3>
+                <p>Set habits for the days that make sense instead of forcing a rigid calendar.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="home-section analytics-preview" aria-labelledby="analytics-title">
+        <div class="home-section-header">
+            <p class="eyebrow">Analytics preview</p>
+            <h2 id="analytics-title">Know what is working before motivation fades.</h2>
+        </div>
+        <div class="analytics-preview-grid">
+            <article class="analytics-card main-analytics-card">
+                <div class="card-header">
+                    <h3>Consistency trend</h3>
+                    <span class="tag">Last 14 days</span>
+                </div>
+                <div class="trend-line" aria-hidden="true">
+                    <span style="--point: 42%;"></span>
+                    <span style="--point: 56%;"></span>
+                    <span style="--point: 50%;"></span>
+                    <span style="--point: 68%;"></span>
+                    <span style="--point: 78%;"></span>
+                    <span style="--point: 72%;"></span>
+                    <span style="--point: 88%;"></span>
+                </div>
+            </article>
+            <article class="analytics-card">
+                <span class="stat-label">Overall completion</span>
+                <strong>82%</strong>
+                <p>Clear completion rates across all scheduled sessions.</p>
+            </article>
+            <article class="analytics-card">
+                <span class="stat-label">Completed sessions</span>
+                <strong>126</strong>
+                <p>A running view of the work already banked.</p>
+            </article>
+            <article class="analytics-card">
+                <span class="stat-label">Flexible schedule</span>
+                <strong>4x</strong>
+                <p>Weekly cadence built around your real availability.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="home-section workflow-section" id="workflow" aria-labelledby="workflow-title">
+        <div class="home-section-header">
+            <p class="eyebrow">Workflow</p>
+            <h2 id="workflow-title">From intention to insight in four simple steps.</h2>
+        </div>
+        <div class="workflow-grid">
+            <article class="workflow-step">
+                <span>1</span>
+                <h3>Create</h3>
+                <p>Name a habit, choose its type, and set the days it belongs on your schedule.</p>
+            </article>
+            <article class="workflow-step">
+                <span>2</span>
+                <h3>Check in</h3>
+                <p>Log a yes or no, a percentage, or a measurable value from the Today view.</p>
+            </article>
+            <article class="workflow-step">
+                <span>3</span>
+                <h3>Review</h3>
+                <p>Use the dashboard to compare completion, streaks, and consistency score.</p>
+            </article>
+            <article class="workflow-step">
+                <span>4</span>
+                <h3>Adjust</h3>
+                <p>Refine your cadence with reports and keep the routine realistic.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="home-cta" aria-labelledby="home-cta-title">
+        <div>
+            <p class="eyebrow">Ready when you are</p>
+            <h2 id="home-cta-title">Start with one habit and let the data stay honest.</h2>
+        </div>
+        <div class="hero-actions">
+            <a class="btn primary" href="{% url 'habits:signup' %}">Create account</a>
+            <a class="btn ghost" href="{% url 'habits:login' %}">I already have one</a>
+        </div>
+    </section>
+</div>
+{% endblock %}

@@ -14,7 +14,7 @@
     <div class="ambient-bg"></div>
     <header class="site-header">
         <div class="container nav">
-            <a class="brand" href="{% url 'habits:today' %}">Consistify</a>
+            <a class="brand" href="{% if request.user.is_authenticated %}{% url 'habits:today' %}{% else %}{% url 'habits:index' %}{% endif %}">Consistify</a>
             {% if request.user.is_authenticated %}
                 <nav class="nav-primary">
                     <a class="nav-link {% if request.resolver_match.url_name == 'today' or request.resolver_match.url_name == 'habit_detail' or request.resolver_match.url_name == 'habit_edit' or request.resolver_match.url_name == 'habit_create' %}active{% endif %}" href="{% url 'habits:today' %}">Today</a>
