@@ -37,7 +37,7 @@
             </div>
             <div class="stat">
                 <span class="stat-label">30 day completion</span>
-                <span class="stat-value">{{ stats.full_completion_reliability }}%</span>
+                <span class="stat-value">{{ stats.completion_rate|floatformat:1 }}%</span>
             </div>
             <div class="stat">
                 <span class="stat-label">Avg completion</span>
