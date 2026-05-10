@@ -26,7 +26,7 @@ class HabitForm(forms.ModelForm):
         queryset=HabitCategory.objects.none(),
         required=True,
         widget=forms.SelectMultiple(attrs={"class": "select select-multi", "size": 8}),
-        help_text="Select up to two categories.",
+        help_text="Select up to three categories.",
     )
     tags = forms.CharField(
         required=False,
@@ -106,8 +106,8 @@ class HabitForm(forms.ModelForm):
 
         if not categories:
             self.add_error("categories", "Select at least one category.")
-        elif len(categories) > 2:
-            self.add_error("categories", "Choose at most two categories.")
+        elif len(categories) > 3:
+            self.add_error("categories", "Choose at most three categories.")
 
         if schedule_type == Habit.SCHEDULE_INTERVAL and interval_days < 1:
             self.add_error("interval_days", "Interval must be at least 1 day.")

@@ -542,6 +542,11 @@ main > section + section {
     justify-content: flex-end;
 }
 
+.progress-form[data-habit-type="binary"] .progress-controls {
+    width: 100%;
+    justify-content: flex-end;
+}
+
 .progress-range {
     width: 110px;
     accent-color: var(--accent);
@@ -856,14 +861,13 @@ main > section + section {
 .checkbox span::after {
     content: "";
     position: absolute;
-    width: 6px;
-    height: 10px;
-    border: 2px solid #fff;
-    border-top: 0;
-    border-left: 0;
-    top: 3px;
-    left: 7px;
-    transform: rotate(45deg);
+    width: 8px;
+    height: 4px;
+    border-left: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
     opacity: 0;
 }
 

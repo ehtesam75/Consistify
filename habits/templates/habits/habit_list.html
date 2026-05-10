@@ -33,13 +33,7 @@
                             <a class="habit-name" href="{% url 'habits:habit_detail' item.habit.id %}">{{ item.habit.name }}</a>
                             <p class="habit-meta">{{ item.habit.schedule_summary }}</p>
                             <div class="habit-flags">
-                                {% for category in item.habit.categories.all %}
-                                    <span class="badge category {{ category.key }}">{{ category.label }}</span>
-                                {% endfor %}
                                 <span class="badge priority {{ item.habit.priority }}">{{ item.habit.get_priority_display }}</span>
-                                {% for tag in item.tags %}
-                                    <span class="tag-chip">#{{ tag }}</span>
-                                {% endfor %}
                             </div>
                         </div>
                         <div class="habit-progress">

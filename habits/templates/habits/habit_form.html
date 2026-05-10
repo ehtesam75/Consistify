@@ -82,15 +82,15 @@
             <div class="form-panel field-span-2" id="section-categories">
                 <div class="panel-header">
                     <h2 class="panel-title">Categories</h2>
-                    <p class="panel-subtitle">Add up to two categories for better grouping.</p>
+                    <p class="panel-subtitle">Add up to three categories for better grouping.</p>
                 </div>
                 <div class="field">
                     <div class="field-label-row">
                         <label>Selection</label>
-                        <span class="select-count" id="categoryCount">0/2 selected</span>
+                        <span class="select-count" id="categoryCount">0/3 selected</span>
                     </div>
                     {{ form.categories }}
-                    <p class="help">Select up to two categories. Hold Ctrl/Cmd to pick multiple.</p>
+                    <p class="help">Select up to three categories. Hold Ctrl/Cmd to pick multiple.</p>
                     {{ form.categories.errors }}
                 </div>
             </div>
@@ -232,7 +232,7 @@
 
     const categorySelect = document.getElementById("id_categories");
     const categoryCount = document.getElementById("categoryCount");
-    const categoryLimit = 2;
+    const categoryLimit = 3;
     let previousCategoryValues = categorySelect
         ? Array.from(categorySelect.selectedOptions).map((option) => option.value)
         : [];
