@@ -203,6 +203,17 @@ window.ConsistifyUI = (() => {
                 }, 0);
             };
 
+            let pendingSubmitId = null;
+            const queueSubmit = () => {
+                if (pendingSubmitId) {
+                    window.clearTimeout(pendingSubmitId);
+                }
+                pendingSubmitId = window.setTimeout(() => {
+                    pendingSubmitId = null;
+                    submitProgress();
+                }, 400);
+            };
+
             const updateVisual = (percent, rawValue) => {
                 const safePercent = clampNumber(parseNumber(percent, 0), 0, 100);
                 if (fill) {
@@ -237,13 +248,20 @@ window.ConsistifyUI = (() => {
                 let committedPercent = sync(
                     input ? input.value : range ? range.value : 0
                 );
+                const commitPercent = (value) => {
+                    const nextPercent = sync(value);
+                    if (nextPercent !== committedPercent) {
+                        committedPercent = nextPercent;
+                        queueSubmit();
+                    }
+                };
 
                 if (range) {
                     range.addEventListener("input", (event) =>
                         sync(event.target.value)
                     );
                     range.addEventListener("change", (event) =>
-                        sync(event.target.value)
+                        commitPercent(event.target.value)
                     );
                 }
                 if (input) {
@@ -299,7 +317,7 @@ window.ConsistifyUI = (() => {
                         const nextPercent = sync(enteredValue);
                         if (nextPercent !== committedPercent) {
                             committedPercent = nextPercent;
-                            submitProgress();
+                            queueSubmit();
                         }
                     });
                 }
@@ -329,14 +347,20 @@ window.ConsistifyUI = (() => {
                     return current;
                 };
                 let committedValue = sync(input.value);
+                const commitValue = (value) => {
+                    const nextValue = sync(value);
+                    if (nextValue !== committedValue) {
+                        committedValue = nextValue;
+                        queueSubmit();
+                    }
+                };
 
                 stepButtons.forEach((button) => {
                     button.addEventListener("click", () => {
                         const delta = parseNumber(button.dataset.step, 0) * stepValue;
                         const current = parseNumber(input.value, 0) + delta;
                         const nextValue = clampNumber(current, minValue, maxValue);
-                        input.value = Math.round(nextValue);
-                        sync(input.value);
+                        commitValue(nextValue);
                     });
                 });
 
@@ -390,7 +414,7 @@ window.ConsistifyUI = (() => {
                     const nextValue = sync(enteredValue);
                     if (nextValue !== committedValue) {
                         committedValue = nextValue;
-                        submitProgress();
+                        queueSubmit();
                     }
                 });
                 return;

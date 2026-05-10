@@ -14,16 +14,23 @@
 </section>
 
 <div class="date-nav">
-    <a class="btn ghost small" href="?date={{ prev_date|date:'Y-m-d' }}">Previous</a>
+    <a class="btn ghost small" href="?date={{ prev_date|date:'Y-m-d' }}{% if hide_completed %}&hide_completed=1{% endif %}">Previous</a>
     <span class="date-chip">{{ target_date|date:"M d, Y" }}</span>
-    <a class="btn ghost small" href="?date={{ next_date|date:'Y-m-d' }}">Next</a>
+    <a class="btn ghost small" href="?date={{ next_date|date:'Y-m-d' }}{% if hide_completed %}&hide_completed=1{% endif %}">Next</a>
 </div>
 
 <section class="card-grid">
     <div class="card" style="--i: 0;">
         <div class="card-header">
             <h2>Scheduled habits</h2>
-            <span class="tag">{{ completed_count }}/{{ scheduled_count }} completed</span>
+            <div class="card-header-actions">
+                <span class="tag">{{ completed_count }}/{{ scheduled_count }} completed</span>
+                {% if hide_completed %}
+                    <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}">Show completed</a>
+                {% else %}
+                    <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}&hide_completed=1">Hide completed</a>
+                {% endif %}
+            </div>
         </div>
         {% if scheduled_habits %}
             <ul class="habit-list">
@@ -71,7 +78,11 @@
                 {% endfor %}
             </ul>
         {% else %}
-            <p class="empty">No habits scheduled for this day.</p>
+            {% if hide_completed and scheduled_count %}
+                <p class="empty">All scheduled habits are completed.</p>
+            {% else %}
+                <p class="empty">No habits scheduled for this day.</p>
+            {% endif %}
         {% endif %}
     </div>
 

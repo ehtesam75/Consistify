@@ -104,13 +104,22 @@ def habit_list(request):
         1 for item in scheduled_habits if item["completion_percentage"] >= 100
     )
 
+    hide_completed = request.GET.get("hide_completed") == "1"
+    visible_scheduled_habits = (
+        [item for item in scheduled_habits if not item["completed"]]
+        if hide_completed
+        else scheduled_habits
+    )
+
     context = {
         "target_date": target_date,
         "prev_date": target_date - timedelta(days=1),
         "next_date": target_date + timedelta(days=1),
-        "scheduled_habits": scheduled_habits,
+        "scheduled_habits": visible_scheduled_habits,
         "scheduled_count": len(scheduled_habits),
         "completed_count": completed_count,
+        "hide_completed": hide_completed,
+        "visible_scheduled_count": len(visible_scheduled_habits),
         "habits": habits,
         "all_count": len(habits),
     }
@@ -321,6 +330,7 @@ def habit_create(request):
             )
             habit.sort_order = max_order + 1
             habit.save()
+            form.save_m2m()
             messages.success(request, "Habit created.")
             return redirect("habits:habit_detail", habit_id=habit.id)
     else:

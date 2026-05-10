@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from .models import Habit, HabitCategory, HabitCompletion
 
-ANALYTICS_START_DATE = date(2026, 5, 2)
+ANALYTICS_START_DATE = date(2026, 5, 10)
 CONSISTENCY_COMPLETION_QUALITY_WEIGHT = 0.45
 CONSISTENCY_FULL_COMPLETION_WEIGHT = 0.25
 CONSISTENCY_STREAK_STABILITY_WEIGHT = 0.15

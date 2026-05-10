@@ -431,6 +431,13 @@ main > section + section {
     margin-bottom: 1rem;
 }
 
+.card-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
 .tag {
     display: inline-flex;
     align-items: center;
