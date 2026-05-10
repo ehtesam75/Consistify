@@ -3,6 +3,7 @@ import logging
 import secrets
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from math import ceil
 
 from django.conf import settings
 from django.contrib import messages
@@ -193,7 +194,7 @@ def dashboard(request):
             if not habit.is_scheduled_on(current_day):
                 continue
             daily_values.append(completion_map.get((habit.id, current_day), 0.0))
-        rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else 0.0
+        rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else None
         chart_labels.append(current_day.strftime("%b %d"))
         chart_rates.append(rate)
 
@@ -455,6 +456,7 @@ def reports(request):
     weekly_labels = [item["label"] for item in weekly_reports]
     weekly_rates = [item["completion_rate"] for item in weekly_reports]
     weekly_streak = [item["avg_current_streak"] for item in weekly_reports]
+    weekly_streak_max = max(1, ceil(max(weekly_streak))) if weekly_streak else 1
 
     monthly_labels = [item["label"] for item in monthly_reports]
     monthly_rates = [item["completion_rate"] for item in monthly_reports]
@@ -467,6 +469,7 @@ def reports(request):
         "weekly_labels": json.dumps(weekly_labels),
         "weekly_rates": json.dumps(weekly_rates),
         "weekly_streak": json.dumps(weekly_streak),
+        "weekly_streak_max": weekly_streak_max,
         "monthly_labels": json.dumps(monthly_labels),
         "monthly_rates": json.dumps(monthly_rates),
         "monthly_consistency": json.dumps(monthly_consistency),
@@ -479,6 +482,7 @@ def habit_compare(request):
     habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
     today = timezone.localdate()
     window_start = clamp_analytics_start(today - timedelta(days=89))
+    last30_start = clamp_analytics_start(today - timedelta(days=29))
     habits_by_id = {habit.id: habit for habit in habits}
     selected_ids = []
     for raw_id in request.GET.getlist("habit_ids"):
@@ -499,6 +503,7 @@ def habit_compare(request):
     if len(selected_habits) >= 2:
         for habit in selected_habits:
             metrics_90 = habit_performance_metrics(habit, window_start, today)
+            metrics_30 = habit_performance_metrics(habit, last30_start, today)
             all_time_start = clamp_analytics_start(habit.start_date)
             metrics_all = habit_performance_metrics(habit, all_time_start, today)
             comparison_rows.append(
@@ -506,7 +511,7 @@ def habit_compare(request):
                     "habit": habit,
                     "metrics_90": metrics_90,
                     "metrics_all": metrics_all,
-                    "avg_daily_30": round(metrics_90["average_completion"], 1),
+                    "avg_daily_30": round(metrics_30["average_completion"], 1),
                     "avg_daily_all": round(metrics_all["average_completion"], 1),
                 }
             )

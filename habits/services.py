@@ -634,6 +634,7 @@ def completion_stats(habit, start_date, end_date, completion_map=None, value_map
         "completion_rate": metrics["completion_rate"],
         "average_completion": metrics["average_completion"],
         "average_value": metrics["average_value"],
+        "full_completion_reliability": metrics["full_completion_reliability"],
     }
 
 

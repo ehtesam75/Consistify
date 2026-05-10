@@ -34,7 +34,7 @@
             <span class="stat-label">{{ row.habit.name }}</span>
             <span class="stat-value">{{ row.metrics_90.completion_rate }}%</span>
             <span class="stat-note">Completion (last 90 days)</span>
-            <span class="stat-note">Avg daily value: {{ row.avg_daily_30 }} (30d), {{ row.avg_daily_all }} (all time)</span>
+            <span class="stat-note">Avg completion: {{ row.avg_daily_30 }}% (30d), {{ row.avg_daily_all }}% (all time)</span>
         </div>
     {% endfor %}
 </section>
