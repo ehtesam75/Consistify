@@ -75,10 +75,10 @@
         {% if history %}
             <ul class="history-grid">
                 {% for item in history %}
-                    <li class="history-item {% if item.completed %}done{% endif %}">
+                    <li class="history-item {{ item.status }}">
                         <span class="history-date">{{ item.date|date:"M d" }}</span>
                         <span class="history-status">
-                            {% if item.completed %}Done{% else %}Missed{% endif %}
+                            {{ item.status_label }}
                             <span class="history-percent">{{ item.completion_percentage|floatformat:0 }}%</span>
                         </span>
                     </li>

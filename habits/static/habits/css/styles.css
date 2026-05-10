@@ -950,6 +950,11 @@ main > section + section {
     border-color: rgba(47, 111, 109, 0.3);
 }
 
+.history-item.pending {
+    background: rgba(176, 122, 55, 0.12);
+    border-color: rgba(176, 122, 55, 0.3);
+}
+
 .history-date {
     font-weight: 600;
 }

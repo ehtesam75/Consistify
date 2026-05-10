@@ -247,14 +247,28 @@ def habit_detail(request, habit_id):
     recent_dates = history_dates[-30:]
 
     completion_map, value_map = get_completion_maps(habit, history_start, today)
-    history = [
-        {
-            "date": scheduled_date,
-            "completion_percentage": completion_map.get(scheduled_date, 0),
-            "completed": completion_map.get(scheduled_date, 0) >= 100,
-        }
-        for scheduled_date in recent_dates
-    ]
+    history = []
+    for scheduled_date in recent_dates:
+        completion_percentage = completion_map.get(scheduled_date, 0)
+        completed = completion_percentage >= 100
+        if completed:
+            status = "done"
+            status_label = "Done"
+        elif scheduled_date == today:
+            status = "pending"
+            status_label = "Pending"
+        else:
+            status = "missed"
+            status_label = "Missed"
+        history.append(
+            {
+                "date": scheduled_date,
+                "completion_percentage": completion_percentage,
+                "completed": completed,
+                "status": status,
+                "status_label": status_label,
+            }
+        )
 
     window_start = clamp_analytics_start(today - timedelta(days=29))
     window_completion_map = {
