@@ -70,7 +70,11 @@ class ConsistifyLogoutView(auth_views.LogoutView):
 @login_required
 def habit_list(request):
     target_date = _get_date_from_request(request)
-    habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
+    habits = list(
+        Habit.objects.filter(user=request.user)
+        .prefetch_related("categories")
+        .order_by("sort_order", "name")
+    )
     completions = HabitCompletion.objects.filter(habit__in=habits, date=target_date)
     completion_map = {completion.habit_id: completion for completion in completions}
 
@@ -121,7 +125,11 @@ def dashboard(request):
         window_start,
         today,
     )
-    habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
+    habits = list(
+        Habit.objects.filter(user=request.user)
+        .prefetch_related("categories")
+        .order_by("sort_order", "name")
+    )
 
     habit_cards = []
     total_scheduled = 0
@@ -219,7 +227,11 @@ def dashboard(request):
 
 @login_required
 def habit_detail(request, habit_id):
-    habit = get_object_or_404(Habit, id=habit_id, user=request.user)
+    habit = get_object_or_404(
+        Habit.objects.prefetch_related("categories"),
+        id=habit_id,
+        user=request.user,
+    )
     today = timezone.localdate()
     history_start = clamp_analytics_start(today - timedelta(days=120))
     history_dates = list(iter_scheduled_dates(habit, history_start, today))
@@ -448,7 +460,11 @@ def reorder_habits(request):
 @login_required
 def reports(request):
     today = timezone.localdate()
-    habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
+    habits = list(
+        Habit.objects.filter(user=request.user)
+        .prefetch_related("categories")
+        .order_by("sort_order", "name")
+    )
 
     weekly_reports = build_weekly_reports(habits, weeks=8, today=today)
     monthly_reports = build_monthly_reports(habits, months=6, today=today)
@@ -479,7 +495,11 @@ def reports(request):
 
 @login_required
 def habit_compare(request):
-    habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
+    habits = list(
+        Habit.objects.filter(user=request.user)
+        .prefetch_related("categories")
+        .order_by("sort_order", "name")
+    )
     today = timezone.localdate()
     window_start = clamp_analytics_start(today - timedelta(days=89))
     last30_start = clamp_analytics_start(today - timedelta(days=29))
@@ -637,7 +657,11 @@ def _build_score_driver_cards(score_drivers):
 @login_required
 def profile(request):
     today = timezone.localdate()
-    habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
+    habits = list(
+        Habit.objects.filter(user=request.user)
+        .prefetch_related("categories")
+        .order_by("sort_order", "name")
+    )
 
     if habits:
         start_date = clamp_analytics_start(min(habit.start_date for habit in habits))

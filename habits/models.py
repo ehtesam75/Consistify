@@ -6,6 +6,30 @@ from django.db import models
 from django.utils import timezone
 
 
+DEFAULT_CATEGORIES = [
+    ("health", "Health"),
+    ("study", "Study"),
+    ("work", "Work"),
+    ("personal", "Personal"),
+    ("organize", "Organize"),
+    ("good-deeds", "Good deeds"),
+    ("self-development", "Self development"),
+    ("for-her-sake", "For her sake"),
+]
+
+
+class HabitCategory(models.Model):
+    key = models.SlugField(max_length=32, unique=True)
+    label = models.CharField(max_length=40)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "label"]
+
+    def __str__(self):
+        return self.label
+
+
 class Habit(models.Model):
     HABIT_BINARY = "binary"
     HABIT_PARTIAL = "partial"
@@ -26,17 +50,6 @@ class Habit(models.Model):
         (SCHEDULE_WEEKLY, "Weekly"),
         (SCHEDULE_DAYS, "Specific days"),
         (SCHEDULE_INTERVAL, "Custom interval"),
-    ]
-
-    CATEGORY_HEALTH = "health"
-    CATEGORY_STUDY = "study"
-    CATEGORY_WORK = "work"
-    CATEGORY_PERSONAL = "personal"
-    CATEGORY_CHOICES = [
-        (CATEGORY_HEALTH, "Health"),
-        (CATEGORY_STUDY, "Study"),
-        (CATEGORY_WORK, "Work"),
-        (CATEGORY_PERSONAL, "Personal"),
     ]
 
     PRIORITY_HIGH = "high"
@@ -64,10 +77,10 @@ class Habit(models.Model):
     )
     unit = models.CharField(max_length=24, blank=True)
     schedule_type = models.CharField(max_length=12, choices=SCHEDULE_CHOICES)
-    category = models.CharField(
-        max_length=12,
-        choices=CATEGORY_CHOICES,
-        default=CATEGORY_PERSONAL,
+    categories = models.ManyToManyField(
+        HabitCategory,
+        blank=True,
+        related_name="habits",
     )
     priority = models.CharField(
         max_length=6,

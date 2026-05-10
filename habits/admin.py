@@ -9,7 +9,7 @@ class HabitAdmin(admin.ModelAdmin):
         "name",
         "user",
         "habit_type",
-        "category",
+        "category_list",
         "priority",
         "schedule_type",
         "start_date",
@@ -17,8 +17,14 @@ class HabitAdmin(admin.ModelAdmin):
         "unit",
         "sort_order",
     )
-    list_filter = ("habit_type", "category", "priority", "schedule_type", "start_date")
+    list_filter = ("habit_type", "categories", "priority", "schedule_type", "start_date")
     search_fields = ("name", "description", "tags", "user__username")
+    filter_horizontal = ("categories",)
+
+    def category_list(self, obj):
+        return ", ".join(category.label for category in obj.categories.all())
+
+    category_list.short_description = "Categories"
 
 
 @admin.register(HabitCompletion)

@@ -4,7 +4,7 @@ from math import sqrt
 
 from django.utils import timezone
 
-from .models import Habit, HabitCompletion
+from .models import Habit, HabitCategory, HabitCompletion
 
 ANALYTICS_START_DATE = date(2026, 5, 2)
 CONSISTENCY_COMPLETION_QUALITY_WEIGHT = 0.45
@@ -478,8 +478,18 @@ def build_category_analytics(habits, start_date, end_date):
     best_category = None
     weakest_category = None
 
-    for category_key, category_label in Habit.CATEGORY_CHOICES:
-        category_habits = [habit for habit in habits if habit.category == category_key]
+    categories = list(HabitCategory.objects.all())
+    habit_category_ids = {
+        habit.id: {category.id for category in habit.categories.all()}
+        for habit in habits
+    }
+
+    for category in categories:
+        category_habits = [
+            habit
+            for habit in habits
+            if category.id in habit_category_ids.get(habit.id, set())
+        ]
         total_scheduled = 0
         total_completed = 0
         total_completion = 0.0
@@ -506,8 +516,8 @@ def build_category_analytics(habits, start_date, end_date):
             round(weighted_score / total_weight, 1) if total_weight else 0.0
         )
         summary = {
-            "key": category_key,
-            "label": category_label,
+            "key": category.key,
+            "label": category.label,
             "habit_count": len(category_habits),
             "scheduled_total": total_scheduled,
             "completed_total": total_completed,

@@ -2,7 +2,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django import forms
 
-from .models import Habit
+from .models import Habit, HabitCategory
 
 
 class HabitForm(forms.ModelForm):
@@ -21,6 +21,12 @@ class HabitForm(forms.ModelForm):
         required=False,
         widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox-grid"}),
         help_text="Only used for specific-day schedules.",
+    )
+    categories = forms.ModelMultipleChoiceField(
+        queryset=HabitCategory.objects.none(),
+        required=True,
+        widget=forms.SelectMultiple(attrs={"class": "select select-multi", "size": 8}),
+        help_text="Select up to two categories.",
     )
     tags = forms.CharField(
         required=False,
@@ -54,7 +60,7 @@ class HabitForm(forms.ModelForm):
             "target_value",
             "unit",
             "schedule_type",
-            "category",
+            "categories",
             "priority",
             "tags",
             "start_date",
@@ -67,7 +73,6 @@ class HabitForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"class": "textarea", "rows": 4}),
             "habit_type": forms.Select(attrs={"class": "select"}),
             "schedule_type": forms.Select(attrs={"class": "select"}),
-            "category": forms.Select(attrs={"class": "select"}),
             "priority": forms.Select(attrs={"class": "select"}),
             "start_date": forms.DateInput(attrs={"class": "input", "type": "date"}),
             "interval_days": forms.NumberInput(attrs={"class": "input", "min": 1}),
@@ -80,6 +85,7 @@ class HabitForm(forms.ModelForm):
         self.fields["weekly_interval"].required = False
         self.fields["target_value"].required = False
         self.fields["unit"].required = False
+        self.fields["categories"].queryset = HabitCategory.objects.all()
         if self.instance and self.instance.days_of_week:
             self.initial["days_of_week"] = self.instance.days_of_week.split(",")
         if self.instance and self.instance.tags:
@@ -93,9 +99,15 @@ class HabitForm(forms.ModelForm):
         interval_days = cleaned_data.get("interval_days") or 0
         weekly_interval = cleaned_data.get("weekly_interval") or 0
         days_of_week = cleaned_data.get("days_of_week") or []
+        categories = cleaned_data.get("categories") or []
         habit_type = cleaned_data.get("habit_type")
         target_value = cleaned_data.get("target_value")
         unit = (cleaned_data.get("unit") or "").strip()
+
+        if not categories:
+            self.add_error("categories", "Select at least one category.")
+        elif len(categories) > 2:
+            self.add_error("categories", "Choose at most two categories.")
 
         if schedule_type == Habit.SCHEDULE_INTERVAL and interval_days < 1:
             self.add_error("interval_days", "Interval must be at least 1 day.")
@@ -147,4 +159,5 @@ class HabitForm(forms.ModelForm):
 
         if commit:
             habit.save()
+            self.save_m2m()
         return habit

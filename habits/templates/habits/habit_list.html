@@ -33,7 +33,9 @@
                             <a class="habit-name" href="{% url 'habits:habit_detail' item.habit.id %}">{{ item.habit.name }}</a>
                             <p class="habit-meta">{{ item.habit.schedule_summary }}</p>
                             <div class="habit-flags">
-                                <span class="badge category {{ item.habit.category }}">{{ item.habit.get_category_display }}</span>
+                                {% for category in item.habit.categories.all %}
+                                    <span class="badge category {{ category.key }}">{{ category.label }}</span>
+                                {% endfor %}
                                 <span class="badge priority {{ item.habit.priority }}">{{ item.habit.get_priority_display }}</span>
                                 {% for tag in item.tags %}
                                     <span class="tag-chip">#{{ tag }}</span>
@@ -92,7 +94,9 @@
                             <a class="habit-name" href="{% url 'habits:habit_detail' habit.id %}">{{ habit.name }}</a>
                             <p class="habit-meta">{{ habit.schedule_summary }}</p>
                             <div class="habit-flags">
-                                <span class="badge category {{ habit.category }}">{{ habit.get_category_display }}</span>
+                                {% for category in habit.categories.all %}
+                                    <span class="badge category {{ category.key }}">{{ category.label }}</span>
+                                {% endfor %}
                                 <span class="badge priority {{ habit.priority }}">{{ habit.get_priority_display }}</span>
                                 {% for tag in habit.get_tags %}
                                     <span class="tag-chip">#{{ tag }}</span>

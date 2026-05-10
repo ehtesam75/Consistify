@@ -14,7 +14,8 @@
         <div class="form-step-row">
             <a class="form-step-chip active" href="#section-details">1. Details</a>
             <a class="form-step-chip" href="#section-tracking">2. Tracking</a>
-            <a class="form-step-chip" href="#section-schedule">3. Schedule</a>
+            <a class="form-step-chip" href="#section-categories">3. Categories</a>
+            <a class="form-step-chip" href="#section-schedule">4. Schedule</a>
         </div>
 
         <form method="post" class="form-grid habit-form-grid modern-form-grid">
@@ -47,15 +48,22 @@
                 </div>
             </div>
 
-            <div class="form-panel" id="section-tracking">
+            <div class="form-panel field-span-2" id="section-tracking">
                 <div class="panel-header">
                     <h2 class="panel-title">Tracking type</h2>
-                    <p class="panel-subtitle">Choose how this habit is measured every day.</p>
+                    <p class="panel-subtitle">Choose how this habit is measured and how urgent it is.</p>
                 </div>
-                <div class="field">
-                    <label for="{{ form.habit_type.id_for_label }}">Habit type</label>
-                    {{ form.habit_type }}
-                    {{ form.habit_type.errors }}
+                <div class="field-row" id="trackingFieldRow">
+                    <div class="field">
+                        <label for="{{ form.habit_type.id_for_label }}">Habit type</label>
+                        {{ form.habit_type }}
+                        {{ form.habit_type.errors }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.priority.id_for_label }}">Priority</label>
+                        {{ form.priority }}
+                        {{ form.priority.errors }}
+                    </div>
                 </div>
                 <div class="field-row" data-field="quantitative">
                     <div class="field">
@@ -71,22 +79,19 @@
                 </div>
             </div>
 
-            <div class="form-panel" id="section-focus">
+            <div class="form-panel field-span-2" id="section-categories">
                 <div class="panel-header">
-                    <h2 class="panel-title">Focus settings</h2>
-                    <p class="panel-subtitle">Classify this habit to improve organization.</p>
+                    <h2 class="panel-title">Categories</h2>
+                    <p class="panel-subtitle">Add up to two categories for better grouping.</p>
                 </div>
-                <div class="field-row" id="focusFieldRow">
-                    <div class="field">
-                        <label for="{{ form.category.id_for_label }}">Category</label>
-                        {{ form.category }}
-                        {{ form.category.errors }}
+                <div class="field">
+                    <div class="field-label-row">
+                        <label>Selection</label>
+                        <span class="select-count" id="categoryCount">0/2 selected</span>
                     </div>
-                    <div class="field">
-                        <label for="{{ form.priority.id_for_label }}">Priority</label>
-                        {{ form.priority }}
-                        {{ form.priority.errors }}
-                    </div>
+                    {{ form.categories }}
+                    <p class="help">Select up to two categories. Hold Ctrl/Cmd to pick multiple.</p>
+                    {{ form.categories.errors }}
                 </div>
             </div>
 
@@ -191,7 +196,6 @@
     const habitTypeSelect = document.getElementById("id_habit_type");
     const quantitativeFields = document.querySelectorAll("[data-field='quantitative']");
     const trackingPanel = document.getElementById("section-tracking");
-    const focusFieldRow = document.getElementById("focusFieldRow");
 
     function updateScheduleFields() {
         if (!scheduleSelect) {
@@ -219,14 +223,56 @@
         if (trackingPanel) {
             trackingPanel.classList.toggle("tracking-compact", !showQuant);
         }
-        if (focusFieldRow) {
-            focusFieldRow.classList.toggle("field-row-stacked", showQuant);
-        }
     }
 
     if (habitTypeSelect) {
         habitTypeSelect.addEventListener("change", updateHabitTypeFields);
         updateHabitTypeFields();
+    }
+
+    const categorySelect = document.getElementById("id_categories");
+    const categoryCount = document.getElementById("categoryCount");
+    const categoryLimit = 2;
+    let previousCategoryValues = categorySelect
+        ? Array.from(categorySelect.selectedOptions).map((option) => option.value)
+        : [];
+
+    function updateCategoryCount(values) {
+        if (!categoryCount) {
+            return;
+        }
+        categoryCount.textContent = `${values.length}/${categoryLimit} selected`;
+    }
+
+    function applyCategorySelection(values) {
+        if (!categorySelect) {
+            return;
+        }
+        const allowed = new Set(values);
+        Array.from(categorySelect.options).forEach((option) => {
+            option.selected = allowed.has(option.value);
+        });
+    }
+
+    function updateCategoryLimit() {
+        if (!categorySelect) {
+            return;
+        }
+        const selectedValues = Array.from(categorySelect.selectedOptions).map(
+            (option) => option.value
+        );
+        if (selectedValues.length > categoryLimit) {
+            applyCategorySelection(previousCategoryValues);
+            updateCategoryCount(previousCategoryValues);
+            return;
+        }
+        previousCategoryValues = selectedValues;
+        updateCategoryCount(selectedValues);
+    }
+
+    if (categorySelect) {
+        categorySelect.addEventListener("change", updateCategoryLimit);
+        updateCategoryCount(previousCategoryValues);
     }
 </script>
 {% endblock %}

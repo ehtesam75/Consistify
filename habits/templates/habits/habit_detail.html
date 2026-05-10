@@ -7,7 +7,9 @@
         <h1>{{ habit.name }}</h1>
         <p class="subtitle">{{ habit.schedule_summary }}</p>
         <div class="habit-flags top-space">
-            <span class="badge category {{ habit.category }}">{{ habit.get_category_display }}</span>
+            {% for category in habit.categories.all %}
+                <span class="badge category {{ category.key }}">{{ category.label }}</span>
+            {% endfor %}
             <span class="badge priority {{ habit.priority }}">{{ habit.get_priority_display }}</span>
             {% for tag in tags %}
                 <span class="tag-chip">#{{ tag }}</span>

@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Habit, HabitCompletion
+from .models import DEFAULT_CATEGORIES, Habit, HabitCategory, HabitCompletion
 from .services import (
     build_category_analytics,
     build_habit_score_drivers,
@@ -23,6 +23,30 @@ class ConsistencyScoreTests(TestCase):
             username="score-user",
             password="not-used",
         )
+        self.categories = {}
+        for index, (key, label) in enumerate(DEFAULT_CATEGORIES, start=1):
+            category, _ = HabitCategory.objects.get_or_create(
+                key=key,
+                defaults={"label": label, "sort_order": index},
+            )
+            self.categories[key] = category
+
+    def _create_habit(
+        self,
+        name,
+        start_date,
+        habit_type=Habit.HABIT_PARTIAL,
+        schedule_type=Habit.SCHEDULE_DAILY,
+        priority=Habit.PRIORITY_MEDIUM,
+    ):
+        return Habit.objects.create(
+            user=self.user,
+            name=name,
+            habit_type=habit_type,
+            schedule_type=schedule_type,
+            priority=priority,
+            start_date=start_date,
+        )
 
     def make_habit(
         self,
@@ -31,17 +55,19 @@ class ConsistencyScoreTests(TestCase):
         habit_type=Habit.HABIT_PARTIAL,
         schedule_type=Habit.SCHEDULE_DAILY,
         priority=Habit.PRIORITY_MEDIUM,
-        category=Habit.CATEGORY_PERSONAL,
+        categories=None,
     ):
-        return Habit.objects.create(
-            user=self.user,
-            name=name,
+        habit = self._create_habit(
+            name,
+            start_date,
             habit_type=habit_type,
             schedule_type=schedule_type,
             priority=priority,
-            category=category,
-            start_date=start_date,
         )
+        if categories is None:
+            categories = [self.categories["personal"]]
+        habit.categories.set(categories)
+        return habit
 
     def log_completion(self, habit, target_date, percentage):
         value = Decimal(str(percentage))
@@ -221,9 +247,9 @@ class ConsistencyScoreTests(TestCase):
 
     def test_category_analytics_marks_best_and_weakest_categories(self):
         start = date(2026, 1, 1)
-        health = self.make_habit("Lift", start, category=Habit.CATEGORY_HEALTH)
-        study = self.make_habit("Read", start, category=Habit.CATEGORY_STUDY)
-        work = self.make_habit("Ship", start, category=Habit.CATEGORY_WORK)
+        health = self.make_habit("Lift", start, categories=[self.categories["health"]])
+        study = self.make_habit("Read", start, categories=[self.categories["study"]])
+        work = self.make_habit("Ship", start, categories=[self.categories["work"]])
 
         for offset in range(2):
             self.log_completion(health, start + timedelta(days=offset), 100)
@@ -236,19 +262,19 @@ class ConsistencyScoreTests(TestCase):
         )
         summaries = {item["key"]: item for item in analytics["summaries"]}
 
-        self.assertEqual(len(analytics["summaries"]), 4)
-        self.assertEqual(summaries[Habit.CATEGORY_HEALTH]["completion_rate"], 100.0)
-        self.assertEqual(summaries[Habit.CATEGORY_STUDY]["completion_rate"], 50.0)
-        self.assertEqual(summaries[Habit.CATEGORY_WORK]["completion_rate"], 0.0)
-        self.assertEqual(analytics["best"]["key"], Habit.CATEGORY_HEALTH)
-        self.assertEqual(analytics["weakest"]["key"], Habit.CATEGORY_WORK)
+        self.assertEqual(len(analytics["summaries"]), len(DEFAULT_CATEGORIES))
+        self.assertEqual(summaries["health"]["completion_rate"], 100.0)
+        self.assertEqual(summaries["study"]["completion_rate"], 50.0)
+        self.assertEqual(summaries["work"]["completion_rate"], 0.0)
+        self.assertEqual(analytics["best"]["key"], "health")
+        self.assertEqual(analytics["weakest"]["key"], "work")
 
     def test_dashboard_renders_score_drivers_and_category_analytics(self):
         today = date(2026, 5, 10)
         habit = self.make_habit(
             "Dashboard habit",
             date(2026, 5, 2),
-            category=Habit.CATEGORY_HEALTH,
+            categories=[self.categories["health"]],
         )
         for offset in range(8):
             self.log_completion(habit, habit.start_date + timedelta(days=offset), 100)
