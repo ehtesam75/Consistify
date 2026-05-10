@@ -41,6 +41,123 @@
     </div>
 </section>
 
+<section class="card score-breakdown-card" style="--i: 0;">
+    <div class="card-header">
+        <div>
+            <h2>Score breakdown</h2>
+            <p class="habit-meta">{{ score_breakdown.current_period_label }}</p>
+        </div>
+        {% if score_breakdown.has_previous %}
+            <span class="tag">Compared with {{ score_breakdown.previous_period_label }}</span>
+        {% else %}
+            <span class="tag">Current window</span>
+        {% endif %}
+    </div>
+    <div class="score-change-summary">
+        <div>
+            <span class="stat-label">Consistency score</span>
+            <span class="score-change-value">{{ score_breakdown.current_score }}</span>
+        </div>
+        {% if score_breakdown.has_previous %}
+            <span class="delta-pill {% if score_breakdown.score_delta > 0 %}positive{% elif score_breakdown.score_delta < 0 %}negative{% else %}neutral{% endif %}">
+                {% if score_breakdown.score_delta > 0 %}+{% endif %}{{ score_breakdown.score_delta }} vs previous
+            </span>
+        {% else %}
+            <span class="stat-note">A comparison appears once an earlier window has scheduled data.</span>
+        {% endif %}
+    </div>
+    <div class="score-component-list">
+        {% for component in score_breakdown.components %}
+            <div class="score-component">
+                <div class="score-component-copy">
+                    <span class="score-component-title">{{ component.label }}</span>
+                    <p>{{ component.description }}</p>
+                </div>
+                <div class="score-component-metrics">
+                    <strong>{{ component.current_points }}</strong>
+                    <span>pts</span>
+                    {% if score_breakdown.has_previous %}
+                        <small class="{% if component.points_delta > 0 %}positive{% elif component.points_delta < 0 %}negative{% else %}neutral{% endif %}">
+                            {% if component.points_delta > 0 %}+{% endif %}{{ component.points_delta }} pts
+                        </small>
+                    {% endif %}
+                </div>
+                <div class="score-component-bar" aria-label="{{ component.label }} factor at {{ component.current_value }} percent">
+                    <span style="width: {{ component.current_value|floatformat:0 }}%;"></span>
+                </div>
+                <div class="score-component-foot">
+                    <span>{{ component.current_value }}% factor</span>
+                    <span>{{ component.weight }}% weight</span>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="score-driver-grid">
+    {% for item in score_driver_cards %}
+        <div class="card score-driver-card" style="--i: {{ forloop.counter }};">
+            <span class="stat-label">{{ item.title }}</span>
+            {% if item.driver %}
+                <a class="driver-habit-name" href="{% url 'habits:habit_detail' item.driver.habit.id %}">{{ item.driver.habit.name }}</a>
+                <span class="driver-value">
+                    {% if item.show_sign and item.value > 0 %}+{% endif %}{{ item.value }}
+                </span>
+                <span class="stat-note">{{ item.value_label }}</span>
+                <p class="habit-meta">{{ item.driver.score }} consistency &middot; {{ item.driver.completion_rate }}% completion</p>
+            {% else %}
+                <p class="empty">{{ item.empty }}</p>
+            {% endif %}
+        </div>
+    {% endfor %}
+</section>
+
+<section class="card category-analytics-card" style="--i: 2;">
+    <div class="card-header">
+        <h2>Category analytics</h2>
+        <span class="tag">Health / Study / Work / Personal</span>
+    </div>
+    {% if category_analytics.best %}
+        <div class="category-leader-strip">
+            <div>
+                <span class="stat-label">Best category</span>
+                <strong>{{ category_analytics.best.label }}</strong>
+                <span>{{ category_analytics.best.consistency_score }} consistency</span>
+            </div>
+            <div>
+                <span class="stat-label">Weakest category</span>
+                <strong>{{ category_analytics.weakest.label }}</strong>
+                <span>{{ category_analytics.weakest.completion_rate }}% completion</span>
+            </div>
+        </div>
+    {% endif %}
+    <div class="category-summary-grid">
+        {% for category in category_analytics.summaries %}
+            <div class="category-summary {% if category.is_best %}is-best{% endif %} {% if category.is_weakest %}is-weakest{% endif %}">
+                <div class="category-summary-head">
+                    <span class="badge category {{ category.key }}">{{ category.label }}</span>
+                    {% if category.is_best %}
+                        <span class="tag">Best</span>
+                    {% elif category.is_weakest %}
+                        <span class="tag muted">Weakest</span>
+                    {% endif %}
+                </div>
+                <div class="category-summary-stats">
+                    <div>
+                        <span class="stat-label">Completion</span>
+                        <strong>{{ category.completion_rate }}%</strong>
+                    </div>
+                    <div>
+                        <span class="stat-label">Consistency</span>
+                        <strong>{{ category.consistency_score }}</strong>
+                    </div>
+                </div>
+                <p class="habit-meta">{{ category.completed_total }}/{{ category.scheduled_total }} completed across {{ category.habit_count }} habit{{ category.habit_count|pluralize }}</p>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
 <section class="card" style="--i: 0;">
     <div class="card-header">
         <h2>Consistency trend</h2>

@@ -5,9 +5,16 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 
 from .models import Habit, HabitCompletion
-from .services import calculate_overall_consistency, habit_performance_metrics
+from .services import (
+    build_category_analytics,
+    build_habit_score_drivers,
+    build_overall_score_breakdown,
+    calculate_overall_consistency,
+    habit_performance_metrics,
+)
 
 
 class ConsistencyScoreTests(TestCase):
@@ -24,6 +31,7 @@ class ConsistencyScoreTests(TestCase):
         habit_type=Habit.HABIT_PARTIAL,
         schedule_type=Habit.SCHEDULE_DAILY,
         priority=Habit.PRIORITY_MEDIUM,
+        category=Habit.CATEGORY_PERSONAL,
     ):
         return Habit.objects.create(
             user=self.user,
@@ -31,6 +39,7 @@ class ConsistencyScoreTests(TestCase):
             habit_type=habit_type,
             schedule_type=schedule_type,
             priority=priority,
+            category=category,
             start_date=start_date,
         )
 
@@ -140,3 +149,118 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["completed_total"], 1)
         self.assertEqual(metrics["current_streak"], 0)
         self.assertLess(metrics["consistency_score"], 100.0)
+
+    def test_overall_score_breakdown_explains_score_change(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Better routine", start)
+        for offset in range(4):
+            self.log_completion(habit, start + timedelta(days=offset), 50)
+            self.log_completion(habit, start + timedelta(days=offset + 4), 100)
+
+        breakdown = build_overall_score_breakdown(
+            [habit],
+            start + timedelta(days=4),
+            start + timedelta(days=7),
+            start,
+            start + timedelta(days=3),
+        )
+
+        components = {item["key"]: item for item in breakdown["components"]}
+
+        self.assertTrue(breakdown["has_previous"])
+        self.assertEqual(breakdown["current_score"], 100.0)
+        self.assertEqual(breakdown["previous_score"], 45.0)
+        self.assertEqual(breakdown["score_delta"], 55.0)
+        self.assertEqual(components["completion_quality"]["points_delta"], 22.5)
+        self.assertEqual(components["full_completion"]["points_delta"], 25.0)
+        self.assertEqual(components["rhythm_stability"]["points_delta"], 0.0)
+        self.assertEqual(components["recent_momentum"]["points_delta"], 7.5)
+
+    def test_habit_score_drivers_identify_booster_drag_and_movement(self):
+        start = date(2026, 1, 1)
+        previous_start = start
+        previous_end = start + timedelta(days=3)
+        current_start = start + timedelta(days=4)
+        current_end = start + timedelta(days=7)
+
+        booster = self.make_habit(
+            "Priority win",
+            start,
+            priority=Habit.PRIORITY_HIGH,
+        )
+        drag = self.make_habit(
+            "Priority gap",
+            start,
+            priority=Habit.PRIORITY_HIGH,
+        )
+        improved = self.make_habit("Comeback", start)
+        declined = self.make_habit("Needs reset", start)
+
+        for offset in range(4):
+            self.log_completion(booster, previous_start + timedelta(days=offset), 100)
+            self.log_completion(booster, current_start + timedelta(days=offset), 100)
+            self.log_completion(improved, previous_start + timedelta(days=offset), 0)
+            self.log_completion(improved, current_start + timedelta(days=offset), 100)
+            self.log_completion(declined, previous_start + timedelta(days=offset), 100)
+            self.log_completion(declined, current_start + timedelta(days=offset), 0)
+
+        drivers = build_habit_score_drivers(
+            [booster, drag, improved, declined],
+            current_start,
+            current_end,
+            previous_start,
+            previous_end,
+        )
+
+        self.assertEqual(drivers["booster"]["habit"], booster)
+        self.assertEqual(drivers["drag"]["habit"], drag)
+        self.assertEqual(drivers["improved"]["habit"], improved)
+        self.assertEqual(drivers["improved"]["score_delta"], 100.0)
+        self.assertEqual(drivers["declined"]["habit"], declined)
+        self.assertEqual(drivers["declined"]["score_delta"], -100.0)
+
+    def test_category_analytics_marks_best_and_weakest_categories(self):
+        start = date(2026, 1, 1)
+        health = self.make_habit("Lift", start, category=Habit.CATEGORY_HEALTH)
+        study = self.make_habit("Read", start, category=Habit.CATEGORY_STUDY)
+        work = self.make_habit("Ship", start, category=Habit.CATEGORY_WORK)
+
+        for offset in range(2):
+            self.log_completion(health, start + timedelta(days=offset), 100)
+            self.log_completion(study, start + timedelta(days=offset), 50)
+
+        analytics = build_category_analytics(
+            [health, study, work],
+            start,
+            start + timedelta(days=1),
+        )
+        summaries = {item["key"]: item for item in analytics["summaries"]}
+
+        self.assertEqual(len(analytics["summaries"]), 4)
+        self.assertEqual(summaries[Habit.CATEGORY_HEALTH]["completion_rate"], 100.0)
+        self.assertEqual(summaries[Habit.CATEGORY_STUDY]["completion_rate"], 50.0)
+        self.assertEqual(summaries[Habit.CATEGORY_WORK]["completion_rate"], 0.0)
+        self.assertEqual(analytics["best"]["key"], Habit.CATEGORY_HEALTH)
+        self.assertEqual(analytics["weakest"]["key"], Habit.CATEGORY_WORK)
+
+    def test_dashboard_renders_score_drivers_and_category_analytics(self):
+        today = date(2026, 5, 10)
+        habit = self.make_habit(
+            "Dashboard habit",
+            date(2026, 5, 2),
+            category=Habit.CATEGORY_HEALTH,
+        )
+        for offset in range(8):
+            self.log_completion(habit, habit.start_date + timedelta(days=offset), 100)
+
+        self.client.force_login(self.user)
+        with patch("habits.views.timezone.localdate", return_value=today), patch(
+            "habits.services.timezone.localdate",
+            return_value=today,
+        ):
+            response = self.client.get(reverse("habits:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Score breakdown")
+        self.assertContains(response, "Biggest score booster")
+        self.assertContains(response, "Category analytics")

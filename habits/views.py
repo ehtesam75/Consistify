@@ -23,7 +23,10 @@ from .forms import HabitForm
 from .models import Habit, HabitCompletion
 from .services import (
     ANALYTICS_START_DATE,
+    build_category_analytics,
+    build_habit_score_drivers,
     build_monthly_reports,
+    build_overall_score_breakdown,
     build_weekly_reports,
     calculate_overall_consistency,
     calculate_streaks,
@@ -113,6 +116,10 @@ def habit_list(request):
 def dashboard(request):
     today = timezone.localdate()
     window_start = clamp_analytics_start(today - timedelta(days=29))
+    previous_window_start, previous_window_end = _previous_period_for_window(
+        window_start,
+        today,
+    )
     habits = list(Habit.objects.filter(user=request.user).order_by("sort_order", "name"))
 
     habit_cards = []
@@ -132,11 +139,36 @@ def dashboard(request):
                 "completed": metrics["completed_total"],
                 "rate": metrics["completion_rate"],
                 "consistency": metrics["consistency_score"],
+                "completion_quality": metrics["completion_quality"],
+                "full_completion": metrics["full_completion_reliability"],
+                "rhythm_stability": metrics["streak_stability"],
+                "recent_momentum": metrics["recent_momentum"],
             }
         )
 
     overall_rate = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
-    overall_consistency = calculate_overall_consistency(habits, window_start, today)
+    score_breakdown = build_overall_score_breakdown(
+        habits,
+        window_start,
+        today,
+        previous_window_start,
+        previous_window_end,
+    )
+    score_breakdown["current_period_label"] = _format_period_label(window_start, today)
+    score_breakdown["previous_period_label"] = (
+        _format_period_label(previous_window_start, previous_window_end)
+        if previous_window_start and previous_window_end
+        else ""
+    )
+    overall_consistency = score_breakdown["current_score"]
+    score_drivers = build_habit_score_drivers(
+        habits,
+        window_start,
+        today,
+        previous_window_start,
+        previous_window_end,
+    )
+    category_analytics = build_category_analytics(habits, window_start, today)
 
     doing_well = [card for card in habit_cards if card["scheduled"] and card["rate"] >= 80]
     needs_focus = [card for card in habit_cards if card["scheduled"] and card["rate"] < 50]
@@ -175,6 +207,9 @@ def dashboard(request):
         "total_completed": total_completed,
         "doing_well": doing_well,
         "needs_focus": needs_focus,
+        "score_breakdown": score_breakdown,
+        "score_driver_cards": _build_score_driver_cards(score_drivers),
+        "category_analytics": category_analytics,
         "chart_labels": json.dumps(chart_labels),
         "chart_rates": json.dumps(chart_rates),
     }
@@ -522,6 +557,76 @@ def _build_compare_chart_payload(selected_habits, today):
         "last30": _build_timeframe_series(last30_start),
         "all": _build_timeframe_series(all_time_start),
     }
+
+
+def _previous_period_for_window(window_start, window_end):
+    window_days = (window_end - window_start).days + 1
+    previous_end = window_start - timedelta(days=1)
+    if previous_end < ANALYTICS_START_DATE:
+        return None, None
+
+    previous_start = previous_end - timedelta(days=window_days - 1)
+    previous_start = clamp_analytics_start(previous_start)
+    if previous_start > previous_end:
+        return None, None
+    return previous_start, previous_end
+
+
+def _format_period_label(start_date, end_date):
+    if not start_date or not end_date:
+        return ""
+    if start_date == end_date:
+        return start_date.strftime("%b %d")
+    return f"{start_date.strftime('%b %d')} - {end_date.strftime('%b %d')}"
+
+
+def _build_score_driver_cards(score_drivers):
+    card_specs = (
+        {
+            "title": "Biggest score booster",
+            "key": "booster",
+            "value_key": "impact_points",
+            "value_label": "overall score pts",
+            "empty": "No scored habits yet.",
+        },
+        {
+            "title": "Biggest score drag",
+            "key": "drag",
+            "value_key": "drag_points",
+            "value_label": "possible score gap",
+            "empty": "No scored habits yet.",
+        },
+        {
+            "title": "Most improved",
+            "key": "improved",
+            "value_key": "score_delta",
+            "value_label": "score change",
+            "empty": "No score improvement in the comparison window.",
+            "show_sign": True,
+        },
+        {
+            "title": "Most declined",
+            "key": "declined",
+            "value_key": "score_delta",
+            "value_label": "score change",
+            "empty": "No score decline in the comparison window.",
+            "show_sign": True,
+        },
+    )
+    cards = []
+    for spec in card_specs:
+        driver = score_drivers.get(spec["key"])
+        cards.append(
+            {
+                "title": spec["title"],
+                "driver": driver,
+                "value": driver[spec["value_key"]] if driver else None,
+                "value_label": spec["value_label"],
+                "empty": spec["empty"],
+                "show_sign": spec.get("show_sign", False),
+            }
+        )
+    return cards
 
 
 @login_required

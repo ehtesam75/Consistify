@@ -17,6 +17,36 @@ PRIORITY_SCORE_WEIGHTS = {
     Habit.PRIORITY_MEDIUM: 1.0,
     Habit.PRIORITY_LOW: 0.8,
 }
+CONSISTENCY_SCORE_COMPONENTS = (
+    {
+        "key": "completion_quality",
+        "label": "Completion quality",
+        "metric_key": "completion_quality",
+        "weight": CONSISTENCY_COMPLETION_QUALITY_WEIGHT,
+        "description": "Average progress across every scheduled session.",
+    },
+    {
+        "key": "full_completion",
+        "label": "Full completion",
+        "metric_key": "full_completion_reliability",
+        "weight": CONSISTENCY_FULL_COMPLETION_WEIGHT,
+        "description": "How often scheduled sessions reached 100%.",
+    },
+    {
+        "key": "rhythm_stability",
+        "label": "Rhythm stability",
+        "metric_key": "streak_stability",
+        "weight": CONSISTENCY_STREAK_STABILITY_WEIGHT,
+        "description": "How steadily progress continued after momentum started.",
+    },
+    {
+        "key": "recent_momentum",
+        "label": "Recent momentum",
+        "metric_key": "recent_momentum",
+        "weight": CONSISTENCY_RECENT_MOMENTUM_WEIGHT,
+        "description": "Recent scheduled sessions, with newer days weighted more.",
+    },
+)
 
 
 def iter_scheduled_dates(habit, start_date, end_date):
@@ -200,6 +230,311 @@ def _habit_consistency_weight(habit, scheduled_total):
         return 0.0
     priority_weight = PRIORITY_SCORE_WEIGHTS.get(habit.priority, 1.0)
     return priority_weight * sqrt(scheduled_total)
+
+
+def _empty_component_snapshot():
+    return {
+        component["key"]: {
+            "value": 0.0,
+            "points": 0.0,
+        }
+        for component in CONSISTENCY_SCORE_COMPONENTS
+    }
+
+
+def _aggregate_consistency_snapshot(habits, start_date, end_date):
+    weighted_score = 0.0
+    total_weight = 0.0
+    scheduled_total = 0
+    completed_total = 0
+    component_totals = {component["key"]: 0.0 for component in CONSISTENCY_SCORE_COMPONENTS}
+
+    for habit in habits:
+        metrics = habit_performance_metrics(habit, start_date, end_date)
+        if metrics["scheduled_total"] == 0:
+            continue
+
+        weight = _habit_consistency_weight(habit, metrics["scheduled_total"])
+        if weight == 0:
+            continue
+
+        total_weight += weight
+        scheduled_total += metrics["scheduled_total"]
+        completed_total += metrics["completed_total"]
+        weighted_score += metrics["consistency_score"] * weight
+        for component in CONSISTENCY_SCORE_COMPONENTS:
+            component_totals[component["key"]] += metrics[component["metric_key"]] * weight
+
+    if total_weight == 0:
+        return {
+            "score": 0.0,
+            "scheduled_total": scheduled_total,
+            "completed_total": completed_total,
+            "components": _empty_component_snapshot(),
+        }
+
+    components = {}
+    for component in CONSISTENCY_SCORE_COMPONENTS:
+        value = component_totals[component["key"]] / total_weight
+        components[component["key"]] = {
+            "value": round(value, 1),
+            "points": round(value * component["weight"], 1),
+        }
+
+    return {
+        "score": round(weighted_score / total_weight, 1),
+        "scheduled_total": scheduled_total,
+        "completed_total": completed_total,
+        "components": components,
+    }
+
+
+def build_overall_score_breakdown(
+    habits,
+    start_date,
+    end_date,
+    previous_start_date=None,
+    previous_end_date=None,
+):
+    current = _aggregate_consistency_snapshot(habits, start_date, end_date)
+    previous = None
+    has_previous = False
+
+    if (
+        previous_start_date is not None
+        and previous_end_date is not None
+        and previous_start_date <= previous_end_date
+    ):
+        previous = _aggregate_consistency_snapshot(
+            habits,
+            previous_start_date,
+            previous_end_date,
+        )
+        has_previous = previous["scheduled_total"] > 0
+
+    component_rows = []
+    for component in CONSISTENCY_SCORE_COMPONENTS:
+        current_component = current["components"][component["key"]]
+        previous_component = (
+            previous["components"][component["key"]] if has_previous else None
+        )
+        component_rows.append(
+            {
+                "key": component["key"],
+                "label": component["label"],
+                "description": component["description"],
+                "weight": int(component["weight"] * 100),
+                "current_value": current_component["value"],
+                "current_points": current_component["points"],
+                "previous_value": (
+                    previous_component["value"] if previous_component else None
+                ),
+                "previous_points": (
+                    previous_component["points"] if previous_component else None
+                ),
+                "value_delta": (
+                    round(
+                        current_component["value"] - previous_component["value"],
+                        1,
+                    )
+                    if previous_component
+                    else None
+                ),
+                "points_delta": (
+                    round(
+                        current_component["points"] - previous_component["points"],
+                        1,
+                    )
+                    if previous_component
+                    else None
+                ),
+            }
+        )
+
+    return {
+        "current_score": current["score"],
+        "previous_score": previous["score"] if has_previous else None,
+        "score_delta": (
+            round(current["score"] - previous["score"], 1) if has_previous else None
+        ),
+        "has_previous": has_previous,
+        "scheduled_total": current["scheduled_total"],
+        "completed_total": current["completed_total"],
+        "components": component_rows,
+    }
+
+
+def _habit_driver_snapshot(habit, metrics, previous_metrics, total_weight):
+    weight = _habit_consistency_weight(habit, metrics["scheduled_total"])
+    impact_points = 0.0
+    drag_points = 0.0
+    if total_weight:
+        impact_points = (metrics["consistency_score"] * weight) / total_weight
+        drag_points = ((100.0 - metrics["consistency_score"]) * weight) / total_weight
+
+    score_delta = None
+    if previous_metrics and previous_metrics["scheduled_total"] > 0:
+        score_delta = round(
+            metrics["consistency_score"] - previous_metrics["consistency_score"],
+            1,
+        )
+
+    return {
+        "habit": habit,
+        "score": metrics["consistency_score"],
+        "completion_rate": metrics["completion_rate"],
+        "scheduled_total": metrics["scheduled_total"],
+        "completed_total": metrics["completed_total"],
+        "impact_points": round(impact_points, 1),
+        "drag_points": round(drag_points, 1),
+        "score_delta": score_delta,
+    }
+
+
+def build_habit_score_drivers(
+    habits,
+    start_date,
+    end_date,
+    previous_start_date=None,
+    previous_end_date=None,
+):
+    current_rows = []
+    total_weight = 0.0
+
+    for habit in habits:
+        metrics = habit_performance_metrics(habit, start_date, end_date)
+        if metrics["scheduled_total"] == 0:
+            continue
+        weight = _habit_consistency_weight(habit, metrics["scheduled_total"])
+        if weight == 0:
+            continue
+        total_weight += weight
+        current_rows.append(
+            {
+                "habit": habit,
+                "metrics": metrics,
+            }
+        )
+
+    snapshots = []
+    has_previous_window = (
+        previous_start_date is not None
+        and previous_end_date is not None
+        and previous_start_date <= previous_end_date
+    )
+    for row in current_rows:
+        previous_metrics = None
+        if has_previous_window:
+            previous_metrics = habit_performance_metrics(
+                row["habit"],
+                previous_start_date,
+                previous_end_date,
+            )
+        snapshots.append(
+            _habit_driver_snapshot(
+                row["habit"],
+                row["metrics"],
+                previous_metrics,
+                total_weight,
+            )
+        )
+
+    if not snapshots:
+        return {
+            "booster": None,
+            "drag": None,
+            "improved": None,
+            "declined": None,
+        }
+
+    movement_snapshots = [
+        snapshot for snapshot in snapshots if snapshot["score_delta"] is not None
+    ]
+    improved_snapshots = [
+        snapshot for snapshot in movement_snapshots if snapshot["score_delta"] > 0
+    ]
+    declined_snapshots = [
+        snapshot for snapshot in movement_snapshots if snapshot["score_delta"] < 0
+    ]
+
+    return {
+        "booster": max(snapshots, key=lambda item: item["impact_points"]),
+        "drag": max(snapshots, key=lambda item: item["drag_points"]),
+        "improved": (
+            max(improved_snapshots, key=lambda item: item["score_delta"])
+            if improved_snapshots
+            else None
+        ),
+        "declined": (
+            min(declined_snapshots, key=lambda item: item["score_delta"])
+            if declined_snapshots
+            else None
+        ),
+    }
+
+
+def build_category_analytics(habits, start_date, end_date):
+    summaries = []
+    best_category = None
+    weakest_category = None
+
+    for category_key, category_label in Habit.CATEGORY_CHOICES:
+        category_habits = [habit for habit in habits if habit.category == category_key]
+        total_scheduled = 0
+        total_completed = 0
+        total_completion = 0.0
+        weighted_score = 0.0
+        total_weight = 0.0
+
+        for habit in category_habits:
+            metrics = habit_performance_metrics(habit, start_date, end_date)
+            if metrics["scheduled_total"] == 0:
+                continue
+
+            total_scheduled += metrics["scheduled_total"]
+            total_completed += metrics["completed_total"]
+            total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
+
+            weight = _habit_consistency_weight(habit, metrics["scheduled_total"])
+            total_weight += weight
+            weighted_score += metrics["consistency_score"] * weight
+
+        completion_rate = (
+            round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
+        )
+        consistency_score = (
+            round(weighted_score / total_weight, 1) if total_weight else 0.0
+        )
+        summary = {
+            "key": category_key,
+            "label": category_label,
+            "habit_count": len(category_habits),
+            "scheduled_total": total_scheduled,
+            "completed_total": total_completed,
+            "completion_rate": completion_rate,
+            "consistency_score": consistency_score,
+            "is_best": False,
+            "is_weakest": False,
+        }
+        summaries.append(summary)
+
+        if total_scheduled == 0:
+            continue
+        if best_category is None or consistency_score > best_category["consistency_score"]:
+            best_category = summary
+        if weakest_category is None or consistency_score < weakest_category["consistency_score"]:
+            weakest_category = summary
+
+    if best_category:
+        best_category["is_best"] = True
+    if weakest_category:
+        weakest_category["is_weakest"] = True
+
+    return {
+        "summaries": summaries,
+        "best": best_category,
+        "weakest": weakest_category,
+    }
 
 
 def habit_performance_metrics(habit, start_date, end_date, completion_map=None, value_map=None):
