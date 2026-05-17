@@ -117,20 +117,6 @@
         <h2>Category analytics</h2>
         <span class="tag">{{ dashboard_window_note }}</span>
     </div>
-    {% if category_analytics.best %}
-        <div class="category-leader-strip">
-            <div>
-                <span class="stat-label">Best category</span>
-                <strong>{{ category_analytics.best.label }}</strong>
-                <span>{{ category_analytics.best.consistency_score }} consistency</span>
-            </div>
-            <div>
-                <span class="stat-label">Weakest category</span>
-                <strong>{{ category_analytics.weakest.label }}</strong>
-                <span>{{ category_analytics.weakest.completion_rate }}% completion</span>
-            </div>
-        </div>
-    {% endif %}
     <div class="category-summary-grid">
         {% for category in category_analytics.summaries %}
             <div class="category-summary {% if category.is_best %}is-best{% endif %} {% if category.is_weakest %}is-weakest{% endif %}">

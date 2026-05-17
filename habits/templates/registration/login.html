@@ -1,10 +1,11 @@
 {% extends "habits/base.html" %}
 
+{% block body_class %}auth-page{% endblock %}
+
 {% block content %}
 <section class="card narrow">
     <div class="card-header">
         <h1>Welcome back</h1>
-        <p class="subtitle">Log in to keep your streaks alive.</p>
     </div>
     <form method="post" class="form-grid">
         {% csrf_token %}

@@ -77,12 +77,66 @@
     </div>
 </section>
 {% elif selected_habits|length == 1 %}
-<section class="card">
-    <p class="empty">Select at least two habits to compare.</p>
+<section class="compare-empty">
+    <div class="compare-empty-copy">
+        <p class="eyebrow">Almost there</p>
+        <h2>Add one more habit</h2>
+        <p class="subtitle">Select at least two habits to compare.</p>
+    </div>
+    <div class="compare-empty-steps" aria-label="Compare steps">
+        <div class="compare-step">
+            <span class="compare-step-index">1</span>
+            <div>
+                <span class="compare-step-title">Choose 2-{{ compare_limit }} habits</span>
+                <span class="compare-step-note">Use the multiselect list</span>
+            </div>
+        </div>
+        <div class="compare-step">
+            <span class="compare-step-index">2</span>
+            <div>
+                <span class="compare-step-title">Click Compare</span>
+                <span class="compare-step-note">Get a 90 day view</span>
+            </div>
+        </div>
+        <div class="compare-step">
+            <span class="compare-step-index">3</span>
+            <div>
+                <span class="compare-step-title">Read the trends</span>
+                <span class="compare-step-note">Spot streaks and dips</span>
+            </div>
+        </div>
+    </div>
 </section>
 {% else %}
-<section class="card">
-    <p class="empty">Pick two to four habits and click Compare to see side-by-side insights and chart trends.</p>
+<section class="compare-empty">
+    <div class="compare-empty-copy">
+        <p class="eyebrow">Ready to compare</p>
+        <h2>Spot the patterns faster</h2>
+        <p class="subtitle">Pick two to four habits and click Compare to see side-by-side insights and chart trends.</p>
+    </div>
+    <div class="compare-empty-steps" aria-label="Compare steps">
+        <div class="compare-step">
+            <span class="compare-step-index">1</span>
+            <div>
+                <span class="compare-step-title">Choose 2-{{ compare_limit }} habits</span>
+                <span class="compare-step-note">Use the multiselect list</span>
+            </div>
+        </div>
+        <div class="compare-step">
+            <span class="compare-step-index">2</span>
+            <div>
+                <span class="compare-step-title">Click Compare</span>
+                <span class="compare-step-note">Get a 90 day view</span>
+            </div>
+        </div>
+        <div class="compare-step">
+            <span class="compare-step-index">3</span>
+            <div>
+                <span class="compare-step-title">Read the trends</span>
+                <span class="compare-step-note">Spot streaks and dips</span>
+            </div>
+        </div>
+    </div>
 </section>
 {% endif %}
 {% endblock %}

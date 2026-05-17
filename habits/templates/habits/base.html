@@ -31,7 +31,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'habits/css/styles.css' %}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
     <div class="ambient-bg"></div>
     <header class="site-header">
         <div class="container nav">
@@ -157,8 +157,22 @@
     {% if not request.user.is_authenticated %}
         <footer class="site-footer">
             <div class="container footer-inner">
-                <span>Consistify</span>
-                <span>Build steady momentum.</span>
+                <div class="footer-brand">
+                    <span class="footer-logo">Consistify</span>
+                    <p class="footer-tagline">Build steady progress with daily habits.</p>
+                </div>
+                <div class="footer-links">
+                    <span class="footer-label">Explore</span>
+                    <div class="footer-link-row">
+                        <a href="{% url 'habits:index' %}">Home</a>
+                        <a href="{% url 'habits:login' %}">Log in</a>
+                        <a href="{% url 'habits:signup' %}">Sign up</a>
+                    </div>
+                </div>
+                <div class="footer-meta">
+                    <span class="footer-label">Focus, tracked</span>
+                    <span class="footer-meta-line">&copy; {% now "Y" %} Consistify. All rights reserved.</span>
+                </div>
             </div>
         </footer>
     {% endif %}

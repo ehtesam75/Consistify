@@ -57,10 +57,6 @@
                 <span class="stat-note">All time · {{ all_time_label }}</span>
             </div>
             <div class="stat">
-                <span class="stat-label">Next due</span>
-                <span class="stat-value">{% if next_due %}{{ next_due|date:"M d" }}{% else %}--{% endif %}</span>
-            </div>
-            <div class="stat">
                 <span class="stat-label">Consistency score</span>
                 <span class="stat-value">{{ metrics.consistency_score }}</span>
                 <span class="stat-note">All time · {{ all_time_label }}</span>
