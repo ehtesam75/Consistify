@@ -1531,7 +1531,45 @@ html {
 
 .leaderboard-card {
     display: grid;
-    gap: 0.8rem;
+    gap: 0.6rem;
+}
+
+.leaderboard-card .card-header {
+    margin-bottom: 0;
+}
+
+.segmented-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    width: fit-content;
+}
+
+.segmented-option {
+    padding: 0.42rem 0.85rem;
+    border-radius: 999px;
+    color: var(--ink-soft);
+    font-weight: 700;
+    font-size: 0.9rem;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.segmented-option:hover {
+    color: var(--ink);
+}
+
+.segmented-option.active {
+    background: var(--surface);
+    color: var(--accent-strong);
+    box-shadow: var(--shadow-soft);
+}
+
+.leaderboard-window-switch {
+    margin-top: 0;
 }
 
 .leaderboard-list {

@@ -6,9 +6,7 @@
         <p class="eyebrow">User profile</p>
         <h1>{{ profile_user.username }}</h1>
         <p class="subtitle">Long-term summary as of {{ today|date:"F j, Y" }}</p>
-        {% if is_own_profile %}
-            <p class="subtitle">This is your profile URL: <strong>/{{ profile_user.username }}/</strong></p>
-        {% else %}
+        {% if not is_own_profile %}
             <p class="subtitle">Viewing {{ profile_user.username }}'s progress profile.</p>
         {% endif %}
     </div>

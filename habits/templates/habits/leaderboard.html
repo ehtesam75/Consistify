@@ -5,7 +5,7 @@
     <div>
         <p class="eyebrow">Friends</p>
         <h1>Leaderboard</h1>
-        <p class="subtitle">Ranked by consistency score as of {{ today|date:"F j, Y" }}.</p>
+        <p class="subtitle">Ranked by {{ leaderboard_window_title|lower }} consistency as of {{ today|date:"F j, Y" }}.</p>
     </div>
     <div class="hero-actions">
         <a class="btn primary" href="{% url 'habits:user_search' %}">Find users</a>
@@ -13,28 +13,14 @@
     </div>
 </section>
 
-<section class="stats-grid wide">
-    <div class="stat-card">
-        <span class="stat-label">Friends ranked</span>
-        <span class="stat-value">{{ friend_count }}</span>
-        <span class="stat-note">Accepted friends plus you</span>
-    </div>
-    <div class="stat-card">
-        <span class="stat-label">Your rank</span>
-        <span class="stat-value">#{{ current_entry.rank }}</span>
-        <span class="stat-note">{{ current_entry.consistency_score }} consistency score</span>
-    </div>
-    <div class="stat-card">
-        <span class="stat-label">Top score</span>
-        <span class="stat-value">{{ leader_entry.consistency_score }}</span>
-        <span class="stat-note">{{ leader_entry.user.username }}</span>
-    </div>
-</section>
-
 <section class="card leaderboard-card" style="--i: 0;">
     <div class="card-header">
         <h2>Consistency ranking</h2>
-        <span class="tag">{{ leaderboard_entries|length }} users</span>
+        <span class="tag">{{ leaderboard_window_label }}</span>
+    </div>
+    <div class="segmented-control leaderboard-window-switch" aria-label="Leaderboard timeframe">
+        <a class="segmented-option {% if leaderboard_window == 'week' %}active{% endif %}" href="{% url 'habits:leaderboard' %}?window=week">Current week</a>
+        <a class="segmented-option {% if leaderboard_window == 'all' %}active{% endif %}" href="{% url 'habits:leaderboard' %}?window=all">All time</a>
     </div>
 
     <div class="leaderboard-list">

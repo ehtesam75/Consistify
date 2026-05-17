@@ -719,14 +719,16 @@ def _build_profile_context(profile_user, current_user):
     return context
 
 
-def _build_user_metrics(user, today):
+def _build_user_metrics(user, today, start_date=None):
     habits = list(
         Habit.objects.filter(user=user)
         .prefetch_related("categories")
         .order_by("sort_order", "name")
     )
 
-    if habits:
+    if start_date is not None:
+        start_date = clamp_analytics_start(start_date)
+    elif habits:
         start_date = clamp_analytics_start(min(habit.start_date for habit in habits))
     else:
         start_date = clamp_analytics_start(today)
@@ -763,11 +765,22 @@ def _build_user_metrics(user, today):
 @login_required
 def leaderboard(request):
     today = timezone.localdate()
+    requested_window = request.GET.get("window")
+    leaderboard_window = "all" if requested_window == "all" else "week"
+    if leaderboard_window == "week":
+        window_start = clamp_analytics_start(today - timedelta(days=today.weekday()))
+        window_label = f"{window_start.strftime('%b %d')} - {today.strftime('%b %d')}"
+        window_title = "Current week"
+    else:
+        window_start = None
+        window_label = "All tracked history"
+        window_title = "All time"
+
     participants = [request.user] + _accepted_friends_for(request.user)
     entries = []
 
     for user in participants:
-        metrics = _build_user_metrics(user, today)
+        metrics = _build_user_metrics(user, today, start_date=window_start)
         entries.append(
             {
                 "user": user,
@@ -807,6 +820,9 @@ def leaderboard(request):
             "friend_count": len(participants) - 1,
             "current_entry": current_entry,
             "leader_entry": leader_entry,
+            "leaderboard_window": leaderboard_window,
+            "leaderboard_window_label": window_label,
+            "leaderboard_window_title": window_title,
         },
     )
 

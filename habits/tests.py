@@ -423,6 +423,8 @@ class FriendRequestFeatureTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Leaderboard")
+        self.assertContains(response, "Current week")
+        self.assertContains(response, "All time")
         self.assertContains(response, "alice")
         self.assertContains(response, "bob")
         self.assertNotContains(response, "cara")
@@ -430,3 +432,48 @@ class FriendRequestFeatureTests(TestCase):
         content = response.content.decode()
         ranking_markup = content.split('<div class="leaderboard-list">', 1)[1]
         self.assertLess(ranking_markup.index("bob"), ranking_markup.index("alice"))
+
+    def test_leaderboard_can_switch_between_week_and_all_time(self):
+        FriendRequest.objects.create(
+            from_user=self.alice,
+            to_user=self.bob,
+            status=FriendRequest.STATUS_ACCEPTED,
+        )
+        habit = Habit.objects.create(
+            user=self.bob,
+            name="Old win",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_INTERVAL,
+            interval_days=999,
+            start_date=date(2026, 5, 10),
+        )
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=date(2026, 5, 10),
+            completion_percentage=Decimal("100"),
+            raw_value=Decimal("100"),
+        )
+        self.client.force_login(self.alice)
+
+        with patch("habits.views.timezone.localdate", return_value=date(2026, 5, 17)), patch(
+            "habits.services.timezone.localdate",
+            return_value=date(2026, 5, 17),
+        ):
+            week_response = self.client.get(reverse("habits:leaderboard"))
+            all_time_response = self.client.get(
+                f"{reverse('habits:leaderboard')}?window=all"
+            )
+
+        week_ranking = week_response.content.decode().split(
+            '<div class="leaderboard-list">',
+            1,
+        )[1]
+        all_time_ranking = all_time_response.content.decode().split(
+            '<div class="leaderboard-list">',
+            1,
+        )[1]
+
+        self.assertContains(week_response, "May 11 - May 17")
+        self.assertContains(all_time_response, "All tracked history")
+        self.assertLess(week_ranking.index("alice"), week_ranking.index("bob"))
+        self.assertLess(all_time_ranking.index("bob"), all_time_ranking.index("alice"))
