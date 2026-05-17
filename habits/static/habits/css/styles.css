@@ -93,14 +93,8 @@ a {
     content: "";
     position: absolute;
     inset: 0;
-    background: repeating-linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.35) 0,
-        rgba(255, 255, 255, 0.35) 2px,
-        transparent 2px,
-        transparent 10px
-    );
-    opacity: 0.2;
+    background: none;
+    opacity: 0;
 }
 
 :root[data-theme="dark"] .ambient-bg::before {
