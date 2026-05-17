@@ -5,8 +5,6 @@ from math import sqrt
 from django.utils import timezone
 
 from .models import Habit, HabitCategory, HabitCompletion
-
-ANALYTICS_START_DATE = date(2026, 5, 10)
 CONSISTENCY_COMPLETION_QUALITY_WEIGHT = 0.45
 CONSISTENCY_FULL_COMPLETION_WEIGHT = 0.25
 CONSISTENCY_STREAK_STABILITY_WEIGHT = 0.15
@@ -616,12 +614,6 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
     }
 
 
-def clamp_analytics_start(start_date):
-    if start_date < ANALYTICS_START_DATE:
-        return ANALYTICS_START_DATE
-    return start_date
-
-
 def calculate_streaks(habit, up_to_date=None):
     if up_to_date is None:
         up_to_date = timezone.localdate()
@@ -736,11 +728,7 @@ def build_weekly_reports(habits, weeks=8, today=None):
     if today is None:
         today = timezone.localdate()
 
-    if today < ANALYTICS_START_DATE:
-        return []
-
-    days_since_anchor = (today - ANALYTICS_START_DATE).days
-    current_week_start = today - timedelta(days=days_since_anchor % 7)
+    current_week_start = today - timedelta(days=today.weekday())
 
     reports = []
     for week_index in reversed(range(weeks)):
@@ -748,10 +736,6 @@ def build_weekly_reports(habits, weeks=8, today=None):
         period_end = period_start + timedelta(days=6)
         if period_end > today:
             period_end = today
-        if period_start < ANALYTICS_START_DATE:
-            period_start = ANALYTICS_START_DATE
-        if period_start > period_end:
-            continue
         label = f"{period_start.strftime('%b %d')} - {period_end.strftime('%b %d')}"
         reports.append(_build_period_snapshot(habits, period_start, period_end, label))
 
@@ -772,18 +756,11 @@ def build_monthly_reports(habits, months=6, today=None):
     if today is None:
         today = timezone.localdate()
 
-    if today < ANALYTICS_START_DATE:
-        return []
-
     reports = []
     for months_back in reversed(range(months)):
         year, month = _shift_month(today, months_back)
         first_day = date(year, month, 1)
         last_day = date(year, month, monthrange(year, month)[1])
-        if last_day < ANALYTICS_START_DATE:
-            continue
-        if first_day < ANALYTICS_START_DATE:
-            first_day = ANALYTICS_START_DATE
         if months_back == 0 and today < last_day:
             last_day = today
         reports.append(

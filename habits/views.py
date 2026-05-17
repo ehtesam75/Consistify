@@ -25,7 +25,6 @@ from django.views.decorators.http import require_POST
 from .forms import HabitForm
 from .models import FriendRequest, Habit, HabitCompletion
 from .services import (
-    ANALYTICS_START_DATE,
     build_category_analytics,
     build_habit_score_drivers,
     build_monthly_reports,
@@ -33,7 +32,6 @@ from .services import (
     build_weekly_reports,
     calculate_overall_consistency,
     calculate_streaks,
-    clamp_analytics_start,
     completion_stats,
     get_completion_maps,
     get_next_scheduled_date,
@@ -131,7 +129,7 @@ def habit_list(request):
 @login_required
 def dashboard(request):
     today = timezone.localdate()
-    window_start = clamp_analytics_start(today - timedelta(days=29))
+    window_start = today - timedelta(days=29)
     previous_window_start, previous_window_end = _previous_period_for_window(
         window_start,
         today,
@@ -194,7 +192,7 @@ def dashboard(request):
     needs_focus = [card for card in habit_cards if card["scheduled"] and card["rate"] < 50]
 
     chart_days = 14
-    chart_start = clamp_analytics_start(today - timedelta(days=chart_days - 1))
+    chart_start = today - timedelta(days=chart_days - 1)
     chart_labels = []
     chart_rates = []
     recent_completions = HabitCompletion.objects.filter(
@@ -244,7 +242,7 @@ def habit_detail(request, habit_id):
         user=request.user,
     )
     today = timezone.localdate()
-    history_start = clamp_analytics_start(today - timedelta(days=120))
+    history_start = today - timedelta(days=120)
     history_dates = list(iter_scheduled_dates(habit, history_start, today))
     recent_dates = history_dates[-30:]
 
@@ -272,7 +270,7 @@ def habit_detail(request, habit_id):
             }
         )
 
-    window_start = clamp_analytics_start(today - timedelta(days=29))
+    window_start = today - timedelta(days=29)
     window_completion_map = {
         date: value for date, value in completion_map.items() if date >= window_start
     }
@@ -527,8 +525,8 @@ def habit_compare(request):
         .order_by("sort_order", "name")
     )
     today = timezone.localdate()
-    window_start = clamp_analytics_start(today - timedelta(days=89))
-    last30_start = clamp_analytics_start(today - timedelta(days=29))
+    window_start = today - timedelta(days=89)
+    last30_start = today - timedelta(days=29)
     habits_by_id = {habit.id: habit for habit in habits}
     selected_ids = []
     for raw_id in request.GET.getlist("habit_ids"):
@@ -550,7 +548,7 @@ def habit_compare(request):
         for habit in selected_habits:
             metrics_90 = habit_performance_metrics(habit, window_start, today)
             metrics_30 = habit_performance_metrics(habit, last30_start, today)
-            all_time_start = clamp_analytics_start(habit.start_date)
+            all_time_start = habit.start_date
             metrics_all = habit_performance_metrics(habit, all_time_start, today)
             comparison_rows.append(
                 {
@@ -602,8 +600,8 @@ def _build_compare_chart_payload(selected_habits, today):
             datasets.append({"label": habit.name, "data": points})
         return {"labels": labels, "datasets": datasets}
 
-    last30_start = clamp_analytics_start(today - timedelta(days=29))
-    all_time_start = clamp_analytics_start(min(habit.start_date for habit in selected_habits))
+    last30_start = today - timedelta(days=29)
+    all_time_start = min(habit.start_date for habit in selected_habits)
     return {
         "last30": _build_timeframe_series(last30_start),
         "all": _build_timeframe_series(all_time_start),
@@ -613,11 +611,7 @@ def _build_compare_chart_payload(selected_habits, today):
 def _previous_period_for_window(window_start, window_end):
     window_days = (window_end - window_start).days + 1
     previous_end = window_start - timedelta(days=1)
-    if previous_end < ANALYTICS_START_DATE:
-        return None, None
-
     previous_start = previous_end - timedelta(days=window_days - 1)
-    previous_start = clamp_analytics_start(previous_start)
     if previous_start > previous_end:
         return None, None
     return previous_start, previous_end
@@ -705,7 +699,6 @@ def _build_profile_context(profile_user, current_user):
         "profile_user": profile_user,
         "is_own_profile": profile_user == current_user,
         "today": today,
-        "analytics_start_date": ANALYTICS_START_DATE,
         "total_habits": metrics["total_habits"],
         "overall_completion": metrics["overall_completion"],
         "best_streak": metrics["best_streak"],
@@ -726,12 +719,10 @@ def _build_user_metrics(user, today, start_date=None):
         .order_by("sort_order", "name")
     )
 
-    if start_date is not None:
-        start_date = clamp_analytics_start(start_date)
-    elif habits:
-        start_date = clamp_analytics_start(min(habit.start_date for habit in habits))
-    else:
-        start_date = clamp_analytics_start(today)
+    if start_date is None and habits:
+        start_date = min(habit.start_date for habit in habits)
+    elif start_date is None:
+        start_date = today
 
     total_habits = len(habits)
     total_scheduled = 0
@@ -768,7 +759,7 @@ def leaderboard(request):
     requested_window = request.GET.get("window")
     leaderboard_window = "all" if requested_window == "all" else "week"
     if leaderboard_window == "week":
-        window_start = clamp_analytics_start(today - timedelta(days=today.weekday()))
+        window_start = today - timedelta(days=today.weekday())
         window_label = f"{window_start.strftime('%b %d')} - {today.strftime('%b %d')}"
         window_title = "Current week"
     else:

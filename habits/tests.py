@@ -17,7 +17,9 @@ from .models import (
 from .services import (
     build_category_analytics,
     build_habit_score_drivers,
+    build_monthly_reports,
     build_overall_score_breakdown,
+    build_weekly_reports,
     calculate_overall_consistency,
     habit_performance_metrics,
 )
@@ -296,6 +298,40 @@ class ConsistencyScoreTests(TestCase):
         self.assertContains(response, "Score breakdown")
         self.assertContains(response, "Biggest score booster")
         self.assertContains(response, "Category analytics")
+
+    def test_dashboard_uses_full_rolling_window_before_may_10(self):
+        today = date(2026, 5, 17)
+        habit = self.make_habit("Older dashboard habit", date(2026, 4, 18))
+        self.log_completion(habit, date(2026, 4, 18), 100)
+
+        self.client.force_login(self.user)
+        with patch("habits.views.timezone.localdate", return_value=today), patch(
+            "habits.services.timezone.localdate",
+            return_value=today,
+        ):
+            response = self.client.get(reverse("habits:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Apr 18 - May 17")
+
+    def test_reports_use_section_periods_before_may_10(self):
+        today = date(2026, 5, 17)
+        habit = self.make_habit("April habit", date(2026, 4, 1))
+
+        with patch("habits.services.timezone.localdate", return_value=today):
+            weekly_reports = build_weekly_reports([habit], weeks=2, today=today)
+            monthly_reports = build_monthly_reports([habit], months=2, today=today)
+
+        self.assertEqual(
+            [report["label"] for report in weekly_reports],
+            ["May 04 - May 10", "May 11 - May 17"],
+        )
+        self.assertEqual(weekly_reports[0]["total_scheduled"], 7)
+        self.assertEqual(
+            [report["label"] for report in monthly_reports],
+            ["Apr 2026", "May 2026"],
+        )
+        self.assertEqual(monthly_reports[0]["total_scheduled"], 30)
 
 
 class FriendRequestFeatureTests(TestCase):
