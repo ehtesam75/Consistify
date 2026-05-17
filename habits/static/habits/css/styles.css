@@ -103,6 +103,11 @@ a {
     opacity: 0.2;
 }
 
+:root[data-theme="dark"] .ambient-bg::before {
+    background: none;
+    opacity: 0;
+}
+
 .container {
     width: min(1120px, 92vw);
     margin: 0 auto;

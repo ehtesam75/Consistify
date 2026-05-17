@@ -27,7 +27,7 @@
     <div class="stat-card">
         <span class="stat-label">Completed sessions</span>
         <span class="stat-value">{{ total_completed }}</span>
-        <span class="stat-note">100% completion days · {{ dashboard_window_note }}</span>
+        <span class="stat-note">100% completion · {{ dashboard_window_note }}</span>
     </div>
     <div class="stat-card">
         <span class="stat-label">Active habits</span>
@@ -104,7 +104,7 @@
                     {% if item.show_sign and item.value > 0 %}+{% endif %}{{ item.value }}
                 </span>
                 <span class="stat-note">{{ item.value_label }}</span>
-                <p class="habit-meta">{{ item.driver.score }} consistency &middot; {{ item.driver.completion_rate }}% completion &middot; {{ dashboard_window_note }}</p>
+                <p class="habit-meta">{{ item.driver.score }} consistency &middot; {{ item.driver.completion_rate }}% completion</p>
             {% else %}
                 <p class="empty">{{ item.empty }}</p>
             {% endif %}

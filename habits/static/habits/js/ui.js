@@ -449,10 +449,30 @@ window.ConsistifyUI = (() => {
         });
     }
 
+    function initNotificationMenus() {
+        const menus = document.querySelectorAll(".notification-menu");
+        if (!menus.length) {
+            return;
+        }
+
+        document.addEventListener("click", (event) => {
+            menus.forEach((menu) => {
+                if (!menu.open) {
+                    return;
+                }
+                if (menu.contains(event.target)) {
+                    return;
+                }
+                menu.open = false;
+            });
+        });
+    }
+
     function initUiFeatures() {
         initThemeToggle();
         initHabitProgressControls();
         initDeleteConfirmations();
+        initNotificationMenus();
     }
 
     if (document.readyState === "loading") {
