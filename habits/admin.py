@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Habit, HabitCompletion
+from .models import FriendRequest, Habit, HabitCompletion
 
 
 @admin.register(Habit)
@@ -32,3 +32,11 @@ class HabitCompletionAdmin(admin.ModelAdmin):
     list_display = ("habit", "date", "completion_percentage", "raw_value")
     list_filter = ("date",)
     search_fields = ("habit__name", "habit__user__username")
+
+
+@admin.register(FriendRequest)
+class FriendRequestAdmin(admin.ModelAdmin):
+    list_display = ("from_user", "to_user", "status", "created_at", "updated_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("from_user__username", "to_user__username")
+    readonly_fields = ("friendship_key", "created_at", "updated_at")

@@ -1,0 +1,81 @@
+{% extends "habits/base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">People</p>
+        <h1>Find users</h1>
+        <p class="subtitle">Search by username.</p>
+    </div>
+</section>
+
+<section class="card user-search-card" style="--i: 0;">
+    <form method="get" class="user-search-form">
+        <div class="user-search-field">
+            <label for="userSearch">Username</label>
+            <div class="user-search-control">
+                <input id="userSearch" class="input" type="search" name="q" value="{{ query }}" placeholder="Search username">
+                <button class="btn primary" type="submit">Search</button>
+            </div>
+        </div>
+    </form>
+</section>
+
+<section class="card" style="--i: 1;">
+    <div class="card-header">
+        <h2>Results</h2>
+        {% if query %}
+            <span class="tag">{{ results|length }} found</span>
+        {% endif %}
+    </div>
+
+    {% if query %}
+        {% if results %}
+            <ul class="user-result-list">
+                {% for result in results %}
+                    <li class="user-result">
+                        <div class="user-result-copy">
+                            <span class="user-avatar" aria-hidden="true">{{ result.user.username|slice:":1"|upper }}</span>
+                            <div>
+                                <a class="habit-name" href="{% url 'habits:user_profile' result.user.username %}">{{ result.user.username }}</a>
+                                {% if result.status == "accepted" %}
+                                    <p class="habit-meta">Progress profile</p>
+                                {% elif result.status == "outgoing_pending" %}
+                                    <p class="habit-meta">Friend request sent</p>
+                                {% elif result.status == "incoming_pending" %}
+                                    <p class="habit-meta">Sent you a friend request</p>
+                                {% else %}
+                                    <p class="habit-meta">Available to add</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="user-result-actions">
+                            {% if result.status == "accepted" %}
+                                <span class="tag">Friends</span>
+                            {% elif result.status == "outgoing_pending" %}
+                                <span class="tag">Pending</span>
+                            {% elif result.status == "incoming_pending" %}
+                                <form method="post" action="{% url 'habits:accept_friend_request' result.friend_request.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button class="btn primary small" type="submit">Accept request</button>
+                                </form>
+                            {% else %}
+                                <form method="post" action="{% url 'habits:send_friend_request' result.user.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button class="btn ghost small" type="submit">Send request</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">No users found for "{{ query }}".</p>
+        {% endif %}
+    {% else %}
+        <p class="empty">Search for someone by username.</p>
+    {% endif %}
+</section>
+{% endblock %}

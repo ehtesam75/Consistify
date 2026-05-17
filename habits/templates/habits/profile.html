@@ -4,9 +4,16 @@
 <section class="hero">
     <div>
         <p class="eyebrow">User profile</p>
-        <h1>Progress profile</h1>
+        <h1>{{ profile_user.username }}</h1>
         <p class="subtitle">Long-term summary as of {{ today|date:"F j, Y" }}</p>
-        <p class="subtitle">Signed in as <strong>{{ request.user.username }}</strong></p>
+        {% if is_own_profile %}
+            <p class="subtitle">This is your profile URL: <strong>/{{ profile_user.username }}/</strong></p>
+        {% else %}
+            <p class="subtitle">Viewing {{ profile_user.username }}'s progress profile.</p>
+        {% endif %}
+    </div>
+    <div class="hero-actions">
+        <a class="btn ghost" href="{% url 'habits:user_search' %}">Find users</a>
     </div>
 </section>
 

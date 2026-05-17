@@ -7,21 +7,23 @@ from math import ceil
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
-from django.db.models import Max
+from django.db import IntegrityError
+from django.db.models import Max, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .forms import HabitForm
-from .models import Habit, HabitCompletion
+from .models import FriendRequest, Habit, HabitCompletion
 from .services import (
     ANALYTICS_START_DATE,
     build_category_analytics,
@@ -680,9 +682,46 @@ def _build_score_driver_cards(score_drivers):
 
 @login_required
 def profile(request):
+    return redirect("habits:user_profile", username=request.user.username)
+
+
+@login_required
+def username_profile(request, username):
+    User = get_user_model()
+    profile_user = get_object_or_404(User, username=username)
+    context = _build_profile_context(profile_user, request.user)
+    return render(request, "habits/profile.html", context)
+
+
+def _build_profile_context(profile_user, current_user):
     today = timezone.localdate()
+    metrics = _build_user_metrics(profile_user, today)
+
+    monthly_reports = build_monthly_reports(metrics["habits"], months=12, today=today)
+    progress_labels = [item["label"] for item in monthly_reports]
+    progress_rates = [item["completion_rate"] for item in monthly_reports]
+
+    context = {
+        "profile_user": profile_user,
+        "is_own_profile": profile_user == current_user,
+        "today": today,
+        "analytics_start_date": ANALYTICS_START_DATE,
+        "total_habits": metrics["total_habits"],
+        "overall_completion": metrics["overall_completion"],
+        "best_streak": metrics["best_streak"],
+        "consistency_score": metrics["consistency_score"],
+        "total_scheduled": metrics["total_scheduled"],
+        "total_completed": metrics["total_completed"],
+        "monthly_reports": monthly_reports,
+        "progress_labels": json.dumps(progress_labels),
+        "progress_rates": json.dumps(progress_rates),
+    }
+    return context
+
+
+def _build_user_metrics(user, today):
     habits = list(
-        Habit.objects.filter(user=request.user)
+        Habit.objects.filter(user=user)
         .prefetch_related("categories")
         .order_by("sort_order", "name")
     )
@@ -709,24 +748,157 @@ def profile(request):
     overall_completion = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
     consistency_score = calculate_overall_consistency(habits, start_date, today)
 
-    monthly_reports = build_monthly_reports(habits, months=12, today=today)
-    progress_labels = [item["label"] for item in monthly_reports]
-    progress_rates = [item["completion_rate"] for item in monthly_reports]
-
-    context = {
-        "today": today,
-        "analytics_start_date": ANALYTICS_START_DATE,
+    return {
+        "habits": habits,
+        "start_date": start_date,
         "total_habits": total_habits,
         "overall_completion": overall_completion,
         "best_streak": best_streak,
         "consistency_score": consistency_score,
         "total_scheduled": total_scheduled,
         "total_completed": total_completed,
-        "monthly_reports": monthly_reports,
-        "progress_labels": json.dumps(progress_labels),
-        "progress_rates": json.dumps(progress_rates),
     }
-    return render(request, "habits/profile.html", context)
+
+
+@login_required
+def leaderboard(request):
+    today = timezone.localdate()
+    participants = [request.user] + _accepted_friends_for(request.user)
+    entries = []
+
+    for user in participants:
+        metrics = _build_user_metrics(user, today)
+        entries.append(
+            {
+                "user": user,
+                "is_current_user": user == request.user,
+                "total_habits": metrics["total_habits"],
+                "overall_completion": metrics["overall_completion"],
+                "best_streak": metrics["best_streak"],
+                "consistency_score": metrics["consistency_score"],
+                "total_scheduled": metrics["total_scheduled"],
+                "total_completed": metrics["total_completed"],
+            }
+        )
+
+    entries.sort(
+        key=lambda entry: (
+            -entry["consistency_score"],
+            -entry["overall_completion"],
+            -entry["total_completed"],
+            entry["user"].username.lower(),
+        )
+    )
+    for rank, entry in enumerate(entries, start=1):
+        entry["rank"] = rank
+
+    current_entry = next(
+        (entry for entry in entries if entry["is_current_user"]),
+        None,
+    )
+    leader_entry = entries[0] if entries else None
+
+    return render(
+        request,
+        "habits/leaderboard.html",
+        {
+            "today": today,
+            "leaderboard_entries": entries,
+            "friend_count": len(participants) - 1,
+            "current_entry": current_entry,
+            "leader_entry": leader_entry,
+        },
+    )
+
+
+@login_required
+def user_search(request):
+    query = (request.GET.get("q") or "").strip()
+    results = []
+
+    if query:
+        User = get_user_model()
+        users = list(
+            User.objects.filter(username__icontains=query)
+            .exclude(id=request.user.id)
+            .order_by("username")[:20]
+        )
+        friend_states = _friend_request_states(request.user, users)
+        for user in users:
+            state = friend_states.get(
+                user.id,
+                {"status": "none", "friend_request": None},
+            )
+            results.append(
+                {
+                    "user": user,
+                    "status": state["status"],
+                    "friend_request": state["friend_request"],
+                }
+            )
+
+    return render(
+        request,
+        "habits/user_search.html",
+        {
+            "query": query,
+            "results": results,
+        },
+    )
+
+
+@login_required
+@require_POST
+def send_friend_request(request, user_id):
+    User = get_user_model()
+    target_user = get_object_or_404(User, id=user_id)
+    next_url = _safe_next_url(request)
+
+    if target_user == request.user:
+        messages.error(request, "You cannot send a friend request to yourself.")
+        return redirect(next_url or reverse("habits:user_search"))
+
+    existing_request = _friend_request_between(request.user, target_user)
+    if existing_request:
+        if existing_request.status == FriendRequest.STATUS_ACCEPTED:
+            messages.info(request, f"You and {target_user.username} are already friends.")
+        elif existing_request.to_user_id == request.user.id:
+            existing_request.accept()
+            messages.success(request, f"You accepted {target_user.username}'s friend request.")
+        else:
+            messages.info(request, f"Friend request already sent to {target_user.username}.")
+        return redirect(
+            next_url
+            or f"{reverse('habits:user_search')}?q={target_user.username}"
+        )
+
+    try:
+        FriendRequest.objects.create(from_user=request.user, to_user=target_user)
+        messages.success(request, f"Friend request sent to {target_user.username}.")
+    except IntegrityError:
+        messages.info(request, "A friend request already exists for this user.")
+
+    return redirect(
+        next_url
+        or f"{reverse('habits:user_search')}?q={target_user.username}"
+    )
+
+
+@login_required
+@require_POST
+def accept_friend_request(request, request_id):
+    friend_request = get_object_or_404(
+        FriendRequest,
+        id=request_id,
+        to_user=request.user,
+        status=FriendRequest.STATUS_PENDING,
+    )
+    friend_request.accept()
+    messages.success(
+        request,
+        f"You accepted {friend_request.from_user.username}'s friend request.",
+    )
+    return redirect(_safe_next_url(request) or reverse("habits:user_search"))
 
 
 def signup(request):
@@ -741,6 +913,82 @@ def signup(request):
         form = UserCreationForm()
 
     return render(request, "registration/signup.html", {"form": form})
+
+
+def _friend_request_between(first_user, second_user):
+    friendship_key = FriendRequest.build_friendship_key(first_user.id, second_user.id)
+    return FriendRequest.objects.filter(friendship_key=friendship_key).first()
+
+
+def _accepted_friends_for(user):
+    accepted_requests = (
+        FriendRequest.objects.filter(status=FriendRequest.STATUS_ACCEPTED)
+        .filter(Q(from_user=user) | Q(to_user=user))
+        .select_related("from_user", "to_user")
+    )
+
+    friends = []
+    seen_user_ids = set()
+    for friend_request in accepted_requests:
+        friend = (
+            friend_request.to_user
+            if friend_request.from_user_id == user.id
+            else friend_request.from_user
+        )
+        if friend.id in seen_user_ids:
+            continue
+        seen_user_ids.add(friend.id)
+        friends.append(friend)
+    return sorted(friends, key=lambda friend: friend.username.lower())
+
+
+def _friend_request_states(current_user, users):
+    user_ids = [user.id for user in users]
+    if not user_ids:
+        return {}
+
+    requests = FriendRequest.objects.filter(
+        Q(from_user=current_user, to_user_id__in=user_ids)
+        | Q(to_user=current_user, from_user_id__in=user_ids)
+    )
+
+    states = {}
+    priorities = {
+        "none": 0,
+        "outgoing_pending": 1,
+        "incoming_pending": 2,
+        "accepted": 3,
+    }
+    for friend_request in requests:
+        other_user_id = (
+            friend_request.to_user_id
+            if friend_request.from_user_id == current_user.id
+            else friend_request.from_user_id
+        )
+        if friend_request.status == FriendRequest.STATUS_ACCEPTED:
+            status = "accepted"
+        elif friend_request.to_user_id == current_user.id:
+            status = "incoming_pending"
+        else:
+            status = "outgoing_pending"
+
+        current_state = states.get(other_user_id, {"status": "none"})
+        if priorities[status] > priorities[current_state["status"]]:
+            states[other_user_id] = {
+                "status": status,
+                "friend_request": friend_request,
+            }
+    return states
+
+
+def _safe_next_url(request):
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+    ):
+        return next_url
+    return None
 
 
 def _parse_decimal(raw_value):

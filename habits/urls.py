@@ -11,7 +11,15 @@ urlpatterns = [
     path("dashboard/", views.dashboard, name="dashboard"),
     path("reports/", views.reports, name="reports"),
     path("compare/", views.habit_compare, name="habit_compare"),
+    path("leaderboard/", views.leaderboard, name="leaderboard"),
     path("profile/", views.profile, name="profile"),
+    path("friends/search/", views.user_search, name="user_search"),
+    path("friends/request/<int:user_id>/", views.send_friend_request, name="send_friend_request"),
+    path(
+        "friends/requests/<int:request_id>/accept/",
+        views.accept_friend_request,
+        name="accept_friend_request",
+    ),
     path("habits/new/", views.habit_create, name="habit_create"),
     path("habits/<int:habit_id>/", views.habit_detail, name="habit_detail"),
     path("habits/<int:habit_id>/edit/", views.habit_edit, name="habit_edit"),
@@ -22,4 +30,5 @@ urlpatterns = [
     path("accounts/signup/", views.signup, name="signup"),
     path("accounts/login/", views.ConsistifyLoginView.as_view(), name="login"),
     path("accounts/logout/", views.ConsistifyLogoutView.as_view(), name="logout"),
+    path("<str:username>/", views.username_profile, name="user_profile"),
 ]

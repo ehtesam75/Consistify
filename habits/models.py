@@ -188,3 +188,67 @@ class HabitCompletion(models.Model):
     @property
     def is_completed(self):
         return self.completion_percentage == Decimal("100")
+
+
+class FriendRequest(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ACCEPTED, "Accepted"),
+    ]
+
+    from_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sent_friend_requests",
+    )
+    to_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="received_friend_requests",
+    )
+    friendship_key = models.CharField(max_length=64, unique=True, editable=False)
+    status = models.CharField(
+        max_length=12,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["to_user", "status"]),
+            models.Index(fields=["from_user", "status"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(from_user=models.F("to_user")),
+                name="friend_request_not_self",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.from_user} -> {self.to_user} ({self.status})"
+
+    @classmethod
+    def build_friendship_key(cls, first_user_id, second_user_id):
+        first, second = sorted([int(first_user_id), int(second_user_id)])
+        return f"{first}:{second}"
+
+    def save(self, *args, **kwargs):
+        if self.from_user_id and self.to_user_id:
+            if self.from_user_id == self.to_user_id:
+                raise ValueError("Users cannot send friend requests to themselves.")
+            self.friendship_key = self.build_friendship_key(
+                self.from_user_id,
+                self.to_user_id,
+            )
+        super().save(*args, **kwargs)
+
+    def accept(self):
+        self.status = self.STATUS_ACCEPTED
+        self.updated_at = timezone.now()
+        self.save(update_fields=["status", "updated_at"])

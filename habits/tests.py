@@ -7,7 +7,13 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import DEFAULT_CATEGORIES, Habit, HabitCategory, HabitCompletion
+from .models import (
+    DEFAULT_CATEGORIES,
+    FriendRequest,
+    Habit,
+    HabitCategory,
+    HabitCompletion,
+)
 from .services import (
     build_category_analytics,
     build_habit_score_drivers,
@@ -290,3 +296,137 @@ class ConsistencyScoreTests(TestCase):
         self.assertContains(response, "Score breakdown")
         self.assertContains(response, "Biggest score booster")
         self.assertContains(response, "Category analytics")
+
+
+class FriendRequestFeatureTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.alice = User.objects.create_user(
+            username="alice",
+            password="not-used",
+        )
+        self.bob = User.objects.create_user(
+            username="bob",
+            password="not-used",
+        )
+        self.cara = User.objects.create_user(
+            username="cara",
+            password="not-used",
+        )
+
+    def test_search_can_send_friend_request(self):
+        self.client.force_login(self.alice)
+        search_url = f"{reverse('habits:user_search')}?q=bob"
+
+        response = self.client.get(search_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "bob")
+        self.assertContains(response, "Send request")
+
+        response = self.client.post(
+            reverse("habits:send_friend_request", args=[self.bob.id]),
+            {"next": search_url},
+        )
+
+        self.assertRedirects(response, search_url, fetch_redirect_response=False)
+        friend_request = FriendRequest.objects.get(
+            from_user=self.alice,
+            to_user=self.bob,
+        )
+        self.assertEqual(friend_request.status, FriendRequest.STATUS_PENDING)
+
+    def test_search_can_accept_incoming_friend_request(self):
+        friend_request = FriendRequest.objects.create(
+            from_user=self.bob,
+            to_user=self.alice,
+        )
+        self.client.force_login(self.alice)
+        search_url = f"{reverse('habits:user_search')}?q=bob"
+
+        response = self.client.get(search_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sent you a friend request")
+        self.assertContains(response, "Accept request")
+
+        response = self.client.post(
+            reverse("habits:accept_friend_request", args=[friend_request.id]),
+            {"next": search_url},
+        )
+
+        self.assertRedirects(response, search_url, fetch_redirect_response=False)
+        friend_request.refresh_from_db()
+        self.assertEqual(friend_request.status, FriendRequest.STATUS_ACCEPTED)
+
+    def test_notification_panel_lists_incoming_friend_requests(self):
+        FriendRequest.objects.create(from_user=self.bob, to_user=self.alice)
+        self.client.force_login(self.alice)
+
+        response = self.client.get(reverse("habits:today"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "notification-badge")
+        self.assertContains(response, "bob")
+        self.assertContains(response, "Accept")
+
+    def test_username_profile_url_renders_target_profile(self):
+        self.client.force_login(self.alice)
+
+        response = self.client.get(
+            reverse("habits:user_profile", args=[self.bob.username])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<h1>bob</h1>", html=True)
+        self.assertContains(response, "Viewing bob's progress profile.")
+
+    def test_legacy_profile_url_redirects_to_current_username(self):
+        self.client.force_login(self.cara)
+
+        response = self.client.get(reverse("habits:profile"))
+
+        self.assertRedirects(
+            response,
+            reverse("habits:user_profile", args=[self.cara.username]),
+            fetch_redirect_response=False,
+        )
+
+    def test_leaderboard_ranks_current_user_and_accepted_friends(self):
+        FriendRequest.objects.create(
+            from_user=self.alice,
+            to_user=self.bob,
+            status=FriendRequest.STATUS_ACCEPTED,
+        )
+        FriendRequest.objects.create(from_user=self.alice, to_user=self.cara)
+        habit = Habit.objects.create(
+            user=self.bob,
+            name="Bob daily",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=date(2026, 5, 15),
+        )
+        for target_date in (date(2026, 5, 15), date(2026, 5, 16)):
+            HabitCompletion.objects.create(
+                habit=habit,
+                date=target_date,
+                completion_percentage=Decimal("100"),
+                raw_value=Decimal("100"),
+            )
+        self.client.force_login(self.alice)
+
+        with patch("habits.views.timezone.localdate", return_value=date(2026, 5, 17)), patch(
+            "habits.services.timezone.localdate",
+            return_value=date(2026, 5, 17),
+        ):
+            response = self.client.get(reverse("habits:leaderboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Leaderboard")
+        self.assertContains(response, "alice")
+        self.assertContains(response, "bob")
+        self.assertNotContains(response, "cara")
+
+        content = response.content.decode()
+        ranking_markup = content.split('<div class="leaderboard-list">', 1)[1]
+        self.assertLess(ranking_markup.index("bob"), ranking_markup.index("alice"))
