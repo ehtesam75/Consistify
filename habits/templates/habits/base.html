@@ -43,7 +43,6 @@
                     <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'habits:reports' %}">Reports</a>
                     <a class="nav-link {% if request.resolver_match.url_name == 'habit_compare' %}active{% endif %}" href="{% url 'habits:habit_compare' %}">Compare</a>
                     <a class="nav-link {% if request.resolver_match.url_name == 'leaderboard' %}active{% endif %}" href="{% url 'habits:leaderboard' %}">Leaderboard</a>
-                    <a class="nav-link {% if request.resolver_match.url_name == 'user_search' %}active{% endif %}" href="{% url 'habits:user_search' %}">Find Users</a>
                     <a class="nav-link {% if request.resolver_match.url_name == 'profile' or request.resolver_match.url_name == 'user_profile' %}active{% endif %}" href="{% url 'habits:user_profile' request.user.username %}">Profile</a>
                 </nav>
                 <div class="nav-utility">
@@ -83,6 +82,9 @@
                             {% else %}
                                 <p class="empty notification-empty">No pending friend requests.</p>
                             {% endif %}
+                            <div class="notification-panel-footer">
+                                <a class="btn ghost small" href="{% url 'habits:user_search' %}">Find users</a>
+                            </div>
                         </div>
                     </details>
                     <button id="themeToggle" type="button" class="theme-toggle icon-toggle" aria-label="Switch to dark mode" title="Switch to dark mode">

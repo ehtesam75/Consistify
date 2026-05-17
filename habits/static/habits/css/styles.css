@@ -422,6 +422,17 @@ a {
     margin-bottom: 0;
 }
 
+.notification-panel-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(228, 222, 212, 0.7);
+}
+
+:root[data-theme="dark"] .notification-panel-footer {
+    border-top-color: rgba(59, 71, 95, 0.7);
+}
+
 .notification-link {
     justify-self: start;
 }
@@ -1264,89 +1275,6 @@ main > section + section {
     border-color: rgba(176, 122, 55, 0.45);
     background: rgba(176, 122, 55, 0.14);
     color: var(--accent-strong);
-}
-
-.compare-empty {
-    position: relative;
-    z-index: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-    gap: 1.8rem;
-    padding: 1.8rem 0;
-    margin-top: 1.6rem;
-    border-top: 1px solid rgba(228, 222, 212, 0.7);
-    border-bottom: 1px solid rgba(228, 222, 212, 0.7);
-}
-
-.compare-empty::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-        radial-gradient(circle at 12% 20%, rgba(176, 122, 55, 0.12), transparent 55%),
-        radial-gradient(circle at 88% 10%, rgba(47, 111, 109, 0.12), transparent 50%);
-    opacity: 0.85;
-    pointer-events: none;
-    z-index: -1;
-}
-
-:root[data-theme="dark"] .compare-empty {
-    border-color: rgba(59, 71, 95, 0.72);
-}
-
-:root[data-theme="dark"] .compare-empty::before {
-    background:
-        radial-gradient(circle at 12% 20%, rgba(208, 155, 79, 0.16), transparent 55%),
-        radial-gradient(circle at 88% 10%, rgba(98, 183, 176, 0.18), transparent 50%);
-}
-
-.compare-empty-copy h2 {
-    margin-bottom: 0.35rem;
-}
-
-.compare-empty-copy .subtitle {
-    margin-bottom: 0;
-}
-
-.compare-empty-steps {
-    display: grid;
-    gap: 0.85rem;
-    align-content: center;
-}
-
-.compare-step {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.8rem;
-    align-items: center;
-}
-
-.compare-step-index {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 999px;
-    display: inline-grid;
-    place-items: center;
-    background: rgba(176, 122, 55, 0.18);
-    color: var(--accent-strong);
-    font-weight: 700;
-}
-
-:root[data-theme="dark"] .compare-step-index {
-    background: rgba(208, 155, 79, 0.22);
-    color: var(--accent-strong);
-}
-
-.compare-step-title {
-    display: block;
-    font-weight: 600;
-    color: var(--ink);
-}
-
-.compare-step-note {
-    display: block;
-    font-size: 0.85rem;
-    color: var(--ink-soft);
 }
 
 .form-panel {
@@ -2953,10 +2881,6 @@ body.auth-page main {
 
     .modern-form-actions {
         justify-content: flex-start;
-    }
-
-    .compare-empty {
-        grid-template-columns: 1fr;
     }
 
     .footer-inner {
