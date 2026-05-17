@@ -15,7 +15,12 @@
 
 <div class="date-nav">
     <a class="btn ghost small" href="?date={{ prev_date|date:'Y-m-d' }}{% if hide_completed %}&hide_completed=1{% endif %}">Previous</a>
-    <span class="date-chip">{{ target_date|date:"M d, Y" }}</span>
+    <form class="date-picker-form" method="get">
+        <input class="date-chip date-picker-input" type="date" name="date" value="{{ target_date|date:'Y-m-d' }}" aria-label="Choose date" data-date-picker>
+        {% if hide_completed %}
+            <input type="hidden" name="hide_completed" value="1">
+        {% endif %}
+    </form>
     <a class="btn ghost small" href="?date={{ next_date|date:'Y-m-d' }}{% if hide_completed %}&hide_completed=1{% endif %}">Next</a>
 </div>
 
@@ -141,6 +146,12 @@
 <script>
     if (window.ConsistifyUI) {
         window.ConsistifyUI.enableHabitDragSort("habitSortList");
+    }
+    const datePicker = document.querySelector("[data-date-picker]");
+    if (datePicker) {
+        datePicker.addEventListener("change", () => {
+            datePicker.form.submit();
+        });
     }
 </script>
 {% endblock %}

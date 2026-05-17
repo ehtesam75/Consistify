@@ -130,6 +130,7 @@ def habit_list(request):
 def dashboard(request):
     today = timezone.localdate()
     window_start = today - timedelta(days=29)
+    dashboard_window_note = "Last 30 days"
     previous_window_start, previous_window_end = _previous_period_for_window(
         window_start,
         today,
@@ -230,6 +231,8 @@ def dashboard(request):
         "category_analytics": category_analytics,
         "chart_labels": json.dumps(chart_labels),
         "chart_rates": json.dumps(chart_rates),
+        "dashboard_window_label": _format_period_label(window_start, today),
+        "dashboard_window_note": dashboard_window_note,
     }
     return render(request, "habits/dashboard.html", context)
 
@@ -242,13 +245,14 @@ def habit_detail(request, habit_id):
         user=request.user,
     )
     today = timezone.localdate()
-    history_start = today - timedelta(days=120)
-    history_dates = list(iter_scheduled_dates(habit, history_start, today))
-    recent_dates = history_dates[-30:]
+    all_time_start = habit.start_date
+    history_dates = list(iter_scheduled_dates(habit, all_time_start, today))
+    recent_history_dates = history_dates[-20:]
+    chart_dates = history_dates[-30:]
 
-    completion_map, value_map = get_completion_maps(habit, history_start, today)
+    completion_map, value_map = get_completion_maps(habit, all_time_start, today)
     history = []
-    for scheduled_date in recent_dates:
+    for scheduled_date in recent_history_dates:
         completion_percentage = completion_map.get(scheduled_date, 0)
         completed = completion_percentage >= 100
         if completed:
@@ -284,12 +288,19 @@ def habit_detail(request, habit_id):
         window_completion_map,
         window_value_map,
     )
+    all_time_stats = completion_stats(
+        habit,
+        all_time_start,
+        today,
+        completion_map,
+        value_map,
+    )
     detailed_metrics = habit_performance_metrics(
         habit,
-        window_start,
+        all_time_start,
         today,
-        window_completion_map,
-        window_value_map,
+        completion_map,
+        value_map,
     )
     current_streak, max_streak = calculate_streaks(habit, today)
 
@@ -306,13 +317,14 @@ def habit_detail(request, habit_id):
     is_scheduled_today = habit.is_scheduled_on(today)
     next_due = get_next_scheduled_date(habit, today)
 
-    chart_labels = json.dumps([date.strftime("%b %d") for date in recent_dates])
-    chart_percentages = json.dumps([completion_map.get(date, 0) for date in recent_dates])
+    chart_labels = json.dumps([date.strftime("%b %d") for date in chart_dates])
+    chart_percentages = json.dumps([completion_map.get(date, 0) for date in chart_dates])
 
     context = {
         "habit": habit,
         "history": history,
         "stats": stats,
+        "all_time_stats": all_time_stats,
         "metrics": detailed_metrics,
         "current_streak": current_streak,
         "max_streak": max_streak,
@@ -325,6 +337,8 @@ def habit_detail(request, habit_id):
         "chart_labels": chart_labels,
         "chart_percentages": chart_percentages,
         "tags": habit.get_tags(),
+        "detail_window_note": "Last 30 days",
+        "all_time_label": f"Since {all_time_start.strftime('%b %d, %Y')}",
     }
     return render(request, "habits/habit_detail.html", context)
 
@@ -757,11 +771,14 @@ def _build_user_metrics(user, today, start_date=None):
 def leaderboard(request):
     today = timezone.localdate()
     requested_window = request.GET.get("window")
-    leaderboard_window = "all" if requested_window == "all" else "week"
-    if leaderboard_window == "week":
-        window_start = today - timedelta(days=today.weekday())
-        window_label = f"{window_start.strftime('%b %d')} - {today.strftime('%b %d')}"
-        window_title = "Current week"
+    leaderboard_window = "all" if requested_window == "all" else "current"
+    if leaderboard_window == "current":
+        window_start = today - timedelta(days=29)
+        window_label = (
+            "Last 30 days· "
+            f"{window_start.strftime('%b %d')} - {today.strftime('%b %d')}"
+        )
+        window_title = "Current window"
     else:
         window_start = None
         window_label = "All tracked history"

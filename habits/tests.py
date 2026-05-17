@@ -277,6 +277,16 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(analytics["best"]["key"], "health")
         self.assertEqual(analytics["weakest"]["key"], "work")
 
+    def test_today_page_has_date_picker_for_requested_date(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("habits:today"), {"date": "2026-06-03"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'type="date"')
+        self.assertContains(response, 'name="date"')
+        self.assertContains(response, 'value="2026-06-03"')
+
     def test_dashboard_renders_score_drivers_and_category_analytics(self):
         today = date(2026, 5, 10)
         habit = self.make_habit(
@@ -298,6 +308,7 @@ class ConsistencyScoreTests(TestCase):
         self.assertContains(response, "Score breakdown")
         self.assertContains(response, "Biggest score booster")
         self.assertContains(response, "Category analytics")
+        self.assertContains(response, "Last 30 days")
 
     def test_dashboard_uses_full_rolling_window_before_may_10(self):
         today = date(2026, 5, 17)
@@ -332,6 +343,25 @@ class ConsistencyScoreTests(TestCase):
             ["Apr 2026", "May 2026"],
         )
         self.assertEqual(monthly_reports[0]["total_scheduled"], 30)
+
+    def test_habit_detail_uses_all_time_stats_and_limits_history(self):
+        today = date(2026, 5, 17)
+        habit = self.make_habit("All time detail habit", date(2026, 4, 1))
+        for offset in range(17):
+            self.log_completion(habit, habit.start_date + timedelta(days=offset), 100)
+
+        self.client.force_login(self.user)
+        with patch("habits.views.timezone.localdate", return_value=today), patch(
+            "habits.services.timezone.localdate",
+            return_value=today,
+        ):
+            response = self.client.get(reverse("habits:habit_detail", args=[habit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["stats"]["average_completion"], 0.0)
+        self.assertEqual(response.context["all_time_stats"]["average_completion"], 37.0)
+        self.assertEqual(len(response.context["history"]), 20)
+        self.assertContains(response, "All time")
 
 
 class FriendRequestFeatureTests(TestCase):
@@ -459,7 +489,7 @@ class FriendRequestFeatureTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Leaderboard")
-        self.assertContains(response, "Current week")
+        self.assertContains(response, "Current window")
         self.assertContains(response, "All time")
         self.assertContains(response, "alice")
         self.assertContains(response, "bob")
@@ -469,7 +499,7 @@ class FriendRequestFeatureTests(TestCase):
         ranking_markup = content.split('<div class="leaderboard-list">', 1)[1]
         self.assertLess(ranking_markup.index("bob"), ranking_markup.index("alice"))
 
-    def test_leaderboard_can_switch_between_week_and_all_time(self):
+    def test_leaderboard_can_switch_between_current_window_and_all_time(self):
         FriendRequest.objects.create(
             from_user=self.alice,
             to_user=self.bob,
@@ -481,11 +511,11 @@ class FriendRequestFeatureTests(TestCase):
             habit_type=Habit.HABIT_BINARY,
             schedule_type=Habit.SCHEDULE_INTERVAL,
             interval_days=999,
-            start_date=date(2026, 5, 10),
+            start_date=date(2026, 4, 10),
         )
         HabitCompletion.objects.create(
             habit=habit,
-            date=date(2026, 5, 10),
+            date=date(2026, 4, 10),
             completion_percentage=Decimal("100"),
             raw_value=Decimal("100"),
         )
@@ -495,12 +525,12 @@ class FriendRequestFeatureTests(TestCase):
             "habits.services.timezone.localdate",
             return_value=date(2026, 5, 17),
         ):
-            week_response = self.client.get(reverse("habits:leaderboard"))
+            current_window_response = self.client.get(reverse("habits:leaderboard"))
             all_time_response = self.client.get(
                 f"{reverse('habits:leaderboard')}?window=all"
             )
 
-        week_ranking = week_response.content.decode().split(
+        current_window_ranking = current_window_response.content.decode().split(
             '<div class="leaderboard-list">',
             1,
         )[1]
@@ -509,7 +539,10 @@ class FriendRequestFeatureTests(TestCase):
             1,
         )[1]
 
-        self.assertContains(week_response, "May 11 - May 17")
+        self.assertContains(current_window_response, "Apr 18 - May 17")
         self.assertContains(all_time_response, "All tracked history")
-        self.assertLess(week_ranking.index("alice"), week_ranking.index("bob"))
+        self.assertLess(
+            current_window_ranking.index("alice"),
+            current_window_ranking.index("bob"),
+        )
         self.assertLess(all_time_ranking.index("bob"), all_time_ranking.index("alice"))

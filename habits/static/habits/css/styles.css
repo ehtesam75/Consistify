@@ -546,6 +546,16 @@ main > section + section {
     font-weight: 600;
 }
 
+.date-picker-form {
+    margin: 0;
+}
+
+.date-picker-input {
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 1rem;
+}
+
 .card-grid {
     display: grid;
     gap: 1.5rem;

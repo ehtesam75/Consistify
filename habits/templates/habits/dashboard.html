@@ -17,17 +17,17 @@
     <div class="stat-card">
         <span class="stat-label">Overall completion</span>
         <span class="stat-value">{{ overall_rate }}%</span>
-        <span class="stat-note">Last 30 days</span>
+        <span class="stat-note">{{ dashboard_window_note }}</span>
     </div>
     <div class="stat-card">
         <span class="stat-label">Scheduled sessions</span>
         <span class="stat-value">{{ total_scheduled }}</span>
-        <span class="stat-note">Across all habits</span>
+        <span class="stat-note">Across all habits · {{ dashboard_window_note }}</span>
     </div>
     <div class="stat-card">
         <span class="stat-label">Completed sessions</span>
         <span class="stat-value">{{ total_completed }}</span>
-        <span class="stat-note">100% completion days</span>
+        <span class="stat-note">100% completion days · {{ dashboard_window_note }}</span>
     </div>
     <div class="stat-card">
         <span class="stat-label">Active habits</span>
@@ -37,7 +37,7 @@
     <div class="stat-card">
         <span class="stat-label">Consistency score</span>
         <span class="stat-value">{{ overall_consistency }}</span>
-        <span class="stat-note">Across all habits</span>
+        <span class="stat-note">Across all habits · {{ dashboard_window_note }}</span>
     </div>
 </section>
 
@@ -104,7 +104,7 @@
                     {% if item.show_sign and item.value > 0 %}+{% endif %}{{ item.value }}
                 </span>
                 <span class="stat-note">{{ item.value_label }}</span>
-                <p class="habit-meta">{{ item.driver.score }} consistency &middot; {{ item.driver.completion_rate }}% completion</p>
+                <p class="habit-meta">{{ item.driver.score }} consistency &middot; {{ item.driver.completion_rate }}% completion &middot; {{ dashboard_window_note }}</p>
             {% else %}
                 <p class="empty">{{ item.empty }}</p>
             {% endif %}
@@ -115,7 +115,7 @@
 <section class="card category-analytics-card" style="--i: 2;">
     <div class="card-header">
         <h2>Category analytics</h2>
-        <span class="tag">All categories</span>
+        <span class="tag">{{ dashboard_window_note }}</span>
     </div>
     {% if category_analytics.best %}
         <div class="category-leader-strip">
@@ -172,7 +172,7 @@
     <div class="card" style="--i: 1;">
         <div class="card-header">
             <h2>Habits going strong</h2>
-            <span class="tag">80% and above</span>
+            <span class="tag">80% and above · {{ dashboard_window_note }}</span>
         </div>
         {% if doing_well %}
             <ul class="habit-list">
@@ -194,7 +194,7 @@
     <div class="card" style="--i: 2;">
         <div class="card-header">
             <h2>Needs more attention</h2>
-            <span class="tag">Below 50%</span>
+            <span class="tag">Below 50% · {{ dashboard_window_note }}</span>
         </div>
         {% if needs_focus %}
             <ul class="habit-list">
@@ -217,7 +217,7 @@
 <section class="card" style="--i: 3;">
     <div class="card-header">
         <h2>All habits</h2>
-        <span class="tag">30 day snapshot</span>
+        <span class="tag">{{ dashboard_window_note }}</span>
     </div>
     {% if habit_cards %}
         <div class="table">

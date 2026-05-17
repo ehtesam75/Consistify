@@ -19,7 +19,7 @@
         <span class="tag">{{ leaderboard_window_label }}</span>
     </div>
     <div class="segmented-control leaderboard-window-switch" aria-label="Leaderboard timeframe">
-        <a class="segmented-option {% if leaderboard_window == 'week' %}active{% endif %}" href="{% url 'habits:leaderboard' %}?window=week">Current week</a>
+        <a class="segmented-option {% if leaderboard_window == 'current' %}active{% endif %}" href="{% url 'habits:leaderboard' %}?window=current">Current window</a>
         <a class="segmented-option {% if leaderboard_window == 'all' %}active{% endif %}" href="{% url 'habits:leaderboard' %}?window=all">All time</a>
     </div>
 
