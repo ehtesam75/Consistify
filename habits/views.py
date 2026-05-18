@@ -248,7 +248,7 @@ def habit_detail(request, habit_id):
     all_time_start = habit.start_date
     history_dates = list(iter_scheduled_dates(habit, all_time_start, today))
     recent_history_dates = history_dates[-15:]
-    chart_dates = history_dates[-30:]
+    chart_dates = history_dates[-15:]
 
     completion_map, value_map = get_completion_maps(habit, all_time_start, today)
     history = []
