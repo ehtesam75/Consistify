@@ -709,6 +709,34 @@ def _build_profile_context(profile_user, current_user):
     progress_labels = [item["label"] for item in monthly_reports]
     progress_rates = [item["completion_rate"] for item in monthly_reports]
 
+    daily_window_days = 15
+    daily_start = today - timedelta(days=daily_window_days - 1)
+    daily_labels = []
+    daily_rates = []
+    completion_map = {}
+    if metrics["habits"]:
+        recent_completions = HabitCompletion.objects.filter(
+            habit__in=metrics["habits"],
+            date__range=(daily_start, today),
+        )
+        completion_map = {
+            (completion.habit_id, completion.date): float(
+                completion.completion_percentage or 0
+            )
+            for completion in recent_completions
+        }
+
+    for offset in range(daily_window_days):
+        current_day = daily_start + timedelta(days=offset)
+        daily_values = []
+        for habit in metrics["habits"]:
+            if not habit.is_scheduled_on(current_day):
+                continue
+            daily_values.append(completion_map.get((habit.id, current_day), 0.0))
+        rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else None
+        daily_labels.append(current_day.strftime("%b %d"))
+        daily_rates.append(rate)
+
     context = {
         "profile_user": profile_user,
         "is_own_profile": profile_user == current_user,
@@ -722,6 +750,8 @@ def _build_profile_context(profile_user, current_user):
         "monthly_reports": monthly_reports,
         "progress_labels": json.dumps(progress_labels),
         "progress_rates": json.dumps(progress_rates),
+        "daily_labels": json.dumps(daily_labels),
+        "daily_rates": json.dumps(daily_rates),
     }
     return context
 

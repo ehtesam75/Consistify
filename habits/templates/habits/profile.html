@@ -40,6 +40,16 @@
 
 <section class="card" style="--i: 0;">
     <div class="card-header">
+        <h2>Recent completion rate</h2>
+        <span class="tag">Last 15 days</span>
+    </div>
+    <div class="chart-wrap">
+        <canvas id="profileDailyChart"></canvas>
+    </div>
+</section>
+
+<section class="card" style="--i: 1;">
+    <div class="card-header">
         <h2>Long-term progress</h2>
         <span class="tag">Last 12 months</span>
     </div>
@@ -48,7 +58,7 @@
     </div>
 </section>
 
-<section class="card" style="--i: 1;">
+<section class="card" style="--i: 2;">
     <div class="card-header">
         <h2>Monthly history</h2>
     </div>
@@ -74,9 +84,18 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    const dailyLabels = {{ daily_labels|safe }};
+    const dailyRates = {{ daily_rates|safe }};
     const progressLabels = {{ progress_labels|safe }};
     const progressRates = {{ progress_rates|safe }};
     if (window.ConsistifyCharts) {
+        if (dailyLabels.length) {
+            window.ConsistifyCharts.renderRateLine(
+                "profileDailyChart",
+                dailyLabels,
+                dailyRates
+            );
+        }
         window.ConsistifyCharts.renderRateLine("profileProgressChart", progressLabels, progressRates);
     }
 </script>
