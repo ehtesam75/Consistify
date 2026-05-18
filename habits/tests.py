@@ -13,6 +13,7 @@ from .models import (
     Habit,
     HabitCategory,
     HabitCompletion,
+    HabitPause,
 )
 from .services import (
     build_category_analytics,
@@ -362,6 +363,49 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(response.context["all_time_stats"]["average_completion"], 37.0)
         self.assertEqual(len(response.context["history"]), 20)
         self.assertContains(response, "All time")
+
+    def test_paused_dates_are_excluded_from_metrics(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Pause test", start)
+        self.log_completion(habit, start, 100)
+        self.log_completion(habit, start + timedelta(days=1), 100)
+        self.log_completion(habit, start + timedelta(days=2), 100)
+
+        HabitPause.objects.create(
+            habit=habit,
+            start_date=start + timedelta(days=1),
+            end_date=start + timedelta(days=3),
+        )
+
+        metrics = habit_performance_metrics(habit, start, start + timedelta(days=2))
+
+        self.assertEqual(metrics["scheduled_total"], 1)
+        self.assertEqual(metrics["completed_total"], 1)
+        self.assertEqual(metrics["completion_rate"], 100.0)
+
+    def test_pause_habit_starts_tomorrow(self):
+        today = date(2026, 2, 2)
+        habit = self.make_habit("Pause tomorrow", today - timedelta(days=1))
+
+        self.client.force_login(self.user)
+        with patch("habits.views.timezone.localdate", return_value=today):
+            self.client.post(reverse("habits:pause_habit", args=[habit.id]))
+
+        pause = HabitPause.objects.get(habit=habit, end_date__isnull=True)
+        self.assertEqual(pause.start_date, today + timedelta(days=1))
+        self.assertFalse(habit.is_paused_on(today))
+        self.assertTrue(habit.is_paused_on(today + timedelta(days=1)))
+
+    def test_resume_makes_today_schedulable(self):
+        today = date(2026, 2, 2)
+        habit = self.make_habit("Resume test", today - timedelta(days=1))
+
+        pause = HabitPause.objects.create(habit=habit, start_date=today)
+        self.assertFalse(habit.is_scheduled_on(today))
+
+        pause.end_date = today
+        pause.save(update_fields=["end_date", "updated_at"])
+        self.assertTrue(habit.is_scheduled_on(today))
 
 
 class FriendRequestFeatureTests(TestCase):

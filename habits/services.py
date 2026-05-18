@@ -2,6 +2,7 @@ from calendar import monthrange
 from datetime import date, timedelta
 from math import sqrt
 
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import Habit, HabitCategory, HabitCompletion
@@ -54,11 +55,13 @@ def iter_scheduled_dates(habit, start_date, end_date):
         return []
 
     start_date = max(start_date, habit.start_date)
+    pause_ranges = _pause_ranges_for_habit(habit, start_date, end_date)
 
     if habit.schedule_type == Habit.SCHEDULE_DAILY:
         current = start_date
         while current <= end_date:
-            yield current
+            if not _is_paused_on_date(current, pause_ranges):
+                yield current
             current += timedelta(days=1)
         return
 
@@ -77,7 +80,8 @@ def iter_scheduled_dates(habit, start_date, end_date):
 
         current = start_date
         while current <= end_date:
-            yield current
+            if not _is_paused_on_date(current, pause_ranges):
+                yield current
             current += timedelta(days=interval)
         return
 
@@ -87,7 +91,7 @@ def iter_scheduled_dates(habit, start_date, end_date):
             return []
         current = start_date
         while current <= end_date:
-            if current.weekday() in days:
+            if current.weekday() in days and not _is_paused_on_date(current, pause_ranges):
                 yield current
             current += timedelta(days=1)
         return
@@ -110,6 +114,44 @@ def get_completion_maps(habit, start_date, end_date):
             else:
                 value_map[completion.date] = float(completion.raw_value)
     return completion_map, value_map
+
+
+def _pause_ranges_for_habit(habit, start_date, end_date):
+    if end_date < start_date:
+        return []
+    cache = getattr(habit, "_pause_ranges_cache", None)
+    cache_key = (start_date, end_date)
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+
+    prefetched = getattr(habit, "_prefetched_objects_cache", None)
+    pause_ranges = None
+    if prefetched and "pauses" in prefetched:
+        pause_ranges = [
+            (pause.start_date, pause.end_date)
+            for pause in prefetched["pauses"]
+            if pause.start_date <= end_date
+            and (pause.end_date is None or pause.end_date > start_date)
+        ]
+    else:
+        pauses = habit.pauses.filter(start_date__lte=end_date).filter(
+            Q(end_date__isnull=True) | Q(end_date__gt=start_date)
+        )
+        pause_ranges = list(pauses.values_list("start_date", "end_date"))
+
+    if cache is None:
+        habit._pause_ranges_cache = {cache_key: pause_ranges}
+    else:
+        cache[cache_key] = pause_ranges
+
+    return pause_ranges
+
+
+def _is_paused_on_date(target_date, pause_ranges):
+    for start_date, end_date in pause_ranges:
+        if start_date <= target_date and (end_date is None or target_date < end_date):
+            return True
+    return False
 
 
 def _is_completed(percentage_value):
@@ -795,33 +837,67 @@ def get_next_scheduled_date(habit, from_date=None):
     if from_date < habit.start_date:
         from_date = habit.start_date
 
-    if habit.schedule_type == Habit.SCHEDULE_DAILY:
-        return from_date
+    active_pause = habit.active_pause()
+    if active_pause and active_pause.start_date <= from_date:
+        return None
 
-    if habit.schedule_type == Habit.SCHEDULE_WEEKLY:
+    if habit.schedule_type == Habit.SCHEDULE_DAILY:
+        candidate = from_date
+    elif habit.schedule_type == Habit.SCHEDULE_WEEKLY:
         interval = max(1, habit.weekly_interval) * 7
         delta_days = (from_date - habit.start_date).days
         remainder = delta_days % interval
         if remainder == 0:
-            return from_date
-        return from_date + timedelta(days=interval - remainder)
-
-    if habit.schedule_type == Habit.SCHEDULE_INTERVAL:
+            candidate = from_date
+        else:
+            candidate = from_date + timedelta(days=interval - remainder)
+    elif habit.schedule_type == Habit.SCHEDULE_INTERVAL:
         interval = max(1, habit.interval_days)
         delta_days = (from_date - habit.start_date).days
         remainder = delta_days % interval
         if remainder == 0:
-            return from_date
-        return from_date + timedelta(days=interval - remainder)
-
-    if habit.schedule_type == Habit.SCHEDULE_DAYS:
+            candidate = from_date
+        else:
+            candidate = from_date + timedelta(days=interval - remainder)
+    elif habit.schedule_type == Habit.SCHEDULE_DAYS:
         days = habit.get_days_of_week_set()
         if not days:
             return None
+        candidate = None
         for offset in range(0, 7):
-            candidate = from_date + timedelta(days=offset)
-            if candidate.weekday() in days:
-                return candidate
+            current = from_date + timedelta(days=offset)
+            if current.weekday() in days:
+                candidate = current
+                break
+    else:
         return None
 
-    return None
+    if candidate is None:
+        return None
+
+    def advance(next_date):
+        if habit.schedule_type == Habit.SCHEDULE_DAILY:
+            return next_date + timedelta(days=1)
+        if habit.schedule_type == Habit.SCHEDULE_WEEKLY:
+            return next_date + timedelta(days=max(1, habit.weekly_interval) * 7)
+        if habit.schedule_type == Habit.SCHEDULE_INTERVAL:
+            return next_date + timedelta(days=max(1, habit.interval_days))
+        if habit.schedule_type == Habit.SCHEDULE_DAYS:
+            days = habit.get_days_of_week_set()
+            if not days:
+                return None
+            for offset in range(1, 8):
+                current = next_date + timedelta(days=offset)
+                if current.weekday() in days:
+                    return current
+            return None
+        return None
+
+    while habit.is_paused_on(candidate):
+        if active_pause and active_pause.start_date <= candidate:
+            return None
+        candidate = advance(candidate)
+        if candidate is None:
+            return None
+
+    return candidate

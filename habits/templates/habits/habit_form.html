@@ -173,6 +173,33 @@
         </p>
 
         {% if form.instance.pk %}
+            <div class="pause-actions">
+                {% with active_pause=form.instance.active_pause %}
+                    {% if active_pause %}
+                        <form method="post" action="{% url 'habits:resume_habit' form.instance.pk %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="btn primary" type="submit">
+                                {% if active_pause.start_date > today %}
+                                    Cancel pause
+                                {% else %}
+                                    Resume habit
+                                {% endif %}
+                            </button>
+                        </form>
+                        {% if active_pause.start_date > today %}
+                            <p class="help">Pause starts tomorrow and skips scheduled days.</p>
+                        {% endif %}
+                    {% else %}
+                        <form method="post" action="{% url 'habits:pause_habit' form.instance.pk %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="btn ghost" type="submit">Pause habit</button>
+                        </form>
+                        <p class="help">Pausing starts tomorrow and skips scheduled days.</p>
+                    {% endif %}
+                {% endwith %}
+            </div>
             <div class="danger-zone">
                 <h3>Delete habit</h3>
                 <p class="help">Deleting will remove this habit and all tracked history.</p>

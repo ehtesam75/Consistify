@@ -62,16 +62,16 @@
                                 <div class="progress-controls">
                                     {% if item.habit.habit_type == "binary" %}
                                         <label class="checkbox">
-                                            <input type="checkbox" name="completed" value="1" {% if item.completed %}checked{% endif %} data-progress-checkbox>
+                                            <input type="checkbox" name="completed" value="1" {% if item.completed %}checked{% endif %} data-progress-checkbox {% if target_date > today %}disabled{% endif %}>
                                             <span></span>
                                         </label>
                                     {% elif item.habit.habit_type == "partial" %}
-                                        <input type="range" class="progress-range" min="0" max="100" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-range>
-                                        <input type="number" class="progress-input" name="completion_percentage" min="0" max="100" step="1" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-input>
+                                        <input type="range" class="progress-range" min="0" max="100" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-range {% if target_date > today %}disabled{% endif %}>
+                                        <input type="number" class="progress-input" name="completion_percentage" min="0" max="100" step="1" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-input {% if target_date > today %}disabled{% endif %}>
                                     {% else %}
-                                        <button type="button" class="step-button" data-step="-1" aria-label="Decrease value">-</button>
-                                        <input type="number" class="progress-input" name="current_value" min="0" step="1" {% if item.habit.target_value %}max="{{ item.habit.target_value|floatformat:0 }}"{% endif %} value="{{ item.raw_value|default_if_none:0|floatformat:0 }}" data-quant-input>
-                                        <button type="button" class="step-button" data-step="1" aria-label="Increase value">+</button>
+                                        <button type="button" class="step-button" data-step="-1" aria-label="Decrease value" {% if target_date > today %}disabled{% endif %}>-</button>
+                                        <input type="number" class="progress-input" name="current_value" min="0" step="1" {% if item.habit.target_value %}max="{{ item.habit.target_value|floatformat:0 }}"{% endif %} value="{{ item.raw_value|default_if_none:0|floatformat:0 }}" data-quant-input {% if target_date > today %}disabled{% endif %}>
+                                        <button type="button" class="step-button" data-step="1" aria-label="Increase value" {% if target_date > today %}disabled{% endif %}>+</button>
                                         <div class="progress-caption inline" data-progress-caption>
                                             {{ item.raw_value|default_if_none:0|floatformat:0 }} / {{ item.habit.target_value|default_if_none:0|floatformat:0 }} {{ item.habit.unit }}
                                         </div>
@@ -108,6 +108,15 @@
                                     <span class="badge category {{ category.key }}">{{ category.label }}</span>
                                 {% endfor %}
                                 <span class="badge priority {{ habit.priority }}">{{ habit.get_priority_display }}</span>
+                                {% if habit.is_paused %}
+                                    <span class="tag muted">Paused</span>
+                                {% else %}
+                                    {% with active_pause=habit.active_pause %}
+                                        {% if active_pause and active_pause.start_date > today %}
+                                            <span class="tag muted">Pause starts {{ active_pause.start_date|date:"M d" }}</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% endif %}
                                 {% for tag in habit.get_tags %}
                                     <span class="tag-chip">#{{ tag }}</span>
                                 {% endfor %}

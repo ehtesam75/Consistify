@@ -11,6 +11,15 @@
                 <span class="badge category {{ category.key }}">{{ category.label }}</span>
             {% endfor %}
             <span class="badge priority {{ habit.priority }}">{{ habit.get_priority_display }}</span>
+            {% if habit.is_paused %}
+                <span class="tag muted">Paused</span>
+            {% else %}
+                {% with active_pause=habit.active_pause %}
+                    {% if active_pause and active_pause.start_date > today %}
+                        <span class="tag muted">Pause starts {{ active_pause.start_date|date:"M d" }}</span>
+                    {% endif %}
+                {% endwith %}
+            {% endif %}
             {% for tag in tags %}
                 <span class="tag-chip">#{{ tag }}</span>
             {% endfor %}

@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model, login
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Max, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -23,7 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .forms import HabitForm
-from .models import FriendRequest, Habit, HabitCompletion
+from .models import FriendRequest, Habit, HabitCompletion, HabitPause
 from .services import (
     build_category_analytics,
     build_habit_score_drivers,
@@ -69,10 +69,11 @@ class ConsistifyLogoutView(auth_views.LogoutView):
 
 @login_required
 def habit_list(request):
+    today = timezone.localdate()
     target_date = _get_date_from_request(request)
     habits = list(
         Habit.objects.filter(user=request.user)
-        .prefetch_related("categories")
+        .prefetch_related("categories", "pauses")
         .order_by("sort_order", "name")
     )
     completions = HabitCompletion.objects.filter(habit__in=habits, date=target_date)
@@ -113,6 +114,7 @@ def habit_list(request):
 
     context = {
         "target_date": target_date,
+        "today": today,
         "prev_date": target_date - timedelta(days=1),
         "next_date": target_date + timedelta(days=1),
         "scheduled_habits": visible_scheduled_habits,
@@ -137,7 +139,7 @@ def dashboard(request):
     )
     habits = list(
         Habit.objects.filter(user=request.user)
-        .prefetch_related("categories")
+        .prefetch_related("categories", "pauses")
         .order_by("sort_order", "name")
     )
 
@@ -240,7 +242,7 @@ def dashboard(request):
 @login_required
 def habit_detail(request, habit_id):
     habit = get_object_or_404(
-        Habit.objects.prefetch_related("categories"),
+        Habit.objects.prefetch_related("categories", "pauses"),
         id=habit_id,
         user=request.user,
     )
@@ -377,7 +379,12 @@ def habit_create(request):
 
 @login_required
 def habit_edit(request, habit_id):
-    habit = get_object_or_404(Habit, id=habit_id, user=request.user)
+    habit = get_object_or_404(
+        Habit.objects.prefetch_related("pauses"),
+        id=habit_id,
+        user=request.user,
+    )
+    today = timezone.localdate()
     if request.method == "POST":
         form = HabitForm(request.POST, instance=habit)
         if form.is_valid():
@@ -394,6 +401,7 @@ def habit_edit(request, habit_id):
             "form": form,
             "title": "Edit habit",
             "submit_label": "Save changes",
+            "today": today,
         },
     )
 
@@ -412,9 +420,46 @@ def habit_delete(request, habit_id):
 
 @login_required
 @require_POST
+def pause_habit(request, habit_id):
+    habit = get_object_or_404(Habit, id=habit_id, user=request.user)
+    today = timezone.localdate()
+    start_date = today + timedelta(days=1)
+    try:
+        with transaction.atomic():
+            HabitPause.objects.create(habit=habit, start_date=start_date)
+    except IntegrityError:
+        messages.info(request, "This habit is already paused or scheduled to pause.")
+    else:
+        messages.success(request, f'"{habit.name}" paused starting tomorrow.')
+
+    return redirect(_safe_next_url(request) or reverse("habits:habit_detail", args=[habit.id]))
+
+
+@login_required
+@require_POST
+def resume_habit(request, habit_id):
+    habit = get_object_or_404(Habit, id=habit_id, user=request.user)
+    active_pause = habit.active_pause()
+    if not active_pause:
+        messages.info(request, "This habit is not paused.")
+    else:
+        active_pause.end_date = timezone.localdate()
+        active_pause.save(update_fields=["end_date", "updated_at"])
+        messages.success(request, f'"{habit.name}" resumed.')
+
+    return redirect(_safe_next_url(request) or reverse("habits:habit_detail", args=[habit.id]))
+
+
+@login_required
+@require_POST
 def update_progress(request, habit_id):
     habit = get_object_or_404(Habit, id=habit_id, user=request.user)
     target_date = _get_date_from_request(request)
+
+    if habit.is_paused_on(target_date):
+        messages.error(request, "This habit is paused for that day.")
+        next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
+        return redirect(next_url or reverse("habits:today"))
 
     if not habit.is_scheduled_on(target_date):
         messages.error(request, "This habit is not scheduled for that day.")
@@ -500,7 +545,7 @@ def reports(request):
     today = timezone.localdate()
     habits = list(
         Habit.objects.filter(user=request.user)
-        .prefetch_related("categories")
+        .prefetch_related("categories", "pauses")
         .order_by("sort_order", "name")
     )
 
@@ -535,7 +580,7 @@ def reports(request):
 def habit_compare(request):
     habits = list(
         Habit.objects.filter(user=request.user)
-        .prefetch_related("categories")
+        .prefetch_related("categories", "pauses")
         .order_by("sort_order", "name")
     )
     today = timezone.localdate()
@@ -759,7 +804,7 @@ def _build_profile_context(profile_user, current_user):
 def _build_user_metrics(user, today, start_date=None):
     habits = list(
         Habit.objects.filter(user=user)
-        .prefetch_related("categories")
+        .prefetch_related("categories", "pauses")
         .order_by("sort_order", "name")
     )
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import FriendRequest, Habit, HabitCompletion
+from .models import FriendRequest, Habit, HabitCompletion, HabitPause
 
 
 @admin.register(Habit)
@@ -40,3 +40,10 @@ class FriendRequestAdmin(admin.ModelAdmin):
     list_filter = ("status", "created_at")
     search_fields = ("from_user__username", "to_user__username")
     readonly_fields = ("friendship_key", "created_at", "updated_at")
+
+
+@admin.register(HabitPause)
+class HabitPauseAdmin(admin.ModelAdmin):
+    list_display = ("habit", "start_date", "end_date", "created_at", "updated_at")
+    list_filter = ("start_date", "end_date")
+    search_fields = ("habit__name", "habit__user__username")

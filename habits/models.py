@@ -112,8 +112,36 @@ class Habit(models.Model):
             return []
         return [tag.strip() for tag in self.tags.split(",") if tag.strip()]
 
+    def active_pause(self):
+        cache = getattr(self, "_prefetched_objects_cache", None)
+        if cache and "pauses" in cache:
+            pauses = [pause for pause in cache["pauses"] if pause.end_date is None]
+            if not pauses:
+                return None
+            return sorted(pauses, key=lambda pause: pause.start_date, reverse=True)[0]
+        return self.pauses.filter(end_date__isnull=True).order_by("-start_date").first()
+
+    def is_paused_on(self, target_date):
+        cache = getattr(self, "_prefetched_objects_cache", None)
+        if cache and "pauses" in cache:
+            for pause in cache["pauses"]:
+                if pause.start_date <= target_date and (
+                    pause.end_date is None or target_date < pause.end_date
+                ):
+                    return True
+            return False
+        return self.pauses.filter(start_date__lte=target_date).filter(
+            models.Q(end_date__isnull=True) | models.Q(end_date__gt=target_date)
+        ).exists()
+
+    @property
+    def is_paused(self):
+        return self.is_paused_on(timezone.localdate())
+
     def is_scheduled_on(self, target_date):
         if target_date < self.start_date:
+            return False
+        if self.is_paused_on(target_date):
             return False
         if self.schedule_type == self.SCHEDULE_DAILY:
             return True
@@ -188,6 +216,36 @@ class HabitCompletion(models.Model):
     @property
     def is_completed(self):
         return self.completion_percentage == Decimal("100")
+
+
+class HabitPause(models.Model):
+    habit = models.ForeignKey(
+        Habit,
+        on_delete=models.CASCADE,
+        related_name="pauses",
+    )
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-start_date"]
+        indexes = [
+            models.Index(fields=["habit", "start_date"], name="habits_pause_habit_start_idx"),
+            models.Index(fields=["habit", "end_date"], name="habits_pause_habit_end_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["habit"],
+                condition=models.Q(end_date__isnull=True),
+                name="habits_pause_active_unique",
+            ),
+        ]
+
+    def __str__(self):
+        state = "active" if self.end_date is None else "ended"
+        return f"{self.habit.name} pause ({state})"
 
 
 class FriendRequest(models.Model):
