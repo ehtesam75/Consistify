@@ -76,6 +76,7 @@ def habit_list(request):
         .prefetch_related("categories", "pauses")
         .order_by("sort_order", "name")
     )
+    active_habits = [habit for habit in habits if not habit.is_paused_on(target_date)]
     completions = HabitCompletion.objects.filter(habit__in=habits, date=target_date)
     completion_map = {completion.habit_id: completion for completion in completions}
 
@@ -123,7 +124,7 @@ def habit_list(request):
         "hide_completed": hide_completed,
         "visible_scheduled_count": len(visible_scheduled_habits),
         "habits": habits,
-        "all_count": len(habits),
+        "all_count": len(active_habits),
     }
     return render(request, "habits/habit_list.html", context)
 
@@ -142,6 +143,7 @@ def dashboard(request):
         .prefetch_related("categories", "pauses")
         .order_by("sort_order", "name")
     )
+    total_habits = sum(1 for habit in habits if not habit.is_paused)
 
     habit_cards = []
     total_scheduled = 0
@@ -226,6 +228,7 @@ def dashboard(request):
         "overall_consistency": overall_consistency,
         "total_scheduled": total_scheduled,
         "total_completed": total_completed,
+        "total_habits": total_habits,
         "doing_well": doing_well,
         "needs_focus": needs_focus,
         "score_breakdown": score_breakdown,
@@ -553,18 +556,38 @@ def reports(request):
     monthly_reports = build_monthly_reports(habits, months=6, today=today)
 
     weekly_labels = [item["label"] for item in weekly_reports]
-    weekly_rates = [item["completion_rate"] for item in weekly_reports]
-    weekly_streak = [item["avg_current_streak"] for item in weekly_reports]
-    weekly_streak_max = max(1, ceil(max(weekly_streak))) if weekly_streak else 1
+    weekly_rates = []
+    weekly_streak = []
+    for item in weekly_reports:
+        if item["total_scheduled"] == 0:
+            weekly_rates.append(None)
+            weekly_streak.append(None)
+        else:
+            weekly_rates.append(item["completion_rate"])
+            weekly_streak.append(item["avg_current_streak"])
+    streak_values = [value for value in weekly_streak if value is not None]
+    weekly_streak_max = max(1, ceil(max(streak_values))) if streak_values else 1
 
     monthly_labels = [item["label"] for item in monthly_reports]
-    monthly_rates = [item["completion_rate"] for item in monthly_reports]
-    monthly_consistency = [item["consistency_score"] for item in monthly_reports]
+    monthly_rates = []
+    monthly_consistency = []
+    for item in monthly_reports:
+        if item["total_scheduled"] == 0:
+            monthly_rates.append(None)
+            monthly_consistency.append(None)
+        else:
+            monthly_rates.append(item["completion_rate"])
+            monthly_consistency.append(item["consistency_score"])
+
+    weekly_reports_desc = list(reversed(weekly_reports))
+    monthly_reports_desc = list(reversed(monthly_reports))
 
     context = {
         "today": today,
         "weekly_reports": weekly_reports,
+        "weekly_reports_desc": weekly_reports_desc,
         "monthly_reports": monthly_reports,
+        "monthly_reports_desc": monthly_reports_desc,
         "weekly_labels": json.dumps(weekly_labels),
         "weekly_rates": json.dumps(weekly_rates),
         "weekly_streak": json.dumps(weekly_streak),
@@ -752,7 +775,11 @@ def _build_profile_context(profile_user, current_user):
 
     monthly_reports = build_monthly_reports(metrics["habits"], months=12, today=today)
     progress_labels = [item["label"] for item in monthly_reports]
-    progress_rates = [item["completion_rate"] for item in monthly_reports]
+    progress_rates = [
+        item["completion_rate"] if item["total_scheduled"] else None
+        for item in monthly_reports
+    ]
+    monthly_history_reports = list(reversed(monthly_reports))
 
     daily_window_days = 15
     daily_start = today - timedelta(days=daily_window_days - 1)
@@ -793,6 +820,7 @@ def _build_profile_context(profile_user, current_user):
         "total_scheduled": metrics["total_scheduled"],
         "total_completed": metrics["total_completed"],
         "monthly_reports": monthly_reports,
+        "monthly_history_reports": monthly_history_reports,
         "progress_labels": json.dumps(progress_labels),
         "progress_rates": json.dumps(progress_rates),
         "daily_labels": json.dumps(daily_labels),
@@ -813,7 +841,7 @@ def _build_user_metrics(user, today, start_date=None):
     elif start_date is None:
         start_date = today
 
-    total_habits = len(habits)
+    total_habits = sum(1 for habit in habits if not habit.is_paused)
     total_scheduled = 0
     total_completion = 0.0
     total_completed = 0

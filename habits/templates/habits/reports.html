@@ -45,7 +45,7 @@
             <span>Change</span>
             <span>Consistency</span>
         </div>
-        {% for item in weekly_reports %}
+        {% for item in weekly_reports_desc %}
             <div class="table-row five-cols">
                 <span>{{ item.label }}</span>
                 <span>{{ item.completion_rate }}%</span>
@@ -69,7 +69,7 @@
             <span>Change</span>
             <span>Consistency</span>
         </div>
-        {% for item in monthly_reports %}
+        {% for item in monthly_reports_desc %}
             <div class="table-row five-cols">
                 <span>{{ item.label }}</span>
                 <span>{{ item.completion_rate }}%</span>

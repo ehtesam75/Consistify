@@ -71,7 +71,9 @@
                 <span class="stat-note">All time · {{ all_time_label }}</span>
             </div>
         </div>
-        {% if is_scheduled_today %}
+        {% if habit.is_paused %}
+            <p class="help">This habit is paused right now. Resume it to log progress.</p>
+        {% elif is_scheduled_today %}
             <p class="help">Update today's progress from the Today view.</p>
         {% endif %}
     </div>
