@@ -13,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.db import IntegrityError, transaction
 from django.db.models import Max, Q
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -41,6 +41,10 @@ from .services import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def health(request):
+    return HttpResponse("OK", content_type="text/plain")
 
 
 def index(request):
