@@ -1,5 +1,7 @@
 {% extends "habits/base.html" %}
 
+{% block body_class %}leaderboard-page{% endblock %}
+
 {% block content %}
 <section class="hero">
     <div>
@@ -26,32 +28,37 @@
     <div class="leaderboard-list">
         {% for entry in leaderboard_entries %}
             <a class="leaderboard-row {% if entry.is_current_user %}current-user{% endif %}" href="{% url 'habits:user_profile' entry.user.username %}">
-                <span class="leaderboard-rank">#{{ entry.rank }}</span>
-                <span class="user-avatar" aria-hidden="true">{{ entry.user.username|slice:":1"|upper }}</span>
-                <span class="leaderboard-user">
-                    <strong>{{ entry.user.username }}</strong>
-                    {% if entry.is_current_user %}
-                        <small>You</small>
-                    {% else %}
-                        <small>Friend</small>
-                    {% endif %}
-                </span>
-                <span class="leaderboard-metric score">
-                    <strong>{{ entry.consistency_score }}</strong>
-                    <small>Consistency</small>
-                </span>
-                <span class="leaderboard-metric">
-                    <strong>{{ entry.overall_completion }}%</strong>
-                    <small>Completion</small>
-                </span>
-                <span class="leaderboard-metric">
-                    <strong>{{ entry.best_streak }}</strong>
-                    <small>Best streak</small>
-                </span>
-                <span class="leaderboard-metric">
-                    <strong>{{ entry.total_habits }}</strong>
-                    <small>Habits</small>
-                </span>
+                <div class="leaderboard-core">
+                    <span class="leaderboard-rank">#{{ entry.rank }}</span>
+                    <span class="user-avatar" aria-hidden="true">{{ entry.user.username|slice:":1"|upper }}</span>
+                    <span class="leaderboard-user">
+                        <strong>{{ entry.user.username }}</strong>
+                        {% if entry.is_current_user %}
+                            <small>You</small>
+                        {% else %}
+                            <small>Friend</small>
+                        {% endif %}
+                    </span>
+                </div>
+                <span class="leaderboard-meta">Completion {{ entry.overall_completion }}% · Streak {{ entry.best_streak }} · Habits {{ entry.total_habits }}</span>
+                <div class="leaderboard-metrics">
+                    <span class="leaderboard-metric score">
+                        <strong>{{ entry.consistency_score }}</strong>
+                        <small>Consistency</small>
+                    </span>
+                    <span class="leaderboard-metric">
+                        <strong>{{ entry.overall_completion }}%</strong>
+                        <small>Completion</small>
+                    </span>
+                    <span class="leaderboard-metric">
+                        <strong>{{ entry.best_streak }}</strong>
+                        <small>Best streak</small>
+                    </span>
+                    <span class="leaderboard-metric">
+                        <strong>{{ entry.total_habits }}</strong>
+                        <small>Habits</small>
+                    </span>
+                </div>
             </a>
         {% endfor %}
     </div>

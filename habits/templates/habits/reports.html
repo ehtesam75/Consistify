@@ -1,5 +1,7 @@
 {% extends "habits/base.html" %}
 
+{% block body_class %}reports-page{% endblock %}
+
 {% block content %}
 <section class="hero">
     <div>
@@ -37,7 +39,7 @@
     <div class="card-header">
         <h2>Weekly breakdown</h2>
     </div>
-    <div class="table">
+    <div class="table report-breakdown-table weekly-breakdown-table">
         <div class="table-row table-header five-cols">
             <span>Week</span>
             <span>Completion</span>
@@ -61,7 +63,7 @@
     <div class="card-header">
         <h2>Monthly breakdown</h2>
     </div>
-    <div class="table">
+    <div class="table report-breakdown-table monthly-breakdown-table">
         <div class="table-row table-header five-cols">
             <span>Month</span>
             <span>Completion</span>

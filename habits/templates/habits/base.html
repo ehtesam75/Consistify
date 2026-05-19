@@ -111,6 +111,11 @@
                         {% csrf_token %}
                         <button type="submit" class="link-button">Log out</button>
                     </form>
+                    <button class="nav-toggle icon-toggle" type="button" aria-expanded="false" aria-controls="mobileNav" aria-label="Open menu" data-nav-toggle>
+                        <span class="nav-toggle-bar" aria-hidden="true"></span>
+                        <span class="nav-toggle-bar" aria-hidden="true"></span>
+                        <span class="nav-toggle-bar" aria-hidden="true"></span>
+                    </button>
                 </div>
             {% else %}
                 <div class="nav-utility nav-utility-guest">
@@ -136,10 +141,44 @@
                             </svg>
                         </span>
                     </button>
+                    <button class="nav-toggle icon-toggle" type="button" aria-expanded="false" aria-controls="mobileNav" aria-label="Open menu" data-nav-toggle>
+                        <span class="nav-toggle-bar" aria-hidden="true"></span>
+                        <span class="nav-toggle-bar" aria-hidden="true"></span>
+                        <span class="nav-toggle-bar" aria-hidden="true"></span>
+                    </button>
                 </div>
             {% endif %}
         </div>
     </header>
+    <div class="nav-mobile-panel" id="mobileNav" data-nav-panel aria-hidden="true">
+        <div class="nav-mobile-sheet">
+            {% if request.user.is_authenticated %}
+                <nav class="nav-mobile-links">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'today' or request.resolver_match.url_name == 'habit_detail' or request.resolver_match.url_name == 'habit_edit' or request.resolver_match.url_name == 'habit_create' %}active{% endif %}" href="{% url 'habits:today' %}">Today</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'habits:dashboard' %}">Dashboard</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'habits:reports' %}">Reports</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'habit_compare' %}active{% endif %}" href="{% url 'habits:habit_compare' %}">Compare</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'leaderboard' %}active{% endif %}" href="{% url 'habits:leaderboard' %}">Leaderboard</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'profile' or request.resolver_match.url_name == 'user_profile' %}active{% endif %}" href="{% url 'habits:user_profile' request.user.username %}">Profile</a>
+                </nav>
+                <div class="nav-mobile-actions">
+                    <form class="logout-form" method="post" action="{% url 'habits:logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn ghost small">Log out</button>
+                    </form>
+                </div>
+            {% else %}
+                <nav class="nav-mobile-links">
+                    <a class="nav-link" href="{% url 'habits:index' %}">Home</a>
+                </nav>
+                <div class="nav-mobile-actions">
+                    <a class="btn ghost small" href="{% url 'habits:login' %}">Log in</a>
+                    <a class="btn primary small" href="{% url 'habits:signup' %}">Sign up</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="nav-backdrop" data-nav-backdrop></div>
 
     {% if messages %}
         <div class="toast-stack" aria-live="polite" aria-atomic="true">

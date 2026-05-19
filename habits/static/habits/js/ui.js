@@ -468,11 +468,74 @@ window.ConsistifyUI = (() => {
         });
     }
 
+    function initMobileNav() {
+        const toggle = document.querySelector("[data-nav-toggle]");
+        const panel = document.querySelector("[data-nav-panel]");
+        const backdrop = document.querySelector("[data-nav-backdrop]");
+        if (!toggle || !panel || !backdrop) {
+            return;
+        }
+
+        const openLabel = toggle.getAttribute("aria-label") || "Open menu";
+        const closeLabel = "Close menu";
+
+        const openMenu = () => {
+            document.body.classList.add("nav-open");
+            toggle.setAttribute("aria-expanded", "true");
+            toggle.setAttribute("aria-label", closeLabel);
+            panel.setAttribute("aria-hidden", "false");
+        };
+
+        const closeMenu = () => {
+            document.body.classList.remove("nav-open");
+            toggle.setAttribute("aria-expanded", "false");
+            toggle.setAttribute("aria-label", openLabel);
+            panel.setAttribute("aria-hidden", "true");
+        };
+
+        toggle.addEventListener("click", () => {
+            if (document.body.classList.contains("nav-open")) {
+                closeMenu();
+            } else {
+                openMenu();
+            }
+        });
+
+        backdrop.addEventListener("click", closeMenu);
+
+        panel.addEventListener("click", (event) => {
+            if (event.target.closest("a, button")) {
+                closeMenu();
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                closeMenu();
+            }
+        });
+
+        const breakpoint = window.matchMedia("(min-width: 821px)");
+        const handleBreakpoint = () => {
+            if (breakpoint.matches) {
+                closeMenu();
+            }
+        };
+        if (breakpoint.addEventListener) {
+            breakpoint.addEventListener("change", handleBreakpoint);
+        } else {
+            breakpoint.addListener(handleBreakpoint);
+        }
+
+        closeMenu();
+    }
+
     function initUiFeatures() {
         initThemeToggle();
         initHabitProgressControls();
         initDeleteConfirmations();
         initNotificationMenus();
+        initMobileNav();
     }
 
     if (document.readyState === "loading") {

@@ -1,5 +1,7 @@
 {% extends "habits/base.html" %}
 
+{% block body_class %}dashboard-page{% endblock %}
+
 {% block content %}
 <section class="hero">
     <div>
@@ -206,7 +208,7 @@
         <span class="tag">{{ dashboard_window_note }}</span>
     </div>
     {% if habit_cards %}
-        <div class="table">
+        <div class="table all-habits-table">
             <div class="table-row table-header five-cols">
                 <span>Habit</span>
                 <span>Scheduled</span>

@@ -1,5 +1,7 @@
 {% extends "habits/base.html" %}
 
+{% block body_class %}compare-page{% endblock %}
+
 {% block content %}
 <section class="hero">
     <div>
@@ -44,7 +46,7 @@
         <h2>Side-by-side metrics</h2>
         <span class="tag">90 day analytics</span>
     </div>
-    <div class="table">
+    <div class="table compare-metrics-table">
         <div class="table-row table-header five-cols">
             <span>Habit</span>
             <span>Completion</span>
