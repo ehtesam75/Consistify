@@ -68,6 +68,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'habits.context_processors.friend_request_notifications',
+                'habits.context_processors.daily_recap_prompt',
             ],
         },
     },

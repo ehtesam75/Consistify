@@ -2269,6 +2269,90 @@ html {
     }
 }
 
+body.recap-open {
+    overflow: hidden;
+}
+
+.daily-recap-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 26, 36, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    z-index: 1200;
+}
+
+.daily-recap-modal {
+    width: min(760px, 96vw);
+    max-height: 90vh;
+    overflow: auto;
+    background: var(--surface);
+    border-radius: 24px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 1.6rem;
+}
+
+.daily-recap-header {
+    display: grid;
+    gap: 0.4rem;
+    margin-bottom: 1.2rem;
+}
+
+.daily-recap-form {
+    display: grid;
+    gap: 1rem;
+}
+
+.daily-recap-list {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.daily-recap-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.75rem 0.9rem;
+    border-radius: 16px;
+    background: var(--surface-alt);
+    border: 1px solid rgba(228, 222, 212, 0.6);
+}
+
+.daily-recap-meta {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.daily-recap-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.daily-recap-field {
+    min-width: 110px;
+}
+
+.daily-recap-select {
+    min-width: 140px;
+}
+
+.daily-recap-unit {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+}
+
+.daily-recap-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
 .reorder-item {
     cursor: grab;
 }
@@ -3060,6 +3144,27 @@ body.auth-page main {
 
     .today-page .progress-input {
         width: 84px;
+    }
+
+    .daily-recap-modal {
+        padding: 1.2rem;
+    }
+
+    .daily-recap-row {
+        grid-template-columns: 1fr;
+        align-items: flex-start;
+    }
+
+    .daily-recap-controls {
+        justify-content: flex-start;
+    }
+
+    .daily-recap-actions {
+        justify-content: stretch;
+    }
+
+    .daily-recap-actions .btn {
+        width: 100%;
     }
 
     .today-page .hero-actions {

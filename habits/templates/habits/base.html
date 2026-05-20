@@ -31,7 +31,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'habits/css/styles.css' %}">
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}{% if daily_recap %} recap-open{% endif %}">
     <div class="ambient-bg"></div>
     <header class="site-header">
         <div class="container nav">
@@ -194,6 +194,58 @@
     <main class="container">
         {% block content %}{% endblock %}
     </main>
+
+    {% if daily_recap %}
+        <div class="daily-recap-overlay" role="presentation">
+            <div class="daily-recap-modal" role="dialog" aria-modal="true" aria-labelledby="dailyRecapTitle">
+                <div class="daily-recap-header">
+                    <h2 id="dailyRecapTitle">Finish yesterday's check-ins</h2>
+                    <p class="subtitle">Log progress for {{ daily_recap.date|date:"F j, Y" }} before continuing.</p>
+                </div>
+                <form method="post" action="{% url 'habits:daily_recap' %}" class="daily-recap-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="date" value="{{ daily_recap.date|date:'Y-m-d' }}">
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <div class="daily-recap-list">
+                        {% for item in daily_recap.pending_habits %}
+                            <div class="daily-recap-row">
+                                <div class="daily-recap-meta">
+                                    <strong>{{ item.habit.name }}</strong>
+                                    <span class="habit-meta">{{ item.habit.schedule_summary }}</span>
+                                </div>
+                                <div class="daily-recap-controls">
+                                    {% if item.habit.habit_type == "binary" %}
+                                        <label class="daily-recap-select">
+                                            <span class="sr-only">Completed</span>
+                                            <select class="select" name="completed_{{ item.habit.id }}" aria-label="Mark {{ item.habit.name }} done or not done">
+                                                <option value="0" {% if item.completion_percentage < 100 %}selected{% endif %}>Not done</option>
+                                                <option value="1" {% if item.completion_percentage >= 100 %}selected{% endif %}>Done</option>
+                                            </select>
+                                        </label>
+                                    {% elif item.habit.habit_type == "partial" %}
+                                        <label class="daily-recap-field">
+                                            <span class="sr-only">Completion percentage</span>
+                                            <input class="input" type="number" min="0" max="100" step="1" name="percentage_{{ item.habit.id }}" value="{{ item.completion_percentage|floatformat:0 }}" required>
+                                        </label>
+                                        <span class="daily-recap-unit">%</span>
+                                    {% else %}
+                                        <label class="daily-recap-field">
+                                            <span class="sr-only">Progress value</span>
+                                            <input class="input" type="number" min="0" step="1" name="value_{{ item.habit.id }}" value="{{ item.raw_value|default_if_none:0|floatformat:0 }}" required>
+                                        </label>
+                                        <span class="daily-recap-unit">{{ item.habit.unit }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div class="daily-recap-actions">
+                        <button class="btn primary" type="submit">Save and continue</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    {% endif %}
 
     {% if not request.user.is_authenticated %}
         <footer class="site-footer">

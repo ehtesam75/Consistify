@@ -1,4 +1,7 @@
+from django.utils.dateparse import parse_date
+
 from .models import FriendRequest
+from .services import get_pending_habits_for_date
 
 
 def friend_request_notifications(request):
@@ -20,4 +23,30 @@ def friend_request_notifications(request):
     return {
         "incoming_friend_request_count": incoming_requests.count(),
         "incoming_friend_requests": incoming_requests[:5],
+    }
+
+
+def daily_recap_prompt(request):
+    if not request.user.is_authenticated:
+        return {"daily_recap": None}
+
+    recap_date_value = request.session.get("daily_recap_date")
+    if not recap_date_value:
+        return {"daily_recap": None}
+
+    target_date = parse_date(recap_date_value)
+    if not target_date:
+        request.session.pop("daily_recap_date", None)
+        return {"daily_recap": None}
+
+    pending = get_pending_habits_for_date(request.user, target_date)
+    if not pending:
+        request.session.pop("daily_recap_date", None)
+        return {"daily_recap": None}
+
+    return {
+        "daily_recap": {
+            "date": target_date,
+            "pending_habits": pending,
+        }
     }

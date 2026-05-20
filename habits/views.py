@@ -33,6 +33,7 @@ from .services import (
     calculate_overall_consistency,
     calculate_streaks,
     completion_stats,
+    get_pending_habits_for_date,
     get_completion_maps,
     get_next_scheduled_date,
     habit_performance_metrics,
@@ -57,8 +58,19 @@ class ConsistifyLoginView(auth_views.LoginView):
     template_name = "registration/login.html"
 
     def form_valid(self, form):
+        user = form.get_user()
+        previous_login = user.last_login
         response = super().form_valid(form)
         messages.success(self.request, "Logged in successfully.")
+        today = timezone.localdate()
+        should_prompt = previous_login is None or previous_login.date() < today
+        if should_prompt:
+            recap_date = today - timedelta(days=1)
+            pending = get_pending_habits_for_date(user, recap_date)
+            if pending:
+                self.request.session["daily_recap_date"] = recap_date.isoformat()
+            else:
+                self.request.session.pop("daily_recap_date", None)
         return response
 
 
@@ -775,6 +787,17 @@ def username_profile(request, username):
 
 def _build_profile_context(profile_user, current_user):
     today = timezone.localdate()
+    friend_request = None
+    friend_status = "none"
+    if profile_user != current_user:
+        friend_request = _friend_request_between(profile_user, current_user)
+        if friend_request:
+            if friend_request.status == FriendRequest.STATUS_ACCEPTED:
+                friend_status = "accepted"
+            elif friend_request.to_user_id == current_user.id:
+                friend_status = "incoming_pending"
+            else:
+                friend_status = "outgoing_pending"
     metrics = _build_user_metrics(profile_user, today)
 
     monthly_reports = build_monthly_reports(metrics["habits"], months=12, today=today)
@@ -829,6 +852,8 @@ def _build_profile_context(profile_user, current_user):
         "progress_rates": json.dumps(progress_rates),
         "daily_labels": json.dumps(daily_labels),
         "daily_rates": json.dumps(daily_rates),
+        "friend_request": friend_request,
+        "friend_status": friend_status,
     }
     return context
 
@@ -1030,6 +1055,96 @@ def accept_friend_request(request, request_id):
         f"You accepted {friend_request.from_user.username}'s friend request.",
     )
     return redirect(_safe_next_url(request) or reverse("habits:user_search"))
+
+
+@login_required
+@require_POST
+def remove_friend(request, request_id):
+    friend_request = get_object_or_404(
+        FriendRequest,
+        id=request_id,
+        status=FriendRequest.STATUS_ACCEPTED,
+    )
+    if request.user not in (friend_request.from_user, friend_request.to_user):
+        messages.error(request, "You cannot modify that friendship.")
+        return redirect(_safe_next_url(request) or reverse("habits:user_search"))
+
+    other_user = (
+        friend_request.to_user
+        if friend_request.from_user_id == request.user.id
+        else friend_request.from_user
+    )
+    friend_request.delete()
+    messages.success(request, f"You and {other_user.username} are no longer friends.")
+    return redirect(_safe_next_url(request) or reverse("habits:user_search"))
+
+
+@login_required
+@require_POST
+def daily_recap(request):
+    session_date = request.session.get("daily_recap_date")
+    target_date = parse_date(session_date) if session_date else None
+    if not target_date:
+        target_date = _get_date_from_request(request)
+
+    pending = get_pending_habits_for_date(request.user, target_date)
+    if not pending:
+        request.session.pop("daily_recap_date", None)
+        return redirect(_safe_next_url(request) or reverse("habits:today"))
+
+    updates = []
+    errors = []
+
+    for item in pending:
+        habit = item["habit"]
+        if habit.habit_type == Habit.HABIT_BINARY:
+            is_done = request.POST.get(f"completed_{habit.id}") == "1"
+            completion_percentage = Decimal("100") if is_done else Decimal("0")
+            raw_value = completion_percentage
+        elif habit.habit_type == Habit.HABIT_PARTIAL:
+            raw_value = request.POST.get(f"percentage_{habit.id}")
+            if raw_value in (None, ""):
+                errors.append(habit.name)
+                continue
+            completion_percentage = _clamp_percentage(raw_value)
+            raw_value = completion_percentage
+        else:
+            if not habit.target_value or habit.target_value <= 0:
+                errors.append(habit.name)
+                continue
+            raw_value = request.POST.get(f"value_{habit.id}")
+            if raw_value in (None, ""):
+                errors.append(habit.name)
+                continue
+            target_value = habit.target_value.quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+            raw_value = _parse_decimal(raw_value) or Decimal("0")
+            raw_value = raw_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            if raw_value < 0:
+                raw_value = Decimal("0")
+            if raw_value > target_value:
+                raw_value = target_value
+            completion_percentage = _percentage_from_value(raw_value, target_value)
+
+        updates.append((habit, completion_percentage, raw_value))
+
+    if errors:
+        messages.error(request, "Please fill in all pending habits before continuing.")
+        return redirect(_safe_next_url(request) or reverse("habits:today"))
+
+    with transaction.atomic():
+        for habit, completion_percentage, raw_value in updates:
+            completion, _ = HabitCompletion.objects.get_or_create(
+                habit=habit,
+                date=target_date,
+            )
+            completion.completion_percentage = completion_percentage
+            completion.raw_value = raw_value
+            completion.save(update_fields=["completion_percentage", "raw_value"])
+
+    request.session.pop("daily_recap_date", None)
+    return redirect(_safe_next_url(request) or reverse("habits:today"))
 
 
 def signup(request):

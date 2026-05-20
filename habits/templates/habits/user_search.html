@@ -52,6 +52,11 @@
                         <div class="user-result-actions">
                             {% if result.status == "accepted" %}
                                 <span class="tag">Friends</span>
+                                <form method="post" action="{% url 'habits:remove_friend' result.friend_request.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button class="btn danger small" type="submit">Unfriend</button>
+                                </form>
                             {% elif result.status == "outgoing_pending" %}
                                 <span class="tag">Pending</span>
                             {% elif result.status == "incoming_pending" %}

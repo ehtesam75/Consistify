@@ -14,6 +14,13 @@
     </div>
     <div class="hero-actions">
         <a class="btn ghost" href="{% url 'habits:user_search' %}">Find users</a>
+        {% if not is_own_profile and friend_status == "accepted" and friend_request %}
+            <form method="post" action="{% url 'habits:remove_friend' friend_request.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn danger" type="submit">Unfriend</button>
+            </form>
+        {% endif %}
     </div>
 </section>
 

@@ -21,6 +21,12 @@ urlpatterns = [
         views.accept_friend_request,
         name="accept_friend_request",
     ),
+    path(
+        "friends/requests/<int:request_id>/remove/",
+        views.remove_friend,
+        name="remove_friend",
+    ),
+    path("daily-recap/", views.daily_recap, name="daily_recap"),
     path("habits/new/", views.habit_create, name="habit_create"),
     path("habits/<int:habit_id>/", views.habit_detail, name="habit_detail"),
     path("habits/<int:habit_id>/edit/", views.habit_edit, name="habit_edit"),

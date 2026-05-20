@@ -329,6 +329,41 @@ def _aggregate_consistency_snapshot(habits, start_date, end_date):
     }
 
 
+def get_pending_habits_for_date(user, target_date):
+    habits = list(
+        Habit.objects.filter(user=user)
+        .prefetch_related("pauses")
+        .order_by("sort_order", "name")
+    )
+    completions = HabitCompletion.objects.filter(habit__in=habits, date=target_date)
+    completion_map = {completion.habit_id: completion for completion in completions}
+
+    pending = []
+    for habit in habits:
+        if not habit.is_scheduled_on(target_date):
+            continue
+        completion = completion_map.get(habit.id)
+        completion_percentage = (
+            float(completion.completion_percentage) if completion else 0.0
+        )
+        raw_value = None
+        if completion and completion.raw_value is not None:
+            raw_value = float(completion.raw_value)
+            if habit.habit_type == Habit.HABIT_QUANTITATIVE:
+                raw_value = int(raw_value)
+
+        if completion is None or completion_percentage < 100:
+            pending.append(
+                {
+                    "habit": habit,
+                    "completion_percentage": completion_percentage,
+                    "raw_value": raw_value,
+                }
+            )
+
+    return pending
+
+
 def build_overall_score_breakdown(
     habits,
     start_date,
