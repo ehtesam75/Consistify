@@ -3179,8 +3179,14 @@ body.auth-page main {
         width: 100%;
     }
 
+    .today-page .hero-title-row h1 {
+        margin: 0;
+        min-width: 0;
+    }
+
     .today-page .today-create-inline {
         display: inline-flex;
+        margin-left: auto;
         white-space: nowrap;
     }
 
@@ -3224,8 +3230,7 @@ body.auth-page main {
         grid-template-columns: 2fr 1fr 1fr;
     }
 
-    .profile-page .profile-monthly-history-table .table-row span:nth-child(3),
-    .profile-page .profile-monthly-history-table .table-row span:nth-child(4) {
+    .profile-page .profile-monthly-history-table .table-row span:nth-child(3) {
         display: none;
     }
 
