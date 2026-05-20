@@ -881,14 +881,13 @@ def leaderboard(request):
     leaderboard_window = "all" if requested_window == "all" else "current"
     if leaderboard_window == "current":
         window_start = today - timedelta(days=29)
-        window_label = (
-            "Last 30 days· "
-            f"{window_start.strftime('%b %d')} - {today.strftime('%b %d')}"
-        )
+        window_label = "Last 30 days"
+        window_range = f"{window_start.strftime('%b %d')} - {today.strftime('%b %d')}"
         window_title = "Current window"
     else:
         window_start = None
         window_label = "All tracked history"
+        window_range = None
         window_title = "All time"
 
     participants = [request.user] + _accepted_friends_for(request.user)
@@ -937,6 +936,7 @@ def leaderboard(request):
             "leader_entry": leader_entry,
             "leaderboard_window": leaderboard_window,
             "leaderboard_window_label": window_label,
+            "leaderboard_window_range": window_range,
             "leaderboard_window_title": window_title,
         },
     )

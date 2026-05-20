@@ -472,6 +472,7 @@ window.ConsistifyUI = (() => {
         const toggle = document.querySelector("[data-nav-toggle]");
         const panel = document.querySelector("[data-nav-panel]");
         const backdrop = document.querySelector("[data-nav-backdrop]");
+        const sheet = panel ? panel.querySelector(".nav-mobile-sheet") : null;
         if (!toggle || !panel || !backdrop) {
             return;
         }
@@ -504,6 +505,10 @@ window.ConsistifyUI = (() => {
         backdrop.addEventListener("click", closeMenu);
 
         panel.addEventListener("click", (event) => {
+            if (sheet && !sheet.contains(event.target)) {
+                closeMenu();
+                return;
+            }
             if (event.target.closest("a, button")) {
                 closeMenu();
             }

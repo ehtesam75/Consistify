@@ -18,7 +18,12 @@
 <section class="card leaderboard-card" style="--i: 0;">
     <div class="card-header">
         <h2>Consistency ranking</h2>
-        <span class="tag">{{ leaderboard_window_label }}</span>
+        <span class="tag">
+            <span class="leaderboard-window-label">{{ leaderboard_window_label }}</span>
+            {% if leaderboard_window_range %}
+                <span class="leaderboard-window-range">&middot; {{ leaderboard_window_range }}</span>
+            {% endif %}
+        </span>
     </div>
     <div class="segmented-control leaderboard-window-switch" aria-label="Leaderboard timeframe">
         <a class="segmented-option {% if leaderboard_window == 'current' %}active{% endif %}" href="{% url 'habits:leaderboard' %}?window=current">Current window</a>
@@ -34,13 +39,18 @@
                     <span class="leaderboard-user">
                         <strong>{{ entry.user.username }}</strong>
                         {% if entry.is_current_user %}
-                            <small>You</small>
+                            <small class="leaderboard-user-role">You</small>
                         {% else %}
-                            <small>Friend</small>
+                            <small class="leaderboard-user-role">Friend</small>
                         {% endif %}
+                        <small class="leaderboard-user-completion">Completion {{ entry.overall_completion }}%</small>
                     </span>
                 </div>
-                <span class="leaderboard-meta">Completion {{ entry.overall_completion }}% · Streak {{ entry.best_streak }} · Habits {{ entry.total_habits }}</span>
+                <span class="leaderboard-meta">
+                    Completion {{ entry.overall_completion }}%
+                    <span class="leaderboard-meta-streak"> · Streak {{ entry.best_streak }}</span>
+                    <span class="leaderboard-meta-habits"> · Habits {{ entry.total_habits }}</span>
+                </span>
                 <div class="leaderboard-metrics">
                     <span class="leaderboard-metric score">
                         <strong>{{ entry.consistency_score }}</strong>

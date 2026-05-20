@@ -527,6 +527,10 @@ main > section + section {
     flex-wrap: wrap;
 }
 
+.today-page .today-create-inline {
+    display: none;
+}
+
 .btn {
     display: inline-flex;
     align-items: center;
@@ -1705,6 +1709,10 @@ html {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.leaderboard-page .leaderboard-user-completion {
+    display: none;
 }
 
 .leaderboard-user small,
@@ -3054,6 +3062,23 @@ body.auth-page main {
         width: 84px;
     }
 
+    .today-page .hero-actions {
+        display: none;
+    }
+
+    .today-page .hero-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        width: 100%;
+    }
+
+    .today-page .today-create-inline {
+        display: inline-flex;
+        white-space: nowrap;
+    }
+
     .today-page .progress-caption.inline {
         text-align: left;
     }
@@ -3082,11 +3107,17 @@ body.auth-page main {
     }
 
     .compare-page .compare-metrics-table .table-row.five-cols {
-        grid-template-columns: 2fr 1fr 1fr 1fr;
+        grid-template-columns: 2fr 1fr 1fr;
     }
 
-    .compare-page .compare-metrics-table .table-row span:nth-child(3) {
+    .compare-page .compare-metrics-table .table-row span:nth-child(3),
+    .compare-page .compare-metrics-table .table-row span:nth-child(4) {
         display: none;
+    }
+
+    .compare-page .compare-timeframe {
+        margin-left: auto;
+        justify-content: flex-end;
     }
 
     .leaderboard-row {
@@ -3095,6 +3126,10 @@ body.auth-page main {
 
     .leaderboard-page .leaderboard-card {
         gap: 0.85rem;
+    }
+
+    .leaderboard-page .hero-actions {
+        display: none;
     }
 
     .leaderboard-page .leaderboard-window-switch,
@@ -3184,6 +3219,18 @@ body.auth-page main {
         font-size: 0.65rem;
     }
 
+    .leaderboard-page .leaderboard-user-role {
+        display: none;
+    }
+
+    .leaderboard-page .leaderboard-user-completion {
+        display: inline-block;
+        color: var(--ink-soft);
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
     .leaderboard-page .leaderboard-metrics {
         grid-area: score;
         display: grid;
@@ -3223,6 +3270,15 @@ body.auth-page main {
         grid-area: meta;
         display: block;
         font-size: 0.72rem;
+    }
+
+    .leaderboard-page .leaderboard-meta-streak,
+    .leaderboard-page .leaderboard-meta-habits {
+        display: none;
+    }
+
+    .leaderboard-page .leaderboard-window-range {
+        display: none;
     }
 
     .score-component-list {
