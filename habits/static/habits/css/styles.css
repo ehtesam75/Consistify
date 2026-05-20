@@ -3220,6 +3220,15 @@ body.auth-page main {
         display: none;
     }
 
+    .profile-page .profile-monthly-history-table .table-row {
+        grid-template-columns: 2fr 1fr 1fr;
+    }
+
+    .profile-page .profile-monthly-history-table .table-row span:nth-child(3),
+    .profile-page .profile-monthly-history-table .table-row span:nth-child(4) {
+        display: none;
+    }
+
     .compare-page .compare-timeframe {
         margin-left: auto;
         justify-content: flex-end;
@@ -3373,7 +3382,7 @@ body.auth-page main {
 
     .leaderboard-page .leaderboard-meta {
         grid-area: meta;
-        display: block;
+        display: none;
         font-size: 0.72rem;
     }
 

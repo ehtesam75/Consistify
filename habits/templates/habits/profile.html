@@ -71,17 +71,19 @@
     <div class="card-header">
         <h2>Monthly history</h2>
     </div>
-    <div class="table">
-        <div class="table-row table-header">
+    <div class="table profile-monthly-history-table">
+        <div class="table-row table-header five-cols">
             <span>Month</span>
             <span>Completion</span>
+            <span>Sessions</span>
             <span>Streak trend</span>
             <span>Consistency</span>
         </div>
         {% for item in monthly_history_reports %}
-            <div class="table-row">
+            <div class="table-row five-cols">
                 <span>{{ item.label }}</span>
                 <span>{{ item.completion_rate }}%</span>
+                <span>{{ item.completed_total }}/{{ item.total_scheduled }}</span>
                 <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change }}</span>
                 <span>{{ item.consistency_score }}</span>
             </div>
