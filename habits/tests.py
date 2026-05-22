@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from math import sqrt
 from unittest.mock import patch
@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import (
     DEFAULT_CATEGORIES,
@@ -590,3 +591,47 @@ class FriendRequestFeatureTests(TestCase):
             current_window_ranking.index("bob"),
         )
         self.assertLess(all_time_ranking.index("bob"), all_time_ranking.index("alice"))
+
+
+class DailyRecapPromptTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="recap-user",
+            password="not-used",
+        )
+
+    def test_daily_recap_prompts_on_first_authenticated_request_after_midnight(self):
+        today = date(2026, 5, 23)
+        yesterday = today - timedelta(days=1)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Unfinished daily",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=yesterday,
+        )
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=yesterday,
+            completion_percentage=Decimal("0"),
+            raw_value=Decimal("0"),
+        )
+
+        self.client.force_login(self.user)
+        self.user.last_login = timezone.make_aware(datetime(2026, 5, 22, 23, 45))
+        self.user.save(update_fields=["last_login"])
+
+        original_localdate = timezone.localdate
+
+        def fake_localdate(value=None):
+            if value is None:
+                return today
+            return original_localdate(value)
+
+        with patch("habits.context_processors.timezone.localdate", side_effect=fake_localdate):
+            response = self.client.get(reverse("habits:today"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Finish yesterday's check-ins")
+        self.assertContains(response, "Unfinished daily")
+        self.assertEqual(self.client.session["daily_recap_date"], yesterday.isoformat())

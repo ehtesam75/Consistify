@@ -36,9 +36,9 @@
             <div class="card-header-actions">
                 <span class="tag">{{ completed_count }}/{{ scheduled_count }} completed</span>
                 {% if hide_completed %}
-                    <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}&hide_completed=0" data-hide-completed-toggle>Show completed</a>
+                    <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}">Show completed</a>
                 {% else %}
-                    <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}&hide_completed=1" data-hide-completed-toggle>Hide completed</a>
+                    <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}&hide_completed=1">Hide completed</a>
                 {% endif %}
             </div>
         </div>

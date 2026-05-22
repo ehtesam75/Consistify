@@ -48,6 +48,14 @@ CONSISTENCY_SCORE_COMPONENTS = (
 )
 
 
+def should_prompt_daily_recap(previous_login, today=None):
+    if today is None:
+        today = timezone.localdate()
+    if previous_login is None:
+        return True
+    return timezone.localdate(previous_login) < today
+
+
 def iter_scheduled_dates(habit, start_date, end_date):
     if end_date < start_date:
         return []

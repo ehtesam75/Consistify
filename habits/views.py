@@ -37,6 +37,7 @@ from .services import (
     get_completion_maps,
     get_next_scheduled_date,
     habit_performance_metrics,
+    should_prompt_daily_recap,
     iter_scheduled_dates,
 )
 
@@ -63,7 +64,7 @@ class ConsistifyLoginView(auth_views.LoginView):
         response = super().form_valid(form)
         messages.success(self.request, "Logged in successfully.")
         today = timezone.localdate()
-        should_prompt = previous_login is None or previous_login.date() < today
+        should_prompt = should_prompt_daily_recap(previous_login, today)
         if should_prompt:
             recap_date = today - timedelta(days=1)
             pending = get_pending_habits_for_date(user, recap_date)
@@ -1096,6 +1097,7 @@ def daily_recap(request):
     pending = get_pending_habits_for_date(request.user, target_date)
     if not pending:
         request.session.pop("daily_recap_date", None)
+        request.session["daily_recap_dismissed_for"] = target_date.isoformat()
         return redirect(_safe_next_url(request) or reverse("habits:today"))
 
     updates = []
@@ -1150,6 +1152,7 @@ def daily_recap(request):
             completion.save(update_fields=["completion_percentage", "raw_value"])
 
     request.session.pop("daily_recap_date", None)
+    request.session["daily_recap_dismissed_for"] = target_date.isoformat()
     return redirect(_safe_next_url(request) or reverse("habits:today"))
 
 
