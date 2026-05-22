@@ -122,7 +122,13 @@ def habit_list(request):
         1 for item in scheduled_habits if item["completion_percentage"] >= 100
     )
 
-    hide_completed = request.GET.get("hide_completed") == "1"
+    session_hide_completed = request.session.get("today_hide_completed")
+    if request.GET.get("hide_completed") is not None:
+        hide_completed = request.GET.get("hide_completed") == "1"
+        request.session["today_hide_completed"] = hide_completed
+    else:
+        hide_completed = session_hide_completed if isinstance(session_hide_completed, bool) else False
+
     visible_scheduled_habits = (
         [item for item in scheduled_habits if not item["completed"]]
         if hide_completed
