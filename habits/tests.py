@@ -345,6 +345,7 @@ class ConsistencyScoreTests(TestCase):
         self.assertContains(mobile_response, "Mobile menu")
         self.assertContains(mobile_response, "Mobile list habit")
         self.assertContains(mobile_response, "habitSortList")
+        self.assertContains(mobile_response, 'enableHabitDragSort("habitSortList")')
         self.assertNotContains(mobile_response, "Back to today")
 
     def test_dashboard_renders_score_drivers_and_category_analytics(self):

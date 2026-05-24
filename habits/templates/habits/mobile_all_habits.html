@@ -15,3 +15,11 @@
     {% include "habits/partials/all_habits_card.html" %}
 </section>
 {% endblock %}
+
+{% block scripts %}
+<script>
+    if (window.ConsistifyUI) {
+        window.ConsistifyUI.enableHabitDragSort("habitSortList");
+    }
+</script>
+{% endblock %}
