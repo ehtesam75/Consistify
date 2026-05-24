@@ -324,6 +324,29 @@ class ConsistencyScoreTests(TestCase):
         self.assertContains(shown_response, "Hide completed")
         self.assertContains(shown_response, "data-progress-form")
 
+    def test_mobile_all_habits_page_renders_shared_all_habits_section(self):
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Mobile list habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=date(2026, 5, 1),
+        )
+
+        self.client.force_login(self.user)
+
+        today_response = self.client.get(reverse("habits:today"))
+        self.assertEqual(today_response.status_code, 200)
+        self.assertContains(today_response, "All Habits")
+        self.assertNotContains(today_response, "Back to today")
+
+        mobile_response = self.client.get(reverse("habits:mobile_all_habits"))
+        self.assertEqual(mobile_response.status_code, 200)
+        self.assertContains(mobile_response, "Mobile menu")
+        self.assertContains(mobile_response, "Mobile list habit")
+        self.assertContains(mobile_response, "habitSortList")
+        self.assertNotContains(mobile_response, "Back to today")
+
     def test_dashboard_renders_score_drivers_and_category_analytics(self):
         today = date(2026, 5, 10)
         habit = self.make_habit(

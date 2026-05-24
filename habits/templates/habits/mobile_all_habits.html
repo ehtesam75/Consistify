@@ -1,0 +1,17 @@
+{% extends "habits/base.html" %}
+
+{% block body_class %}mobile-all-habits-page{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Mobile menu</p>
+        <h1>All habits</h1>
+        <p class="subtitle">{{ all_count }} total · drag to reorder</p>
+    </div>
+</section>
+
+<section class="card-grid mobile-all-habits-grid">
+    {% include "habits/partials/all_habits_card.html" %}
+</section>
+{% endblock %}

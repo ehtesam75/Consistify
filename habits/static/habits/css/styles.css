@@ -3157,6 +3157,10 @@ body.auth-page main {
         white-space: nowrap;
     }
 
+    .today-page .all-habits-card {
+        display: none;
+    }
+
     .today-page .habit-row {
         flex-direction: column;
         align-items: flex-start;
@@ -3205,6 +3209,84 @@ body.auth-page main {
         font-size: 0.72rem;
         line-height: 1.2;
         color: var(--ink-soft);
+    }
+
+    .mobile-all-habits-page .hero {
+        gap: 0.85rem;
+        align-items: flex-start;
+    }
+
+    .mobile-all-habits-page .hero h1 {
+        margin-bottom: 0.15rem;
+    }
+
+    .mobile-all-habits-page .card-grid {
+        margin-bottom: 1rem;
+    }
+
+    .mobile-all-habits-page .all-habits-card {
+        padding: 1rem;
+    }
+
+    .mobile-all-habits-page .all-habits-card .card-header {
+        align-items: flex-start;
+        gap: 0.4rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .mobile-all-habits-page .all-habits-card .tag {
+        font-size: 0.7rem;
+        padding: 0.18rem 0.5rem;
+    }
+
+    .mobile-all-habits-page .habit-list {
+        gap: 0.65rem;
+    }
+
+    .mobile-all-habits-page .habit-row {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.45rem;
+        padding: 0.7rem 0.8rem;
+    }
+
+    .mobile-all-habits-page .habit-name {
+        display: block;
+        font-size: 0.98rem;
+        line-height: 1.2;
+    }
+
+    .mobile-all-habits-page .habit-meta {
+        font-size: 0.74rem;
+        margin-top: 0.18rem;
+    }
+
+    .mobile-all-habits-page .habit-flags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-top: 0.3rem;
+    }
+
+    .mobile-all-habits-page .habit-flags .badge,
+    .mobile-all-habits-page .habit-flags .tag,
+    .mobile-all-habits-page .habit-flags .tag-chip {
+        font-size: 0.68rem;
+        padding: 0.14rem 0.45rem;
+    }
+
+    .mobile-all-habits-page .habit-row-actions {
+        display: flex;
+        justify-content: flex-start;
+        gap: 0.35rem;
+        align-self: flex-start;
+        margin-top: 0.1rem;
+    }
+
+    .mobile-all-habits-page .icon-link {
+        width: 2.1rem;
+        height: 2.1rem;
     }
 
     .today-page .progress-input {

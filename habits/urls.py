@@ -9,6 +9,7 @@ urlpatterns = [
     path("health/", views.health, name="health"),
     path("cron-job/", views.cron_job, name="cron_job"),
     path("today/", views.habit_list, name="today"),
+    path("today/all-habits/", views.mobile_all_habits, name="mobile_all_habits"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("reports/", views.reports, name="reports"),
     path("compare/", views.habit_compare, name="habit_compare"),

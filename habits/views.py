@@ -84,8 +84,7 @@ class ConsistifyLogoutView(auth_views.LogoutView):
         return response
 
 
-@login_required
-def habit_list(request):
+def _build_today_habit_context(request):
     today = timezone.localdate()
     target_date = _get_date_from_request(request)
     habits = list(
@@ -128,7 +127,9 @@ def habit_list(request):
         hide_completed = request.GET.get("hide_completed") == "1"
         request.session["today_hide_completed"] = hide_completed
     else:
-        hide_completed = session_hide_completed if isinstance(session_hide_completed, bool) else False
+        hide_completed = (
+            session_hide_completed if isinstance(session_hide_completed, bool) else False
+        )
 
     visible_scheduled_habits = (
         [item for item in scheduled_habits if not item["completed"]]
@@ -136,7 +137,7 @@ def habit_list(request):
         else scheduled_habits
     )
 
-    context = {
+    return {
         "target_date": target_date,
         "today": today,
         "prev_date": target_date - timedelta(days=1),
@@ -149,7 +150,18 @@ def habit_list(request):
         "habits": habits,
         "all_count": len(active_habits),
     }
+
+
+@login_required
+def habit_list(request):
+    context = _build_today_habit_context(request)
     return render(request, "habits/habit_list.html", context)
+
+
+@login_required
+def mobile_all_habits(request):
+    context = _build_today_habit_context(request)
+    return render(request, "habits/mobile_all_habits.html", context)
 
 
 @login_required

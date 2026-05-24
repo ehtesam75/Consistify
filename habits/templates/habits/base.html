@@ -155,6 +155,7 @@
             {% if request.user.is_authenticated %}
                 <nav class="nav-mobile-links">
                     <a class="nav-link {% if request.resolver_match.url_name == 'today' or request.resolver_match.url_name == 'habit_detail' or request.resolver_match.url_name == 'habit_edit' or request.resolver_match.url_name == 'habit_create' %}active{% endif %}" href="{% url 'habits:today' %}">Today</a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'mobile_all_habits' %}active{% endif %}" href="{% url 'habits:mobile_all_habits' %}">All Habits</a>
                     <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'habits:dashboard' %}">Dashboard</a>
                     <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'habits:reports' %}">Reports</a>
                     <a class="nav-link {% if request.resolver_match.url_name == 'habit_compare' %}active{% endif %}" href="{% url 'habits:habit_compare' %}">Compare</a>

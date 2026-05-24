@@ -110,64 +110,7 @@
             {% endif %}
         {% endif %}
     </div>
-
-    <div class="card" style="--i: 1;">
-        <div class="card-header">
-            <h2>All habits</h2>
-            <span class="tag">{{ all_count }} total · drag to reorder</span>
-        </div>
-        {% if habits %}
-            <ul class="habit-list" id="habitSortList" data-reorder-url="{% url 'habits:reorder_habits' %}">
-                {% for habit in habits %}
-                    <li class="habit-row compact reorder-item" style="--i: {{ forloop.counter0 }};" draggable="true" data-habit-id="{{ habit.id }}">
-                        <div>
-                            <a class="habit-name" href="{% url 'habits:habit_detail' habit.id %}">{{ habit.name }}</a>
-                            <p class="habit-meta">{{ habit.schedule_summary }}</p>
-                            <div class="habit-flags">
-                                {% for category in habit.categories.all %}
-                                    <span class="badge category {{ category.key }}">{{ category.label }}</span>
-                                {% endfor %}
-                                <span class="badge priority {{ habit.priority }}">{{ habit.get_priority_display }}</span>
-                                {% if habit.is_paused %}
-                                    <span class="tag muted">Paused</span>
-                                {% else %}
-                                    {% with active_pause=habit.active_pause %}
-                                        {% if active_pause and active_pause.start_date > today %}
-                                            <span class="tag muted">Pause starts {{ active_pause.start_date|date:"M d" }}</span>
-                                        {% endif %}
-                                    {% endwith %}
-                                {% endif %}
-                                {% for tag in habit.get_tags %}
-                                    <span class="tag-chip">#{{ tag }}</span>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        <div class="habit-row-actions" data-no-drag draggable="false">
-                            <a class="icon-link" href="{% url 'habits:habit_edit' habit.id %}" aria-label="Edit {{ habit.name }}" title="Edit {{ habit.name }}">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M12 20h9"></path>
-                                    <path d="m16.5 3.5 4 4L8 20l-4 1 1-4 11.5-13.5z"></path>
-                                </svg>
-                            </a>
-                            <form method="post" action="{% url 'habits:habit_delete' habit.id %}" class="icon-form" data-confirm-delete data-confirm-message="Delete this habit and all its history? This cannot be undone." onsubmit="return window.confirm('Delete this habit and all its history? This cannot be undone.')">
-                                {% csrf_token %}
-                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <button class="icon-link icon-danger" type="submit" aria-label="Delete {{ habit.name }}" title="Delete {{ habit.name }}" draggable="false">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <polyline points="3 6 5 6 21 6"></polyline>
-                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-                                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                    </svg>
-                                </button>
-                            </form>
-                        </div>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p class="empty">Create your first habit to build momentum.</p>
-        {% endif %}
-    </div>
+    {% include "habits/partials/all_habits_card.html" %}
 </section>
 {% endblock %}
 
