@@ -621,6 +621,14 @@ main > section + section {
     margin: 0;
 }
 
+.date-picker-display {
+    display: none;
+}
+
+.progress-helper.mobile-only {
+    display: none;
+}
+
 .date-picker-input {
     color: var(--ink);
     font-family: inherit;
@@ -3094,14 +3102,59 @@ body.auth-page main {
     }
 
     .today-page .card-header {
-        flex-direction: column;
-        align-items: flex-start;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "title actions"
+            "summary summary";
+        align-items: center;
+        gap: 0.35rem 0.6rem;
+        margin-bottom: 0.45rem;
+    }
+
+    .today-page .card-header h2 {
+        grid-area: title;
+        font-size: 1.16rem;
+        margin-bottom: 0;
     }
 
     .today-page .card-header-actions {
-        width: 100%;
-        justify-content: flex-start;
-        flex-wrap: wrap;
+        grid-area: actions;
+        width: auto;
+        justify-self: end;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+        gap: 0.35rem;
+    }
+
+    .today-page .card-header-actions {
+        display: contents;
+    }
+
+    .today-page .card-header-actions .scheduled-summary-desktop {
+        display: inline-flex;
+        grid-area: summary;
+        justify-self: center;
+        width: fit-content;
+        font-size: 0.72rem;
+        padding: 0.18rem 0.55rem;
+        margin: 0.1rem 0 0.2rem;
+        text-align: center;
+    }
+
+    .today-page .card-header-actions .btn.small {
+        grid-area: actions;
+        justify-self: end;
+    }
+
+    .today-page .card-header-actions .btn,
+    .today-page .card-header-actions .btn.small {
+        font-size: 0.74rem;
+        padding: 0.33rem 0.6rem;
+    }
+
+    .today-page .card-header-actions .btn {
+        white-space: nowrap;
     }
 
     .today-page .habit-row {
@@ -3142,6 +3195,18 @@ body.auth-page main {
         width: 100%;
     }
 
+    .today-page .progress-caption.inline {
+        display: none;
+    }
+
+    .today-page .progress-helper.mobile-only {
+        display: block;
+        margin: 0;
+        font-size: 0.72rem;
+        line-height: 1.2;
+        color: var(--ink-soft);
+    }
+
     .today-page .progress-input {
         width: 84px;
     }
@@ -3174,8 +3239,8 @@ body.auth-page main {
     .today-page .hero-title-row {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
+        justify-content: flex-end;
+        gap: 0.6rem;
         width: 100%;
     }
 
@@ -3186,7 +3251,6 @@ body.auth-page main {
 
     .today-page .today-create-inline {
         display: inline-flex;
-        margin-left: auto;
         white-space: nowrap;
     }
 
@@ -3480,26 +3544,199 @@ body.auth-page main {
 
 @media (max-width: 520px) {
     .date-nav {
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.55rem;
     }
 
     .today-page .date-nav {
         width: 100%;
-        align-items: stretch;
+        margin-bottom: 1.25rem;
     }
 
-    .today-page .date-nav .btn {
-        width: 100%;
-        justify-content: center;
+    .today-page .date-nav-step {
+        min-width: 0;
+        padding-inline: 0.7rem;
+        gap: 0.25rem;
     }
 
     .today-page .date-picker-form {
         width: 100%;
+        min-width: 0;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .today-page .date-picker-display {
+        display: inline-flex;
+        width: 100%;
+        justify-content: center;
+        position: relative;
+        z-index: 1;
     }
 
     .today-page .date-chip {
         width: 100%;
         text-align: center;
+    }
+
+    .today-page .date-picker-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .today-page .date-nav-label {
+        display: none;
+    }
+
+    .today-page .date-nav-icon {
+        font-size: 1.2rem;
+        line-height: 1;
+    }
+
+    .today-page .date-picker-display-text {
+        font-weight: 600;
+        letter-spacing: 0.02em;
+    }
+
+    .today-page .hero {
+        gap: 0.9rem;
+        align-items: flex-start;
+    }
+
+    .today-page .hero > div:first-child {
+        width: 100%;
+    }
+
+    .today-page .hero-title-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.6rem;
+        width: 100%;
+    }
+
+    .today-page .today-create-inline {
+        justify-self: end;
+    }
+
+    .today-page .subtitle {
+        margin-bottom: 0;
+    }
+
+    .today-page .card {
+        padding: 1rem;
+    }
+
+    .today-page .card-header {
+        margin-bottom: 0.75rem;
+        gap: 0.5rem;
+    }
+
+    .today-page .card-header-actions {
+        gap: 0.45rem;
+    }
+
+    .today-page .habit-list {
+        gap: 0.65rem;
+    }
+
+    .today-page .habit-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 0.65rem;
+        padding: 0.7rem 0.8rem;
+    }
+
+    .today-page .habit-info {
+        min-width: 0;
+    }
+
+    .today-page .habit-name {
+        display: block;
+        font-size: 0.98rem;
+        line-height: 1.2;
+    }
+
+    .today-page .habit-meta {
+        font-size: 0.74rem;
+        margin-top: 0.18rem;
+    }
+
+    .today-page .habit-flags {
+        display: flex;
+        margin-top: 0.3rem;
+    }
+
+    .today-page .habit-flags .badge.priority {
+        font-size: 0.7rem;
+        padding: 0.14rem 0.45rem;
+        line-height: 1.2;
+    }
+
+    .today-page .habit-progress {
+        gap: 0.25rem;
+        align-items: flex-end;
+    }
+
+    .today-page .progress-row .habit-progress {
+        align-items: flex-end;
+    }
+
+    .today-page .progress-row .progress-form {
+        justify-items: end;
+    }
+
+    .today-page .progress-visual {
+        display: none;
+    }
+
+    .today-page .progress-controls {
+        flex-wrap: nowrap;
+        gap: 0.35rem;
+    }
+
+    .today-page .progress-controls .checkbox span,
+    .today-page .progress-controls .step-button,
+    .today-page .progress-controls .progress-input {
+        transform: scale(0.92);
+        transform-origin: center;
+    }
+
+    .today-page .progress-controls .checkbox {
+        margin-right: 0.05rem;
+    }
+
+    .today-page .progress-form[data-habit-type="binary"] .progress-controls {
+        width: auto;
+    }
+
+    .today-page .progress-form[data-habit-type="partial"] .progress-range {
+        display: none;
+    }
+
+    .today-page .progress-form[data-habit-type="partial"] .progress-input {
+        width: 68px;
+    }
+
+    .today-page .progress-form[data-habit-type="quantitative"] .progress-controls {
+        align-items: flex-end;
+        justify-content: flex-end;
+    }
+
+    .today-page .progress-form[data-habit-type="quantitative"] .progress-input {
+        width: 54px;
+    }
+
+    .today-page .progress-caption.inline {
+        font-size: 0.76rem;
+        text-align: right;
     }
 
     .notification-panel {

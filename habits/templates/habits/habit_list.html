@@ -19,14 +19,23 @@
 </section>
 
 <div class="date-nav">
-    <a class="btn ghost small" href="?date={{ prev_date|date:'Y-m-d' }}{% if hide_completed %}&hide_completed=1{% endif %}">Previous</a>
+    <a class="btn ghost small date-nav-step" href="?date={{ prev_date|date:'Y-m-d' }}{% if hide_completed %}&hide_completed=1{% endif %}" aria-label="Previous day">
+        <span class="date-nav-icon" aria-hidden="true">&lsaquo;</span>
+        <span class="date-nav-label">Previous</span>
+    </a>
     <form class="date-picker-form" method="get">
+        <button class="date-chip date-picker-display" type="button" data-date-picker-trigger aria-label="Choose date">
+            <span class="date-picker-display-text">{{ target_date|date:"M j, D" }}</span>
+        </button>
         <input class="date-chip date-picker-input" type="date" name="date" value="{{ target_date|date:'Y-m-d' }}" aria-label="Choose date" data-date-picker>
         {% if hide_completed %}
             <input type="hidden" name="hide_completed" value="1">
         {% endif %}
     </form>
-    <a class="btn ghost small" href="?date={{ next_date|date:'Y-m-d' }}{% if hide_completed %}&hide_completed=1{% endif %}">Next</a>
+    <a class="btn ghost small date-nav-step" href="?date={{ next_date|date:'Y-m-d' }}{% if hide_completed %}&hide_completed=1{% endif %}" aria-label="Next day">
+        <span class="date-nav-label">Next</span>
+        <span class="date-nav-icon" aria-hidden="true">&rsaquo;</span>
+    </a>
 </div>
 
 <section class="card-grid">
@@ -34,9 +43,9 @@
         <div class="card-header">
             <h2>Scheduled habits</h2>
             <div class="card-header-actions">
-                <span class="tag">{{ completed_count }}/{{ scheduled_count }} completed</span>
+                <span class="tag scheduled-summary-desktop">{{ completed_count }}/{{ scheduled_count }} completed</span>
                 {% if hide_completed %}
-                    <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}">Show completed</a>
+                    <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}&hide_completed=0">Show completed</a>
                 {% else %}
                     <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}&hide_completed=1">Hide completed</a>
                 {% endif %}
@@ -77,11 +86,17 @@
                                         <button type="button" class="step-button" data-step="-1" aria-label="Decrease value" {% if target_date > today %}disabled{% endif %}>-</button>
                                         <input type="number" class="progress-input" name="current_value" min="0" step="1" {% if item.habit.target_value %}max="{{ item.habit.target_value|floatformat:0 }}"{% endif %} value="{{ item.raw_value|default_if_none:0|floatformat:0 }}" data-quant-input {% if target_date > today %}disabled{% endif %}>
                                         <button type="button" class="step-button" data-step="1" aria-label="Increase value" {% if target_date > today %}disabled{% endif %}>+</button>
-                                        <div class="progress-caption inline" data-progress-caption>
-                                            {{ item.raw_value|default_if_none:0|floatformat:0 }} / {{ item.habit.target_value|default_if_none:0|floatformat:0 }} {{ item.habit.unit }}
-                                        </div>
                                     {% endif %}
                                 </div>
+                                {% if item.habit.habit_type == "binary" %}
+                                    <p class="progress-helper mobile-only">Check if completed</p>
+                                {% elif item.habit.habit_type == "partial" %}
+                                    <p class="progress-helper mobile-only">100% is max</p>
+                                {% else %}
+                                    <p class="progress-helper mobile-only">
+                                        Max: {{ item.habit.target_value|default_if_none:0|floatformat:0 }}{% if item.habit.unit %} {{ item.habit.unit }}{% endif %}
+                                    </p>
+                                {% endif %}
                             </form>
                         </div>
                     </li>
@@ -162,9 +177,20 @@
         window.ConsistifyUI.enableHabitDragSort("habitSortList");
     }
     const datePicker = document.querySelector("[data-date-picker]");
+    const datePickerTrigger = document.querySelector("[data-date-picker-trigger]");
     if (datePicker) {
         datePicker.addEventListener("change", () => {
             datePicker.form.submit();
+        });
+    }
+    if (datePicker && datePickerTrigger) {
+        datePickerTrigger.addEventListener("click", () => {
+            if (typeof datePicker.showPicker === "function") {
+                datePicker.showPicker();
+            } else {
+                datePicker.click();
+            }
+            datePicker.focus();
         });
     }
 </script>

@@ -289,6 +289,41 @@ class ConsistencyScoreTests(TestCase):
         self.assertContains(response, 'name="date"')
         self.assertContains(response, 'value="2026-06-03"')
 
+    def test_today_page_show_completed_toggle_persists_and_restores_items(self):
+        today = date(2026, 5, 24)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Toggle habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+        )
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=today,
+            completion_percentage=Decimal("100"),
+            raw_value=Decimal("100"),
+        )
+
+        self.client.force_login(self.user)
+
+        hidden_response = self.client.get(
+            reverse("habits:today"),
+            {"date": today.isoformat(), "hide_completed": "1"},
+        )
+        self.assertEqual(hidden_response.status_code, 200)
+        self.assertContains(hidden_response, "Show completed")
+        self.assertNotContains(hidden_response, "data-progress-form")
+        self.assertContains(hidden_response, "All scheduled habits are completed.")
+
+        shown_response = self.client.get(
+            reverse("habits:today"),
+            {"date": today.isoformat(), "hide_completed": "0"},
+        )
+        self.assertEqual(shown_response.status_code, 200)
+        self.assertContains(shown_response, "Hide completed")
+        self.assertContains(shown_response, "data-progress-form")
+
     def test_dashboard_renders_score_drivers_and_category_analytics(self):
         today = date(2026, 5, 10)
         habit = self.make_habit(
