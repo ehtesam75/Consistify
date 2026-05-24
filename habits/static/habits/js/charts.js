@@ -53,12 +53,54 @@ window.ConsistifyCharts = (() => {
         return output;
     }
 
-    function shouldDisplayMobileTick(index, labelsLength, targetTickCount) {
-        if (labelsLength <= targetTickCount) {
-            return true;
+    function getMobileTargetTickCount(canvas, labelsLength, chartOptions = {}) {
+        if (!isMobileViewport()) {
+            return labelsLength;
         }
-        const interval = Math.max(1, Math.ceil(labelsLength / targetTickCount));
-        return index % interval === 0 || index === labelsLength - 1;
+
+        const fallbackWidth = window.innerWidth || 0;
+        const chartWidth = canvas && canvas.clientWidth ? canvas.clientWidth : fallbackWidth;
+        const labelSpacing = Number.isFinite(chartOptions.mobileLabelSpacing) && chartOptions.mobileLabelSpacing > 0
+            ? chartOptions.mobileLabelSpacing
+            : chartOptions.formatMonthLabel
+                ? 96
+                : 120;
+        const widthBasedTickCount = Math.max(3, Math.floor(chartWidth / labelSpacing));
+
+        return Math.min(labelsLength, widthBasedTickCount);
+    }
+
+    function getVisibleTickIndices(labelsLength, targetTickCount) {
+        if (labelsLength <= targetTickCount) {
+            return null;
+        }
+
+        const visibleIndices = new Set([0, labelsLength - 1]);
+        const middleTickCount = Math.max(0, targetTickCount - 2);
+
+        for (let slot = 1; slot <= middleTickCount; slot += 1) {
+            const index = Math.round((slot * (labelsLength - 1)) / (middleTickCount + 1));
+            visibleIndices.add(index);
+        }
+
+        return visibleIndices;
+    }
+
+    function createResponsiveTickCallback(canvas, labels, chartOptions = {}) {
+        return (value, index) => {
+            const targetTickCount = getMobileTargetTickCount(canvas, labels.length, chartOptions);
+            const visibleTickIndices = getVisibleTickIndices(labels.length, targetTickCount);
+            const label = labels[index];
+
+            if (visibleTickIndices && !visibleTickIndices.has(index)) {
+                return "";
+            }
+
+            return getDisplayedLabel(label, {
+                trimRangeStart: chartOptions.trimRangeStart === true,
+                formatMonthLabel: Boolean(chartOptions.formatMonthLabel),
+            });
+        };
     }
 
     function buildGradient(ctx, height) {
@@ -68,7 +110,7 @@ window.ConsistifyCharts = (() => {
         return gradient;
     }
 
-    function renderCompletionBars(canvasId, labels, values) {
+    function renderCompletionBars(canvasId, labels, values, chartOptions = {}) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !window.Chart) {
             return;
@@ -109,6 +151,15 @@ window.ConsistifyCharts = (() => {
                         },
                     },
                     x: {
+                        ticks: {
+                            autoSkip: false,
+                            callback: createResponsiveTickCallback(canvas, labels, {
+                                ...chartOptions,
+                                trimRangeStart: false,
+                            }),
+                            maxRotation: 0,
+                            minRotation: 0,
+                        },
                         grid: {
                             display: false,
                         },
@@ -172,18 +223,11 @@ window.ConsistifyCharts = (() => {
                     },
                     x: {
                         ticks: {
-                            callback: (value, index) => {
-                                const label = labels[index];
-                                const mobileTargetTicks = chartOptions.mobileTickCount;
-                                const shouldLimitTicks = isMobileViewport() && Number.isInteger(mobileTargetTicks) && mobileTargetTicks > 0;
-                                const showTick = !shouldLimitTicks || shouldDisplayMobileTick(index, labels.length, mobileTargetTicks);
-                                if (!showTick) {
-                                    return "";
-                                }
-                                return getDisplayedLabel(label, {
-                                    formatMonthLabel: Boolean(chartOptions.formatMonthLabel),
-                                });
-                            },
+                            autoSkip: false,
+                            callback: createResponsiveTickCallback(canvas, labels, {
+                                ...chartOptions,
+                                trimRangeStart: false,
+                            }),
                             maxRotation: 0,
                             minRotation: 0,
                         },
@@ -201,7 +245,7 @@ window.ConsistifyCharts = (() => {
         });
     }
 
-    function renderCompletionLine(canvasId, labels, values) {
+    function renderCompletionLine(canvasId, labels, values, chartOptions = {}) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !window.Chart) {
             return;
@@ -245,6 +289,15 @@ window.ConsistifyCharts = (() => {
                         },
                     },
                     x: {
+                        ticks: {
+                            autoSkip: false,
+                            callback: createResponsiveTickCallback(canvas, labels, {
+                                ...chartOptions,
+                                trimRangeStart: false,
+                            }),
+                            maxRotation: 0,
+                            minRotation: 0,
+                        },
                         grid: {
                             display: false,
                         },
@@ -343,19 +396,11 @@ window.ConsistifyCharts = (() => {
                     },
                     x: {
                         ticks: {
-                            callback: (value, index) => {
-                                const label = labels[index];
-                                const mobileTargetTicks = chartOptions.mobileTickCount;
-                                const shouldLimitTicks = isMobileViewport() && Number.isInteger(mobileTargetTicks) && mobileTargetTicks > 0;
-                                const showTick = !shouldLimitTicks || shouldDisplayMobileTick(index, labels.length, mobileTargetTicks);
-                                if (!showTick) {
-                                    return "";
-                                }
-                                return getDisplayedLabel(label, {
-                                    trimRangeStart: chartOptions.trimRangeStart !== false,
-                                    formatMonthLabel: Boolean(chartOptions.formatMonthLabel),
-                                });
-                            },
+                            autoSkip: false,
+                            callback: createResponsiveTickCallback(canvas, labels, {
+                                ...chartOptions,
+                                trimRangeStart: chartOptions.trimRangeStart !== false,
+                            }),
                             maxRotation: 0,
                             minRotation: 0,
                         },

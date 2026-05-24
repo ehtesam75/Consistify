@@ -99,15 +99,9 @@
     const progressRates = {{ progress_rates|safe }};
     if (window.ConsistifyCharts) {
         if (dailyLabels.length) {
-            window.ConsistifyCharts.renderRateLine(
-                "profileDailyChart",
-                dailyLabels,
-                dailyRates,
-                { mobileTickCount: 4 }
-            );
+            window.ConsistifyCharts.renderRateLine("profileDailyChart", dailyLabels, dailyRates);
         }
         window.ConsistifyCharts.renderRateLine("profileProgressChart", progressLabels, progressRates, {
-            mobileTickCount: 4,
             formatMonthLabel: true,
         });
     }

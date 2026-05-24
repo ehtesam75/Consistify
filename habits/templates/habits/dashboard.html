@@ -238,9 +238,7 @@
     const chartLabels = {{ chart_labels|safe }};
     const chartRates = {{ chart_rates|safe }};
     if (chartLabels.length && window.ConsistifyCharts) {
-        window.ConsistifyCharts.renderRateLine("dashboardChart", chartLabels, chartRates, {
-            mobileTickCount: 4,
-        });
+        window.ConsistifyCharts.renderRateLine("dashboardChart", chartLabels, chartRates);
     }
 </script>
 {% endblock %}
