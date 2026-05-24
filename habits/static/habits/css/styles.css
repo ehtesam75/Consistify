@@ -3440,6 +3440,10 @@ body.auth-page main {
         position: relative;
     }
 
+    .leaderboard-page .user-avatar {
+        display: none;
+    }
+
     .leaderboard-page .leaderboard-row::before {
         content: none;
     }
