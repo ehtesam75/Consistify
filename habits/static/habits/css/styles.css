@@ -3318,6 +3318,12 @@ body.auth-page main {
         display: none;
     }
 
+    .mobile-hide-action,
+    .mobile-hide-find-users,
+    .dashboard-page .mobile-hide-active-habits {
+        display: none;
+    }
+
     .today-page .hero-title-row {
         display: flex;
         align-items: center;

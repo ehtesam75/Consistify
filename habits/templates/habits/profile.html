@@ -13,7 +13,7 @@
         {% endif %}
     </div>
     <div class="hero-actions">
-        <a class="btn ghost" href="{% url 'habits:user_search' %}">Find users</a>
+        <a class="btn ghost mobile-hide-find-users" href="{% url 'habits:user_search' %}">Find users</a>
         {% if not is_own_profile and friend_status == "accepted" and friend_request %}
             <form method="post" action="{% url 'habits:remove_friend' friend_request.id %}">
                 {% csrf_token %}
@@ -102,10 +102,14 @@
             window.ConsistifyCharts.renderRateLine(
                 "profileDailyChart",
                 dailyLabels,
-                dailyRates
+                dailyRates,
+                { mobileTickCount: 4 }
             );
         }
-        window.ConsistifyCharts.renderRateLine("profileProgressChart", progressLabels, progressRates);
+        window.ConsistifyCharts.renderRateLine("profileProgressChart", progressLabels, progressRates, {
+            mobileTickCount: 4,
+            formatMonthLabel: true,
+        });
     }
 </script>
 {% endblock %}

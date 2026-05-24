@@ -10,7 +10,7 @@
         <p class="subtitle">Track completion rates, streak shifts, and long-range consistency trends.</p>
     </div>
     <div class="hero-actions">
-        <a class="btn ghost" href="{% url 'habits:dashboard' %}">Back to dashboard</a>
+        <a class="btn ghost mobile-hide-action" href="{% url 'habits:dashboard' %}">Back to dashboard</a>
     </div>
 </section>
 
@@ -111,7 +111,8 @@
             monthlyConsistency,
             "Completion %",
             "Consistency score",
-            { min: 0, max: 100, stepSize: 20, tickFormatter: (value) => value }
+            { min: 0, max: 100, stepSize: 20, tickFormatter: (value) => value },
+            { mobileTickCount: 4, formatMonthLabel: true }
         );
     }
 </script>

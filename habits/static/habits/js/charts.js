@@ -1,10 +1,65 @@
 window.ConsistifyCharts = (() => {
+    const MOBILE_BREAKPOINT = "(max-width: 820px)";
     const palette = {
         accent: "#b07a37",
         accentSoft: "rgba(176, 122, 55, 0.2)",
         teal: "#2f6f6d",
         grid: "rgba(28, 31, 36, 0.08)",
     };
+
+    function isMobileViewport() {
+        return window.matchMedia && window.matchMedia(MOBILE_BREAKPOINT).matches;
+    }
+
+    function formatMonthLabel(label) {
+        if (typeof label !== "string") {
+            return label;
+        }
+
+        const directDate = new Date(label);
+        if (!Number.isNaN(directDate.getTime())) {
+            return directDate.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+        }
+
+        const monthYearMatch = label.match(/^([A-Za-z]{3,9})\s+(\d{2,4})$/);
+        if (monthYearMatch) {
+            const normalized = new Date(`${monthYearMatch[1]} 1, ${monthYearMatch[2]}`);
+            if (!Number.isNaN(normalized.getTime())) {
+                return normalized.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+            }
+        }
+
+        const isoMonthMatch = label.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+        if (isoMonthMatch) {
+            const year = Number(isoMonthMatch[1]);
+            const monthIndex = Number(isoMonthMatch[2]) - 1;
+            const isoDate = new Date(year, monthIndex, 1);
+            if (!Number.isNaN(isoDate.getTime())) {
+                return isoDate.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+            }
+        }
+
+        return label;
+    }
+
+    function getDisplayedLabel(label, options = {}) {
+        let output = label;
+        if (typeof output === "string" && options.trimRangeStart && output.includes(" - ")) {
+            output = output.split(" - ")[0];
+        }
+        if (options.formatMonthLabel) {
+            output = formatMonthLabel(output);
+        }
+        return output;
+    }
+
+    function shouldDisplayMobileTick(index, labelsLength, targetTickCount) {
+        if (labelsLength <= targetTickCount) {
+            return true;
+        }
+        const interval = Math.max(1, Math.ceil(labelsLength / targetTickCount));
+        return index % interval === 0 || index === labelsLength - 1;
+    }
 
     function buildGradient(ctx, height) {
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
@@ -73,7 +128,7 @@ window.ConsistifyCharts = (() => {
         });
     }
 
-    function renderRateLine(canvasId, labels, values) {
+    function renderRateLine(canvasId, labels, values, chartOptions = {}) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !window.Chart) {
             return;
@@ -116,6 +171,22 @@ window.ConsistifyCharts = (() => {
                         },
                     },
                     x: {
+                        ticks: {
+                            callback: (value, index) => {
+                                const label = labels[index];
+                                const mobileTargetTicks = chartOptions.mobileTickCount;
+                                const shouldLimitTicks = isMobileViewport() && Number.isInteger(mobileTargetTicks) && mobileTargetTicks > 0;
+                                const showTick = !shouldLimitTicks || shouldDisplayMobileTick(index, labels.length, mobileTargetTicks);
+                                if (!showTick) {
+                                    return "";
+                                }
+                                return getDisplayedLabel(label, {
+                                    formatMonthLabel: Boolean(chartOptions.formatMonthLabel),
+                                });
+                            },
+                            maxRotation: 0,
+                            minRotation: 0,
+                        },
                         grid: {
                             display: false,
                         },
@@ -200,7 +271,8 @@ window.ConsistifyCharts = (() => {
         secondaryValues,
         primaryLabel,
         secondaryLabel,
-        secondaryAxisConfig = {}
+        secondaryAxisConfig = {},
+        chartOptions = {}
     ) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || !window.Chart) {
@@ -273,13 +345,16 @@ window.ConsistifyCharts = (() => {
                         ticks: {
                             callback: (value, index) => {
                                 const label = labels[index];
-                                if (typeof label !== "string") {
-                                    return label;
+                                const mobileTargetTicks = chartOptions.mobileTickCount;
+                                const shouldLimitTicks = isMobileViewport() && Number.isInteger(mobileTargetTicks) && mobileTargetTicks > 0;
+                                const showTick = !shouldLimitTicks || shouldDisplayMobileTick(index, labels.length, mobileTargetTicks);
+                                if (!showTick) {
+                                    return "";
                                 }
-                                if (label.includes(" - ")) {
-                                    return label.split(" - ")[0];
-                                }
-                                return label;
+                                return getDisplayedLabel(label, {
+                                    trimRangeStart: chartOptions.trimRangeStart !== false,
+                                    formatMonthLabel: Boolean(chartOptions.formatMonthLabel),
+                                });
                             },
                             maxRotation: 0,
                             minRotation: 0,

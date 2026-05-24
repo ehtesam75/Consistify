@@ -10,8 +10,8 @@
         <p class="subtitle">{{ today|date:"F j, Y" }}</p>
     </div>
     <div class="hero-actions">
-        <a class="btn primary" href="{% url 'habits:habit_create' %}">Create habit</a>
-        <a class="btn ghost" href="{% url 'habits:today' %}">Back to today</a>
+        <a class="btn primary mobile-hide-action" href="{% url 'habits:habit_create' %}">Create habit</a>
+        <a class="btn ghost mobile-hide-action" href="{% url 'habits:today' %}">Back to today</a>
     </div>
 </section>
 
@@ -31,7 +31,7 @@
         <span class="stat-value">{{ total_completed }}</span>
         <span class="stat-note">100% completion · {{ dashboard_window_note }}</span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card mobile-hide-active-habits">
         <span class="stat-label">Active habits</span>
         <span class="stat-value">{{ total_habits }}</span>
         <span class="stat-note">Currently tracked</span>
@@ -238,7 +238,9 @@
     const chartLabels = {{ chart_labels|safe }};
     const chartRates = {{ chart_rates|safe }};
     if (chartLabels.length && window.ConsistifyCharts) {
-        window.ConsistifyCharts.renderRateLine("dashboardChart", chartLabels, chartRates);
+        window.ConsistifyCharts.renderRateLine("dashboardChart", chartLabels, chartRates, {
+            mobileTickCount: 4,
+        });
     }
 </script>
 {% endblock %}
