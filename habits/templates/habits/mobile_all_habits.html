@@ -6,7 +6,10 @@
 <section class="hero">
     <div>
         <p class="eyebrow">Mobile menu</p>
-        <h1>All habits</h1>
+        <div class="hero-title-row">
+            <h1>All habits</h1>
+            <a class="btn primary small mobile-create-inline" href="{% url 'habits:habit_create' %}">Create habit</a>
+        </div>
         <p class="subtitle">{{ all_count }} total · drag to reorder</p>
     </div>
 </section>

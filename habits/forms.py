@@ -25,7 +25,7 @@ class HabitForm(forms.ModelForm):
     categories = forms.ModelMultipleChoiceField(
         queryset=HabitCategory.objects.none(),
         required=True,
-        widget=forms.SelectMultiple(attrs={"class": "select select-multi", "size": 8}),
+        widget=forms.SelectMultiple(attrs={"class": "select select-multi", "size": 6}),
         help_text="Select up to three categories.",
     )
     tags = forms.CharField(

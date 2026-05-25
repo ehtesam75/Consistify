@@ -9,12 +9,10 @@ from django.utils import timezone
 DEFAULT_CATEGORIES = [
     ("health", "Health"),
     ("study", "Study"),
-    ("work", "Work"),
-    ("personal", "Personal"),
     ("organize", "Organize"),
     ("good-deeds", "Good deeds"),
     ("self-development", "Self development"),
-    ("for-her-sake", "For her sake"),
+    ("spiritual", "Spiritual"),
 ]
 
 

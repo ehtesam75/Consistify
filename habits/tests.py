@@ -75,7 +75,7 @@ class ConsistencyScoreTests(TestCase):
             priority=priority,
         )
         if categories is None:
-            categories = [self.categories["personal"]]
+            categories = [self.categories["spiritual"]]
         habit.categories.set(categories)
         return habit
 
@@ -259,14 +259,18 @@ class ConsistencyScoreTests(TestCase):
         start = date(2026, 1, 1)
         health = self.make_habit("Lift", start, categories=[self.categories["health"]])
         study = self.make_habit("Read", start, categories=[self.categories["study"]])
-        work = self.make_habit("Ship", start, categories=[self.categories["work"]])
+        spiritual = self.make_habit(
+            "Reflect",
+            start,
+            categories=[self.categories["spiritual"]],
+        )
 
         for offset in range(2):
             self.log_completion(health, start + timedelta(days=offset), 100)
             self.log_completion(study, start + timedelta(days=offset), 50)
 
         analytics = build_category_analytics(
-            [health, study, work],
+            [health, study, spiritual],
             start,
             start + timedelta(days=1),
         )
@@ -275,9 +279,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(len(analytics["summaries"]), len(DEFAULT_CATEGORIES))
         self.assertEqual(summaries["health"]["completion_rate"], 100.0)
         self.assertEqual(summaries["study"]["completion_rate"], 50.0)
-        self.assertEqual(summaries["work"]["completion_rate"], 0.0)
+        self.assertEqual(summaries["spiritual"]["completion_rate"], 0.0)
         self.assertEqual(analytics["best"]["key"], "health")
-        self.assertEqual(analytics["weakest"]["key"], "work")
+        self.assertEqual(analytics["weakest"]["key"], "spiritual")
 
     def test_today_page_has_date_picker_for_requested_date(self):
         self.client.force_login(self.user)

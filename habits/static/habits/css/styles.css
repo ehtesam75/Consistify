@@ -893,16 +893,6 @@ main > section + section {
     color: #2f6eb9;
 }
 
-.badge.category.work {
-    background: rgba(214, 120, 57, 0.2);
-    color: #b7662e;
-}
-
-.badge.category.personal {
-    background: rgba(140, 120, 214, 0.2);
-    color: #6d5bc0;
-}
-
 .badge.category.organize {
     background: rgba(83, 160, 118, 0.2);
     color: #2f7f5c;
@@ -918,9 +908,9 @@ main > section + section {
     color: #a36a12;
 }
 
-.badge.category.for-her-sake {
-    background: rgba(92, 155, 217, 0.18);
-    color: #2f6fae;
+.badge.category.spiritual {
+    background: rgba(84, 149, 170, 0.18);
+    color: #2f6a79;
 }
 
 .badge.priority.high {
@@ -950,18 +940,6 @@ main > section + section {
     color: #c8e2ff;
 }
 
-:root[data-theme="dark"] .badge.category.work {
-    background: rgba(224, 146, 92, 0.26);
-    border: 1px solid rgba(224, 146, 92, 0.44);
-    color: #ffd8bd;
-}
-
-:root[data-theme="dark"] .badge.category.personal {
-    background: rgba(165, 142, 230, 0.26);
-    border: 1px solid rgba(165, 142, 230, 0.45);
-    color: #e4d8ff;
-}
-
 :root[data-theme="dark"] .badge.category.organize {
     background: rgba(98, 183, 140, 0.26);
     border: 1px solid rgba(98, 183, 140, 0.45);
@@ -980,10 +958,10 @@ main > section + section {
     color: #ffe8ba;
 }
 
-:root[data-theme="dark"] .badge.category.for-her-sake {
-    background: rgba(116, 174, 230, 0.26);
-    border: 1px solid rgba(116, 174, 230, 0.45);
-    color: #cfe5ff;
+:root[data-theme="dark"] .badge.category.spiritual {
+    background: rgba(110, 186, 201, 0.26);
+    border: 1px solid rgba(110, 186, 201, 0.45);
+    color: #d2f2f7;
 }
 
 :root[data-theme="dark"] .badge.priority.high {
@@ -1769,6 +1747,10 @@ html {
     font-size: 0.85rem;
     color: var(--ink-soft);
     margin-top: 0.2rem;
+}
+
+.help.help-tight {
+    margin: 0.2rem 0 0;
 }
 
 .table {
@@ -3214,6 +3196,29 @@ body.auth-page main {
     .mobile-all-habits-page .hero {
         gap: 0.85rem;
         align-items: flex-start;
+    }
+
+    .mobile-all-habits-page .hero > div:first-child {
+        width: 100%;
+    }
+
+    .mobile-all-habits-page .hero-title-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.6rem;
+        width: 100%;
+    }
+
+    .mobile-all-habits-page .hero-title-row h1 {
+        margin: 0;
+        min-width: 0;
+    }
+
+    .mobile-all-habits-page .mobile-create-inline {
+        display: inline-flex;
+        white-space: nowrap;
+        justify-self: end;
     }
 
     .mobile-all-habits-page .hero h1 {

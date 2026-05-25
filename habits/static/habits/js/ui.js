@@ -88,27 +88,14 @@ window.ConsistifyUI = (() => {
         }
 
         let draggingItem = null;
+        let touchCandidate = null;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchDragging = false;
+        let suppressClick = false;
+        let touchHoldTimer = null;
 
-        list.addEventListener("dragstart", (event) => {
-            if (event.target.closest("[data-no-drag]")) {
-                event.preventDefault();
-                return;
-            }
-            const item = event.target.closest(".reorder-item");
-            if (!item) {
-                return;
-            }
-            draggingItem = item;
-            item.classList.add("dragging");
-        });
-
-        list.addEventListener("dragend", async () => {
-            if (!draggingItem) {
-                return;
-            }
-            draggingItem.classList.remove("dragging");
-            draggingItem = null;
-
+        const persistOrder = async () => {
             const orderedIds = [...list.querySelectorAll(".reorder-item")].map((item) =>
                 item.dataset.habitId
             );
@@ -128,20 +115,145 @@ window.ConsistifyUI = (() => {
                 // Keep the UI responsive even if persistence fails.
                 console.error("Failed to save habit order", error);
             }
-        });
+        };
 
-        list.addEventListener("dragover", (event) => {
-            event.preventDefault();
+        const startDragging = (item) => {
+            draggingItem = item;
+            draggingItem.classList.add("dragging");
+        };
+
+        const clearTouchHold = () => {
+            if (touchHoldTimer) {
+                window.clearTimeout(touchHoldTimer);
+                touchHoldTimer = null;
+            }
+        };
+
+        const finishDragging = () => {
             if (!draggingItem) {
                 return;
             }
-            const afterElement = getDragAfterElement(list, event.clientY);
+            draggingItem.classList.remove("dragging");
+            draggingItem = null;
+            touchDragging = false;
+            void persistOrder();
+        };
+
+        const moveDragging = (clientY) => {
+            if (!draggingItem) {
+                return;
+            }
+            const afterElement = getDragAfterElement(list, clientY);
             if (afterElement == null) {
                 list.appendChild(draggingItem);
             } else {
                 list.insertBefore(draggingItem, afterElement);
             }
+        };
+
+        list.addEventListener("dragstart", (event) => {
+            if (event.target.closest("[data-no-drag]")) {
+                event.preventDefault();
+                return;
+            }
+            const item = event.target.closest(".reorder-item");
+            if (!item || draggingItem) {
+                return;
+            }
+            startDragging(item);
         });
+
+        list.addEventListener("dragend", () => {
+            if (!draggingItem) {
+                return;
+            }
+            finishDragging();
+        });
+
+        list.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            moveDragging(event.clientY);
+        });
+
+        list.addEventListener(
+            "touchstart",
+            (event) => {
+                if (event.target.closest("[data-no-drag]")) {
+                    return;
+                }
+                const item = event.target.closest(".reorder-item");
+                if (!item || event.touches.length !== 1) {
+                    return;
+                }
+                touchCandidate = item;
+                touchStartX = event.touches[0].clientX;
+                touchStartY = event.touches[0].clientY;
+                clearTouchHold();
+                touchHoldTimer = window.setTimeout(() => {
+                    if (!touchCandidate) {
+                        touchHoldTimer = null;
+                        return;
+                    }
+                    startDragging(touchCandidate);
+                    touchDragging = true;
+                    touchCandidate = null;
+                    touchHoldTimer = null;
+                }, 180);
+            },
+            { passive: true }
+        );
+
+        list.addEventListener(
+            "touchmove",
+            (event) => {
+                if ((!touchCandidate && !draggingItem) || event.touches.length !== 1) {
+                    return;
+                }
+                const touch = event.touches[0];
+                if (draggingItem) {
+                    event.preventDefault();
+                    moveDragging(touch.clientY);
+                    return;
+                }
+                const deltaX = Math.abs(touch.clientX - touchStartX);
+                const deltaY = Math.abs(touch.clientY - touchStartY);
+                if (Math.max(deltaX, deltaY) > 6) {
+                    clearTouchHold();
+                    touchCandidate = null;
+                }
+            },
+            { passive: false }
+        );
+
+        const endTouchDrag = () => {
+            if (touchDragging) {
+                suppressClick = true;
+                window.setTimeout(() => {
+                    suppressClick = false;
+                }, 400);
+            }
+            clearTouchHold();
+            touchCandidate = null;
+            if (draggingItem) {
+                finishDragging();
+            }
+        };
+
+        list.addEventListener("touchend", endTouchDrag);
+        list.addEventListener("touchcancel", endTouchDrag);
+
+        list.addEventListener(
+            "click",
+            (event) => {
+                if (!suppressClick) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                suppressClick = false;
+            },
+            true
+        );
     }
 
     function parseNumber(value, fallback = 0) {
