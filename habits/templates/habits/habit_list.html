@@ -14,12 +14,25 @@
     </div>
     <div class="hero-actions">
         <a class="btn primary" href="{% url 'habits:habit_create' %}">Create habit</a>
-        <form class="inline-action-form" method="post" action="{% url 'habits:pause_all_habits' %}">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <button class="btn ghost" type="submit">Pause all habits</button>
-        </form>
-        <a class="btn ghost" href="{% url 'habits:dashboard' %}">View dashboard</a>
+        {% if all_paused %}
+            <form class="inline-action-form" method="post" action="{% url 'habits:resume_all_habits' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn ghost" type="submit">Resume All Habits</button>
+            </form>
+        {% elif all_pause_scheduled %}
+            <form class="inline-action-form" method="post" action="{% url 'habits:resume_all_habits' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn ghost" type="submit">Cancel All Pause</button>
+            </form>
+        {% else %}
+            <form class="inline-action-form" method="post" action="{% url 'habits:pause_all_habits' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn ghost" type="submit">Pause all habits</button>
+            </form>
+        {% endif %}
     </div>
 </section>
 

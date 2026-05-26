@@ -2060,6 +2060,12 @@ html {
     background: rgba(209, 72, 72, 0.1);
 }
 
+:root[data-theme="dark"] .tag.muted {
+    color: #ffd0d0;
+    background: rgba(217, 96, 96, 0.26);
+    border: 1px solid rgba(217, 96, 96, 0.44);
+}
+
 :root[data-theme="dark"] .positive {
     color: #b9f0d4;
 }

@@ -11,11 +11,25 @@
             <a class="btn primary small mobile-create-inline" href="{% url 'habits:habit_create' %}">Create habit</a>
         </div>
         <p class="subtitle">{{ all_count }} total · drag to reorder</p>
-        <form class="inline-action-form mobile-all-pause-form" method="post" action="{% url 'habits:pause_all_habits' %}">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <button class="btn ghost small" type="submit">Pause all habits</button>
-        </form>
+        {% if all_paused %}
+            <form class="inline-action-form mobile-all-pause-form" method="post" action="{% url 'habits:resume_all_habits' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn ghost small" type="submit">Resume All Habits</button>
+            </form>
+        {% elif all_pause_scheduled %}
+            <form class="inline-action-form mobile-all-pause-form" method="post" action="{% url 'habits:resume_all_habits' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn ghost small" type="submit">Cancel All Pause</button>
+            </form>
+        {% else %}
+            <form class="inline-action-form mobile-all-pause-form" method="post" action="{% url 'habits:pause_all_habits' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn ghost small" type="submit">Pause all habits</button>
+            </form>
+        {% endif %}
     </div>
 </section>
 

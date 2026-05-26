@@ -137,6 +137,20 @@ def _build_today_habit_context(request):
         else scheduled_habits
     )
 
+    tomorrow = today + timedelta(days=1)
+    if habits:
+        all_paused = True
+        all_pause_scheduled = True
+        for habit in habits:
+            active_pause = habit.active_pause()
+            if not habit.is_paused_on(today):
+                all_paused = False
+            if not (active_pause and active_pause.start_date == tomorrow):
+                all_pause_scheduled = False
+    else:
+        all_paused = False
+        all_pause_scheduled = False
+
     return {
         "target_date": target_date,
         "today": today,
@@ -149,6 +163,8 @@ def _build_today_habit_context(request):
         "visible_scheduled_count": len(visible_scheduled_habits),
         "habits": habits,
         "all_count": len(active_habits),
+        "all_paused": all_paused,
+        "all_pause_scheduled": all_pause_scheduled,
     }
 
 
@@ -492,6 +508,47 @@ def pause_all_habits(request):
         messages.info(request, "All habits are already paused or scheduled to pause.")
     else:
         messages.info(request, "No habits to pause yet.")
+
+    return redirect(_safe_next_url(request) or reverse("habits:today"))
+
+
+@login_required
+@require_POST
+def resume_all_habits(request):
+    habits = list(
+        Habit.objects.filter(user=request.user)
+        .prefetch_related("pauses")
+        .order_by("sort_order", "name")
+    )
+    today = timezone.localdate()
+
+    if not habits:
+        messages.info(request, "No habits to resume yet.")
+        return redirect(_safe_next_url(request) or reverse("habits:today"))
+
+    tomorrow = today + timedelta(days=1)
+    all_paused = True
+    all_pause_scheduled = True
+    for habit in habits:
+        active_pause = habit.active_pause()
+        if not habit.is_paused_on(today):
+            all_paused = False
+        if not (active_pause and active_pause.start_date == tomorrow):
+            all_pause_scheduled = False
+
+    updated_count = HabitPause.objects.filter(
+        habit__in=habits,
+        end_date__isnull=True,
+    ).update(end_date=today, updated_at=timezone.now())
+
+    if all_paused:
+        messages.success(request, "All habits resumed.")
+    elif all_pause_scheduled:
+        messages.success(request, "All scheduled pauses canceled.")
+    elif updated_count:
+        messages.success(request, "Habit pauses cleared.")
+    else:
+        messages.info(request, "No habit pauses to update.")
 
     return redirect(_safe_next_url(request) or reverse("habits:today"))
 
