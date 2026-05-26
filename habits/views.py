@@ -266,7 +266,10 @@ def dashboard(request):
         for habit in habits:
             if not habit.is_scheduled_on(current_day):
                 continue
-            daily_values.append(completion_map.get((habit.id, current_day), 0.0))
+            completion_key = (habit.id, current_day)
+            if current_day == today and completion_key not in completion_map:
+                continue
+            daily_values.append(completion_map.get(completion_key, 0.0))
         rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else None
         chart_labels.append(current_day.strftime("%b %d"))
         chart_rates.append(rate)
@@ -374,7 +377,13 @@ def habit_detail(request, habit_id):
     next_due = get_next_scheduled_date(habit, today)
 
     chart_labels = json.dumps([date.strftime("%b %d") for date in chart_dates])
-    chart_percentages = json.dumps([completion_map.get(date, 0) for date in chart_dates])
+    chart_values = []
+    for scheduled_date in chart_dates:
+        if scheduled_date == today and scheduled_date not in completion_map:
+            chart_values.append(None)
+        else:
+            chart_values.append(completion_map.get(scheduled_date, 0))
+    chart_percentages = json.dumps(chart_values)
 
     context = {
         "habit": habit,
@@ -801,7 +810,11 @@ def _build_compare_chart_payload(selected_habits, today):
                 if day < habit.start_date:
                     points.append(None)
                     continue
-                if habit.is_scheduled_on(day):
+                is_scheduled = habit.is_scheduled_on(day)
+                if day == today and is_scheduled and day not in completion_map:
+                    points.append(None)
+                    continue
+                if is_scheduled:
                     running_total += completion_map.get(day, 0.0)
                     scheduled_count += 1
                 average_value = round(running_total / scheduled_count, 1) if scheduled_count else None
@@ -942,7 +955,10 @@ def _build_profile_context(profile_user, current_user):
         for habit in metrics["habits"]:
             if not habit.is_scheduled_on(current_day):
                 continue
-            daily_values.append(completion_map.get((habit.id, current_day), 0.0))
+            completion_key = (habit.id, current_day)
+            if current_day == today and completion_key not in completion_map:
+                continue
+            daily_values.append(completion_map.get(completion_key, 0.0))
         rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else None
         daily_labels.append(current_day.strftime("%b %d"))
         daily_rates.append(rate)
