@@ -342,12 +342,16 @@ class ConsistencyScoreTests(TestCase):
         today_response = self.client.get(reverse("habits:today"))
         self.assertEqual(today_response.status_code, 200)
         self.assertContains(today_response, "All Habits")
+        self.assertContains(today_response, "Pause all habits")
+        self.assertContains(today_response, reverse("habits:pause_all_habits"))
         self.assertNotContains(today_response, "Back to today")
 
         mobile_response = self.client.get(reverse("habits:mobile_all_habits"))
         self.assertEqual(mobile_response.status_code, 200)
         self.assertContains(mobile_response, "Mobile menu")
         self.assertContains(mobile_response, "Mobile list habit")
+        self.assertContains(mobile_response, "Pause all habits")
+        self.assertContains(mobile_response, reverse("habits:pause_all_habits"))
         self.assertContains(mobile_response, "habitSortList")
         self.assertContains(mobile_response, 'enableHabitDragSort("habitSortList")')
         self.assertNotContains(mobile_response, "Back to today")
@@ -459,6 +463,46 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(pause.start_date, today + timedelta(days=1))
         self.assertFalse(habit.is_paused_on(today))
         self.assertTrue(habit.is_paused_on(today + timedelta(days=1)))
+
+    def test_pause_all_habits_starts_tomorrow_for_user_habits(self):
+        today = date(2026, 2, 2)
+        first = self.make_habit("Pause all first", today - timedelta(days=1))
+        second = self.make_habit("Pause all second", today - timedelta(days=1))
+        already_paused = self.make_habit("Already paused", today - timedelta(days=1))
+        HabitPause.objects.create(habit=already_paused, start_date=today)
+        other_user = get_user_model().objects.create_user(
+            username="other-pause-user",
+            password="not-used",
+        )
+        other_habit = Habit.objects.create(
+            user=other_user,
+            name="Other user's habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=1),
+        )
+
+        self.client.force_login(self.user)
+        with patch("habits.views.timezone.localdate", return_value=today):
+            response = self.client.post(
+                reverse("habits:pause_all_habits"),
+                {"next": reverse("habits:today")},
+            )
+
+        self.assertRedirects(
+            response,
+            reverse("habits:today"),
+            fetch_redirect_response=False,
+        )
+        for habit in (first, second):
+            pause = HabitPause.objects.get(habit=habit, end_date__isnull=True)
+            self.assertEqual(pause.start_date, today + timedelta(days=1))
+            self.assertFalse(habit.is_paused_on(today))
+            self.assertTrue(habit.is_paused_on(today + timedelta(days=1)))
+
+        existing_pause = HabitPause.objects.get(habit=already_paused)
+        self.assertEqual(existing_pause.start_date, today)
+        self.assertFalse(HabitPause.objects.filter(habit=other_habit).exists())
 
     def test_resume_makes_today_schedulable(self):
         today = date(2026, 2, 2)

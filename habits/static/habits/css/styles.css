@@ -531,6 +531,14 @@ main > section + section {
     display: none;
 }
 
+.inline-action-form {
+    margin: 0;
+}
+
+.mobile-all-pause-form {
+    display: none;
+}
+
 .btn {
     display: inline-flex;
     align-items: center;
@@ -3219,6 +3227,16 @@ body.auth-page main {
         display: inline-flex;
         white-space: nowrap;
         justify-self: end;
+    }
+
+    .mobile-all-habits-page .mobile-all-pause-form {
+        display: flex;
+        margin-top: 0.75rem;
+        width: 100%;
+    }
+
+    .mobile-all-habits-page .mobile-all-pause-form .btn {
+        width: 100%;
     }
 
     .mobile-all-habits-page .hero h1 {

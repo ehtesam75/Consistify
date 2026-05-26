@@ -460,17 +460,40 @@ def habit_delete(request, habit_id):
 @require_POST
 def pause_habit(request, habit_id):
     habit = get_object_or_404(Habit, id=habit_id, user=request.user)
-    today = timezone.localdate()
-    start_date = today + timedelta(days=1)
-    try:
-        with transaction.atomic():
-            HabitPause.objects.create(habit=habit, start_date=start_date)
-    except IntegrityError:
-        messages.info(request, "This habit is already paused or scheduled to pause.")
-    else:
+    start_date = timezone.localdate() + timedelta(days=1)
+    if _schedule_habit_pause(habit, start_date):
         messages.success(request, f'"{habit.name}" paused starting tomorrow.')
+    else:
+        messages.info(request, "This habit is already paused or scheduled to pause.")
 
     return redirect(_safe_next_url(request) or reverse("habits:habit_detail", args=[habit.id]))
+
+
+@login_required
+@require_POST
+def pause_all_habits(request):
+    habits = list(
+        Habit.objects.filter(user=request.user)
+        .prefetch_related("pauses")
+        .order_by("sort_order", "name")
+    )
+    start_date = timezone.localdate() + timedelta(days=1)
+    paused_count = sum(
+        1 for habit in habits if _schedule_habit_pause(habit, start_date)
+    )
+
+    if paused_count:
+        habit_label = "habit" if paused_count == 1 else "habits"
+        messages.success(
+            request,
+            f"{paused_count} {habit_label} paused starting tomorrow.",
+        )
+    elif habits:
+        messages.info(request, "All habits are already paused or scheduled to pause.")
+    else:
+        messages.info(request, "No habits to pause yet.")
+
+    return redirect(_safe_next_url(request) or reverse("habits:today"))
 
 
 @login_required
@@ -486,6 +509,18 @@ def resume_habit(request, habit_id):
         messages.success(request, f'"{habit.name}" resumed.')
 
     return redirect(_safe_next_url(request) or reverse("habits:habit_detail", args=[habit.id]))
+
+
+def _schedule_habit_pause(habit, start_date):
+    if habit.active_pause():
+        return False
+
+    try:
+        with transaction.atomic():
+            HabitPause.objects.create(habit=habit, start_date=start_date)
+    except IntegrityError:
+        return False
+    return True
 
 
 @login_required

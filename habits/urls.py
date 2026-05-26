@@ -32,6 +32,7 @@ urlpatterns = [
     path("habits/<int:habit_id>/", views.habit_detail, name="habit_detail"),
     path("habits/<int:habit_id>/edit/", views.habit_edit, name="habit_edit"),
     path("habits/<int:habit_id>/pause/", views.pause_habit, name="pause_habit"),
+    path("habits/pause-all/", views.pause_all_habits, name="pause_all_habits"),
     path("habits/<int:habit_id>/resume/", views.resume_habit, name="resume_habit"),
     path("habits/<int:habit_id>/delete/", views.habit_delete, name="habit_delete"),
     path("habits/<int:habit_id>/toggle/", views.update_progress, name="toggle_completion"),
