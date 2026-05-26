@@ -3235,14 +3235,22 @@ body.auth-page main {
         justify-self: end;
     }
 
-    .mobile-all-habits-page .mobile-all-pause-form {
+    .mobile-all-habits-page .hero-subtitle-row {
         display: flex;
-        margin-top: 0.75rem;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
         width: 100%;
     }
 
+    .mobile-all-habits-page .mobile-all-pause-form {
+        display: flex;
+        margin-top: 0;
+        width: auto;
+    }
+
     .mobile-all-habits-page .mobile-all-pause-form .btn {
-        width: 100%;
+        width: auto;
     }
 
     .mobile-all-habits-page .hero h1 {
