@@ -6,7 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Consistify</title>
     <link rel="icon" type="image/svg+xml" href="{% static 'habits/img/favicon.svg' %}">
+    <link rel="manifest" href="{% url 'manifest' %}">
+    <link rel="apple-touch-icon" href="{% static 'habits/img/icons/icon-192.png' %}">
     <meta name="theme-color" content="#0f766e">
+    <meta name="background-color" content="#f2ede3">
+    <meta name="application-name" content="Consistify">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Consistify">
     <script>
         (() => {
             const key = "consistify-theme";
@@ -274,6 +282,7 @@
 
     <script src="{% static 'habits/js/charts.js' %}"></script>
     <script src="{% static 'habits/js/ui.js' %}"></script>
+    <script src="{% static 'habits/js/pwa-register.js' %}" defer></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

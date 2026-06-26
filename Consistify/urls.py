@@ -17,7 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from habits.pwa_views import manifest, service_worker
+
 urlpatterns = [
+    path('manifest.json', manifest, name='manifest'),
+    path('service-worker.js', service_worker, name='service_worker'),
     path('admin/', admin.site.urls),
     path('', include('habits.urls')),
 ]
