@@ -9,9 +9,8 @@ const PRECACHE_URLS = [
   "{% static 'habits/js/charts.js' %}",
   "{% static 'habits/js/pwa-register.js' %}",
   "{% static 'habits/img/favicon.svg' %}",
-  "{% static 'habits/img/icons/icon-192.png' %}",
-  "{% static 'habits/img/icons/icon-512.png' %}",
-  "{% static 'habits/img/icons/icon-512-maskable.png' %}",
+  "{% static 'habits/img/icons/Consistify 192 x 192.png' %}",
+  "{% static 'habits/img/icons/Consistify 512 x 512.png' %}",
 ];
 
 self.addEventListener("install", (event) => {
