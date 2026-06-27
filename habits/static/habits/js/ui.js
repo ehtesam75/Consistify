@@ -2,6 +2,10 @@ window.ConsistifyUI = (() => {
     const THEME_KEY = "consistify-theme";
     const THEME_DARK = "dark";
     const THEME_LIGHT = "light";
+    const THEME_COLORS = {
+        light: "#F5F0E7",
+        dark: "#111827",
+    };
 
     function readThemePreference() {
         try {
@@ -19,8 +23,16 @@ window.ConsistifyUI = (() => {
         }
     }
 
+    function updateThemeColorMeta(theme) {
+        const meta = document.getElementById("theme-color-meta");
+        if (meta) {
+            meta.setAttribute("content", theme === THEME_DARK ? THEME_COLORS.dark : THEME_COLORS.light);
+        }
+    }
+
     function applyTheme(theme) {
         document.documentElement.setAttribute("data-theme", theme);
+        updateThemeColorMeta(theme);
         const toggle = document.getElementById("themeToggle");
         if (toggle) {
             const label =

@@ -8,8 +8,8 @@
     <link rel="icon" type="image/svg+xml" href="{% static 'habits/img/favicon.svg' %}">
     <link rel="manifest" href="{% url 'manifest' %}">
     <link rel="apple-touch-icon" href="{% static 'habits/img/icons/Consistify 192 x 192.png' %}">
-    <meta name="theme-color" content="#111827">
-    <meta name="background-color" content="#111827">
+    <meta name="theme-color" id="theme-color-meta" content="#F5F0E7">
+    <meta name="background-color" content="#F5F0E7">
     <meta name="application-name" content="Consistify">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,6 +20,10 @@
             const key = "consistify-theme";
             const dark = "dark";
             const light = "light";
+            const themeColors = {
+                light: "#F5F0E7",
+                dark: "#111827",
+            };
             let theme = light;
 
             try {
@@ -32,6 +36,11 @@
             }
 
             document.documentElement.setAttribute("data-theme", theme);
+
+            const themeColorMeta = document.getElementById("theme-color-meta");
+            if (themeColorMeta) {
+                themeColorMeta.setAttribute("content", themeColors[theme]);
+            }
         })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">

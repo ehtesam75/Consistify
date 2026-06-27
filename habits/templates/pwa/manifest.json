@@ -5,9 +5,9 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "any",
-  "theme_color": "#111827",
-  "background_color": "#111827",
+  "orientation": "portrait",
+  "theme_color": "#F5F0E7",
+  "background_color": "#F5F0E7",
   "icons": [
     {
       "src": "{% static 'habits/img/icons/Consistify 192 x 192.png' %}",
