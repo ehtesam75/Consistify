@@ -637,6 +637,24 @@ def update_progress(request, habit_id):
     completion.raw_value = raw_value
     completion.save(update_fields=["completion_percentage", "raw_value"])
 
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        scheduled_habits = Habit.objects.filter(user=request.user, archived=False)
+        scheduled_count = 0
+        completed_count_total = 0
+        for h in scheduled_habits:
+            if h.is_scheduled_on(target_date):
+                scheduled_count += 1
+                comp = HabitCompletion.objects.filter(habit=h, date=target_date).first()
+                if comp and comp.completion_percentage >= 100:
+                    completed_count_total += 1
+        return JsonResponse({
+            "ok": True,
+            "completion_percentage": float(completion_percentage),
+            "raw_value": float(raw_value) if raw_value is not None else None,
+            "completed_count": completed_count_total,
+            "scheduled_count": scheduled_count,
+        })
+
     next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
     return redirect(next_url or reverse("habits:today"))
 

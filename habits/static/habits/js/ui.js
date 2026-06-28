@@ -309,22 +309,41 @@ window.ConsistifyUI = (() => {
             const caption = form.querySelector("[data-progress-caption]");
             const usesBlurAutosave =
                 habitType === "partial" || habitType === "quantitative";
-            let allowAutoSubmit = false;
 
             if (usesBlurAutosave) {
                 form.addEventListener("submit", (event) => {
-                    if (!allowAutoSubmit) {
-                        event.preventDefault();
-                    }
+                    event.preventDefault();
                 });
             }
 
-            const submitProgress = () => {
-                allowAutoSubmit = true;
-                submitForm(form);
-                window.setTimeout(() => {
-                    allowAutoSubmit = false;
-                }, 0);
+            const updateSummaryCounter = (data) => {
+                if (data.completed_count == null || data.scheduled_count == null) {
+                    return;
+                }
+                const summaries = document.querySelectorAll(".scheduled-summary-desktop");
+                summaries.forEach((el) => {
+                    el.textContent = data.completed_count + "/" + data.scheduled_count + " completed";
+                });
+            };
+
+            const fetchSubmit = async () => {
+                const formData = new FormData(form);
+                try {
+                    const response = await fetch(form.action, {
+                        method: "POST",
+                        headers: {
+                            "X-CSRFToken": getCsrfToken(),
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                        body: formData,
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        updateSummaryCounter(data);
+                    }
+                } catch (error) {
+                    console.error("Failed to save habit progress", error);
+                }
             };
 
             let pendingSubmitId = null;
@@ -334,7 +353,7 @@ window.ConsistifyUI = (() => {
                 }
                 pendingSubmitId = window.setTimeout(() => {
                     pendingSubmitId = null;
-                    submitProgress();
+                    fetchSubmit();
                 }, 400);
             };
 
@@ -545,11 +564,14 @@ window.ConsistifyUI = (() => {
             }
 
             if (habitType === "binary") {
+                form.addEventListener("submit", (event) => {
+                    event.preventDefault();
+                });
                 const checkbox = form.querySelector("[data-progress-checkbox]");
                 const update = () => {
                     const percent = checkbox && checkbox.checked ? 100 : 0;
                     updateVisual(percent, percent);
-                    submitForm(form);
+                    fetchSubmit();
                 };
                 if (checkbox) {
                     checkbox.addEventListener("change", update);
