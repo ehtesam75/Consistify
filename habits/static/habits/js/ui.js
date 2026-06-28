@@ -3,7 +3,7 @@ window.ConsistifyUI = (() => {
     const THEME_DARK = "dark";
     const THEME_LIGHT = "light";
     const THEME_COLORS = {
-        light: "#ffe6ba",
+        light: "#c29b57",
         dark: "#111827",
     };
 
