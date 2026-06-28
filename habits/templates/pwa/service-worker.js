@@ -1,5 +1,5 @@
 {% load static %}
-const CACHE_NAME = "consistify-static-v3";
+const CACHE_NAME = "consistify-static-v4";
 const OFFLINE_URL = "{% url 'habits:index' %}";
 
 const PRECACHE_URLS = [
