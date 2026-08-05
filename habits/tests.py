@@ -452,10 +452,10 @@ class ConsistencyScoreTests(TestCase):
 
     def test_today_page_completion_rate_weights_priority_and_partials(self):
         today = date(2026, 5, 24)
-        # Weights: Low=1, Medium=2, High=3
+        # Weights mirror the Consistency score: Low=0.8, Medium=1.0, High=1.3
         # Completion: Low@100%, Medium@50%, High@0%
-        # weighted_total = 1*100 + 2*50 + 3*0 = 200; weight_sum = 6
-        # rate = round(200 / (6 * 100) * 100) = round(33.333) = 33
+        # weighted_total = 0.8*100 + 1.0*50 + 1.3*0 = 130; weight_sum = 3.1
+        # rate = round(130 / (3.1 * 100) * 100) = round(41.935) = 42
         low = Habit.objects.create(
             user=self.user,
             name="Low habit",
@@ -499,8 +499,8 @@ class ConsistencyScoreTests(TestCase):
             {"date": today.isoformat()},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["completion_rate"], 33)
-        self.assertContains(response, "33% completed")
+        self.assertEqual(response.context["completion_rate"], 42)
+        self.assertContains(response, "42% completed")
 
     def _extract_progress_input(self, response, habit_id, name):
         from django.urls import reverse

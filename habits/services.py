@@ -167,15 +167,15 @@ def _is_completed(percentage_value):
 
 
 PRIORITY_WEIGHTS = {
-    "low": 1,
-    "medium": 2,
-    "high": 3,
+    "low": 0.8,
+    "medium": 1.0,
+    "high": 1.3,
 }
 
 
 def _priority_weight(habit):
     """Difficulty weight derived from a habit's priority level."""
-    return PRIORITY_WEIGHTS.get(getattr(habit, "priority", ""), 1)
+    return PRIORITY_SCORE_WEIGHTS.get(getattr(habit, "priority", ""), 1.0)
 
 
 def weighted_completion_rate(scheduled_habits, completion_lookup=None):
