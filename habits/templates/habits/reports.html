@@ -50,10 +50,10 @@
         {% for item in weekly_reports_desc %}
             <div class="table-row five-cols">
                 <span>{{ item.label }}</span>
-                <span>{{ item.completion_rate }}%</span>
+                <span>{{ item.completion_rate|floatformat:1 }}%</span>
                 <span>{{ item.avg_current_streak }}</span>
-                <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change }}</span>
-                <span>{{ item.consistency_score }}</span>
+                <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change|floatformat:1 }}</span>
+                <span>{{ item.consistency_score|floatformat:1 }}</span>
             </div>
         {% endfor %}
     </div>
@@ -74,10 +74,10 @@
         {% for item in monthly_reports_desc %}
             <div class="table-row five-cols">
                 <span>{{ item.label }}</span>
-                <span>{{ item.completion_rate }}%</span>
+                <span>{{ item.completion_rate|floatformat:1 }}%</span>
                 <span>{{ item.avg_current_streak }}</span>
-                <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change }}</span>
-                <span>{{ item.consistency_score }}</span>
+                <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change|floatformat:1 }}</span>
+                <span>{{ item.consistency_score|floatformat:1 }}</span>
             </div>
         {% endfor %}
     </div>

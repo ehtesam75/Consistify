@@ -32,7 +32,7 @@
     </div>
     <div class="stat-card">
         <span class="stat-label">Overall completion</span>
-        <span class="stat-value">{{ overall_completion }}%</span>
+        <span class="stat-value">{{ overall_completion|floatformat:1 }}%</span>
         <span class="stat-note">Average daily value across {{ total_scheduled }} sessions</span>
     </div>
     <div class="stat-card">
@@ -42,7 +42,7 @@
     </div>
     <div class="stat-card">
         <span class="stat-label">Consistency score</span>
-        <span class="stat-value">{{ consistency_score }}</span>
+        <span class="stat-value">{{ consistency_score|floatformat:1 }}</span>
         <span class="stat-note">Global consistency index</span>
     </div>
 </section>
@@ -81,9 +81,9 @@
         {% for item in monthly_history_reports %}
             <div class="table-row">
                 <span>{{ item.label }}</span>
-                <span>{{ item.completion_rate }}%</span>
-                <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change }}</span>
-                <span>{{ item.consistency_score }}</span>
+                <span>{{ item.completion_rate|floatformat:1 }}%</span>
+                <span>{% if item.streak_change > 0 %}+{% endif %}{{ item.streak_change|floatformat:1 }}</span>
+                <span>{{ item.consistency_score|floatformat:1 }}</span>
             </div>
         {% endfor %}
     </div>

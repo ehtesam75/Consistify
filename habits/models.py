@@ -211,10 +211,6 @@ class HabitCompletion(models.Model):
     def __str__(self):
         return f"{self.habit.name} - {self.date}"
 
-    @property
-    def is_completed(self):
-        return self.completion_percentage == Decimal("100")
-
 
 class HabitPause(models.Model):
     habit = models.ForeignKey(

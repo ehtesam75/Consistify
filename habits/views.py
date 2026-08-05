@@ -33,6 +33,8 @@ from .services import (
     calculate_overall_consistency,
     calculate_streaks,
     completion_stats,
+    compute_today_metrics,
+    compute_user_metrics,
     get_pending_habits_for_date,
     get_completion_maps,
     get_next_scheduled_date,
@@ -94,34 +96,9 @@ def _build_today_habit_context(request):
         .order_by("sort_order", "name")
     )
     active_habits = [habit for habit in habits if not habit.is_paused_on(target_date)]
-    completions = HabitCompletion.objects.filter(habit__in=habits, date=target_date)
-    completion_map = {completion.habit_id: completion for completion in completions}
 
-    scheduled_habits = []
-    for habit in habits:
-        if habit.is_scheduled_on(target_date):
-            completion = completion_map.get(habit.id)
-            completion_percentage = (
-                float(completion.completion_percentage) if completion else 0.0
-            )
-            raw_value = None
-            if completion and completion.raw_value is not None:
-                raw_value = float(completion.raw_value)
-                if habit.habit_type == Habit.HABIT_QUANTITATIVE:
-                    raw_value = int(raw_value)
-            scheduled_habits.append(
-                {
-                    "habit": habit,
-                    "completed": completion_percentage >= 100,
-                    "completion_percentage": completion_percentage,
-                    "raw_value": raw_value,
-                    "tags": habit.get_tags(),
-                }
-            )
-
-    completed_count = sum(
-        1 for item in scheduled_habits if item["completion_percentage"] >= 100
-    )
+    today_metrics = compute_today_metrics(request.user, target_date)
+    scheduled_habits = today_metrics["rows"]
 
     session_hide_completed = request.session.get("today_hide_completed")
     if request.GET.get("hide_completed") is not None:
@@ -152,15 +129,6 @@ def _build_today_habit_context(request):
         all_paused = False
         all_pause_scheduled = False
 
-    completion_lookup = {
-        item["habit"].id: item["completion_percentage"]
-        for item in scheduled_habits
-    }
-    completion_rate = weighted_completion_rate(
-        [item["habit"] for item in scheduled_habits],
-        completion_lookup,
-    )
-
     return {
         "target_date": target_date,
         "today": today,
@@ -168,9 +136,9 @@ def _build_today_habit_context(request):
         "next_date": target_date + timedelta(days=1),
         "can_edit_progress": target_date >= today - timedelta(days=1) and target_date <= today,
         "scheduled_habits": visible_scheduled_habits,
-        "scheduled_count": len(scheduled_habits),
-        "completed_count": completed_count,
-        "completion_rate": completion_rate,
+        "scheduled_count": today_metrics["scheduled_count"],
+        "completed_count": today_metrics["completed_count"],
+        "completion_rate": today_metrics["completion_rate"],
         "hide_completed": hide_completed,
         "visible_scheduled_count": len(visible_scheduled_habits),
         "habits": habits,
@@ -208,31 +176,12 @@ def dashboard(request):
     )
     total_habits = sum(1 for habit in habits if not habit.is_paused)
 
-    habit_cards = []
-    total_scheduled = 0
-    total_completion = 0.0
-    total_completed = 0
-
-    for habit in habits:
-        metrics = habit_performance_metrics(habit, window_start, today)
-        total_scheduled += metrics["scheduled_total"]
-        total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
-        total_completed += metrics["completed_total"]
-        habit_cards.append(
-            {
-                "habit": habit,
-                "scheduled": metrics["scheduled_total"],
-                "completed": metrics["completed_total"],
-                "rate": metrics["completion_rate"],
-                "consistency": metrics["consistency_score"],
-                "completion_quality": metrics["completion_quality"],
-                "full_completion": metrics["full_completion_reliability"],
-                "rhythm_stability": metrics["streak_stability"],
-                "recent_momentum": metrics["recent_momentum"],
-            }
-        )
-
-    overall_rate = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
+    aggregated = compute_user_metrics(habits, window_start, today)
+    habit_cards = aggregated["per_habit"]
+    aggregate = aggregated["aggregate"]
+    total_scheduled = aggregate["total_scheduled"]
+    total_completed = aggregate["total_completed"]
+    overall_rate = aggregate["completion_rate"]
     score_breakdown = build_overall_score_breakdown(
         habits,
         window_start,
@@ -318,8 +267,8 @@ def habit_detail(request, habit_id):
     today = timezone.localdate()
     all_time_start = habit.start_date
     history_dates = list(iter_scheduled_dates(habit, all_time_start, today))
-    recent_history_dates = history_dates[-15:]
-    chart_dates = history_dates[-15:]
+    recent_history_dates = history_dates[-20:]
+    chart_dates = history_dates[-20:]
 
     completion_map, value_map = get_completion_maps(habit, all_time_start, today)
     history = []
@@ -659,33 +608,14 @@ def update_progress(request, habit_id):
     completion.save(update_fields=["completion_percentage", "raw_value"])
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        scheduled_habits = list(
-            Habit.objects.filter(user=request.user, archived=False)
-        )
-        scheduled_count = 0
-        completed_count_total = 0
-        scheduled_habit_objs = []
-        completion_lookup = {}
-        for h in scheduled_habits:
-            if h.is_scheduled_on(target_date):
-                scheduled_count += 1
-                scheduled_habit_objs.append(h)
-                comp = HabitCompletion.objects.filter(habit=h, date=target_date).first()
-                if comp and comp.completion_percentage >= 100:
-                    completed_count_total += 1
-                completion_lookup[h.id] = (
-                    float(comp.completion_percentage) if comp else 0.0
-                )
-        completion_rate = weighted_completion_rate(
-            scheduled_habit_objs, completion_lookup
-        )
+        today_metrics = compute_today_metrics(request.user, target_date)
         return JsonResponse({
             "ok": True,
             "completion_percentage": float(completion_percentage),
             "raw_value": float(raw_value) if raw_value is not None else None,
-            "completed_count": completed_count_total,
-            "scheduled_count": scheduled_count,
-            "completion_rate": completion_rate,
+            "completed_count": today_metrics["completed_count"],
+            "scheduled_count": today_metrics["scheduled_count"],
+            "completion_rate": today_metrics["completion_rate"],
         })
 
     next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
@@ -904,7 +834,7 @@ def _build_score_driver_cards(score_drivers):
             "title": "Biggest score booster",
             "key": "booster",
             "value_key": "impact_points",
-            "value_label": "overall score pts",
+            "value_label": "weighted share",
             "empty": "No scored habits yet.",
         },
         {
@@ -1048,32 +978,19 @@ def _build_user_metrics(user, today, start_date=None):
     elif start_date is None:
         start_date = today
 
+    aggregated = compute_user_metrics(habits, start_date, today)
     total_habits = sum(1 for habit in habits if not habit.is_paused)
-    total_scheduled = 0
-    total_completion = 0.0
-    total_completed = 0
-    best_streak = 0
-
-    for habit in habits:
-        metrics = habit_performance_metrics(habit, start_date, today)
-        total_scheduled += metrics["scheduled_total"]
-        total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
-        total_completed += metrics["completed_total"]
-        if metrics["max_streak"] > best_streak:
-            best_streak = metrics["max_streak"]
-
-    overall_completion = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
-    consistency_score = calculate_overall_consistency(habits, start_date, today)
+    aggregate = aggregated["aggregate"]
 
     return {
         "habits": habits,
         "start_date": start_date,
         "total_habits": total_habits,
-        "overall_completion": overall_completion,
-        "best_streak": best_streak,
-        "consistency_score": consistency_score,
-        "total_scheduled": total_scheduled,
-        "total_completed": total_completed,
+        "overall_completion": aggregate["completion_rate"],
+        "best_streak": aggregated["best_streak"],
+        "consistency_score": aggregated["consistency_score"],
+        "total_scheduled": aggregate["total_scheduled"],
+        "total_completed": aggregate["total_completed"],
     }
 
 

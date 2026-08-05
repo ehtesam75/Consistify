@@ -61,7 +61,7 @@
         <div class="card-header">
             <h2>Scheduled habits</h2>
             <div class="card-header-actions">
-                <span class="tag scheduled-summary-desktop">{{ completion_rate }}% completed</span>
+                <span class="tag scheduled-summary-desktop">{{ completion_rate|floatformat:1 }}% completed</span>
                 {% if hide_completed %}
                     <a class="btn ghost small" href="?date={{ target_date|date:'Y-m-d' }}&hide_completed=0">Show completed</a>
                 {% else %}

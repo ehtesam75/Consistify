@@ -34,9 +34,9 @@
     {% for row in comparison_rows %}
         <div class="stat-card">
             <span class="stat-label">{{ row.habit.name }}</span>
-            <span class="stat-value">{{ row.metrics_90.completion_rate }}%</span>
+            <span class="stat-value">{{ row.metrics_90.completion_rate|floatformat:1 }}%</span>
             <span class="stat-note">Completion (last 90 days)</span>
-            <span class="stat-note">Avg completion: {{ row.avg_daily_30 }}% (30d), {{ row.avg_daily_all }}% (all time)</span>
+            <span class="stat-note">Avg completion: {{ row.avg_daily_30|floatformat:1 }}% (30d), {{ row.avg_daily_all|floatformat:1 }}% (all time)</span>
         </div>
     {% endfor %}
 </section>
@@ -57,10 +57,10 @@
         {% for row in comparison_rows %}
             <div class="table-row five-cols">
                 <span>{{ row.habit.name }}</span>
-                <span>{{ row.metrics_90.completion_rate }}%</span>
+                <span>{{ row.metrics_90.completion_rate|floatformat:1 }}%</span>
                 <span>{{ row.metrics_90.current_streak }}</span>
                 <span>{{ row.metrics_90.max_streak }}</span>
-                <span>{{ row.metrics_90.consistency_score }}</span>
+                <span>{{ row.metrics_90.consistency_score|floatformat:1 }}</span>
             </div>
         {% endfor %}
     </div>

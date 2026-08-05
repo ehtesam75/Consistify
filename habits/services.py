@@ -1,6 +1,6 @@
 from calendar import monthrange
 from datetime import date, timedelta
-from math import sqrt
+from math import isfinite, sqrt
 
 from django.db.models import Q
 from django.utils import timezone
@@ -56,6 +56,26 @@ def should_prompt_daily_recap(previous_login, today=None):
     return timezone.localdate(previous_login) < today
 
 
+def _schedule_interval_days(habit):
+    """Return the spacing (in days) between scheduled sessions, or ``None``
+    when the schedule is daily / days-of-week (which use a 1-day iterator)."""
+    if habit.schedule_type == Habit.SCHEDULE_WEEKLY:
+        return max(1, habit.weekly_interval) * 7
+    if habit.schedule_type == Habit.SCHEDULE_INTERVAL:
+        return max(1, habit.interval_days)
+    return None
+
+
+def _next_aligned_date(habit, from_date, interval):
+    """Return the next scheduled date on or after ``from_date`` for habits with a
+    fixed ``interval`` spacing (weekly / interval)."""
+    delta_days = max(0, (from_date - habit.start_date).days)
+    remainder = delta_days % interval
+    if remainder == 0:
+        return from_date
+    return from_date + timedelta(days=interval - remainder)
+
+
 def iter_scheduled_dates(habit, start_date, end_date):
     if end_date < start_date:
         return []
@@ -73,20 +93,10 @@ def iter_scheduled_dates(habit, start_date, end_date):
             current += timedelta(days=1)
         return
 
-    if habit.schedule_type in (Habit.SCHEDULE_WEEKLY, Habit.SCHEDULE_INTERVAL):
-        if habit.schedule_type == Habit.SCHEDULE_WEEKLY:
-            interval = max(1, habit.weekly_interval) * 7
-        else:
-            interval = max(1, habit.interval_days)
-
-        delta_days = (start_date - habit.start_date).days
-        if delta_days < 0:
-            delta_days = 0
-        remainder = delta_days % interval
-        if remainder != 0:
-            start_date = start_date + timedelta(days=interval - remainder)
-
-        current = start_date
+    interval = _schedule_interval_days(habit)
+    if interval is not None:
+        aligned_start = _next_aligned_date(habit, start_date, interval)
+        current = aligned_start
         while current <= end_date:
             if not _is_paused_on_date(current, pause_ranges):
                 yield current
@@ -166,25 +176,23 @@ def _is_completed(percentage_value):
     return percentage_value >= 100
 
 
-PRIORITY_WEIGHTS = {
-    "low": 0.8,
-    "medium": 1.0,
-    "high": 1.3,
-}
-
-
 def _priority_weight(habit):
     """Difficulty weight derived from a habit's priority level."""
     return PRIORITY_SCORE_WEIGHTS.get(getattr(habit, "priority", ""), 1.0)
 
 
 def weighted_completion_rate(scheduled_habits, completion_lookup=None):
-    """Compute a priority-weighted, partial-aware completion rate (0-100).
+    """Compute a priority-weighted, partial-aware completion rate (0.0-100.0).
 
     Each scheduled habit contributes its per-habit ``completion_percentage``
     (already 0-100 across binary/partial/quantitative types) scaled by the
     habit's priority weight so harder habits count proportionally more.
+
+    Returns a ``float`` rounded to one decimal place so callers can compare
+    it against other rate-style metrics that share the same scale.
     """
+    from math import isfinite
+
     completion_lookup = completion_lookup or {}
     weighted_total = 0.0
     weight_sum = 0.0
@@ -196,10 +204,13 @@ def weighted_completion_rate(scheduled_habits, completion_lookup=None):
             percent = float(percent)
         except (TypeError, ValueError):
             percent = 0.0
+        # NaN / Inf must not poison the aggregate; treat as zero.
+        if not isfinite(percent):
+            percent = 0.0
         weighted_total += weight * max(0.0, min(100.0, percent))
     if weight_sum <= 0:
-        return 0
-    return round((weighted_total / (weight_sum * 100)) * 100)
+        return 0.0
+    return round((weighted_total / (weight_sum * 100)) * 100, 1)
 
 
 def _clamped_percentage(percentage_value):
@@ -275,19 +286,38 @@ def _rhythm_stability(scheduled_dates, completion_map):
     return max(0.0, round(1 - break_ratio, 4))
 
 
-def _recent_momentum(scheduled_dates, completion_map):
-    recent_dates = scheduled_dates[-RECENT_MOMENTUM_WINDOW:]
-    if not recent_dates:
+def _recent_momentum(scheduled_dates, completion_map, end_date=None):
+    """Calendar-based recent momentum over the last RECENT_MOMENTUM_WINDOW days.
+
+    Earlier versions took the last ``RECENT_MOMENTUM_WINDOW`` *scheduled sessions*,
+    which silently underweighted low-frequency habits (e.g. weekly habits only
+    contributed two slots). This implementation buckets by calendar day so daily
+    and weekly habits are weighted on the same absolute window.
+    """
+    if end_date is None:
+        end_date = scheduled_dates[-1] if scheduled_dates else timezone.localdate()
+    if not scheduled_dates:
+        return 0.0
+
+    window_start = end_date - timedelta(days=RECENT_MOMENTUM_WINDOW - 1)
+    completion_by_date = {}
+    for scheduled_date in scheduled_dates:
+        if scheduled_date >= window_start:
+            completion_by_date[scheduled_date] = completion_map.get(scheduled_date, 0)
+
+    if not completion_by_date:
         return 0.0
 
     weighted_completion = 0.0
     total_weight = 0
-    for index, scheduled_date in enumerate(recent_dates, start=1):
-        weight = index
-        weighted_completion += (
-            _clamped_percentage(completion_map.get(scheduled_date, 0)) / 100
-        ) * weight
+    for offset in range(RECENT_MOMENTUM_WINDOW):
+        day = window_start + timedelta(days=offset)
+        weight = offset + 1
         total_weight += weight
+        if day in completion_by_date:
+            weighted_completion += (
+                _clamped_percentage(completion_by_date[day]) / 100
+            ) * weight
 
     if total_weight == 0:
         return 0.0
@@ -710,7 +740,7 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
     completion_quality = (total_completion / scheduled_total) / 100
     full_completion_ratio = completed_total / scheduled_total
     streak_stability = _rhythm_stability(scheduled_dates, completion_map)
-    recent_momentum = _recent_momentum(scheduled_dates, completion_map)
+    recent_momentum = _recent_momentum(scheduled_dates, completion_map, end_date)
     consistency_score = _consistency_score(
         completion_quality=completion_quality,
         full_completion_ratio=full_completion_ratio,
@@ -920,24 +950,11 @@ def get_next_scheduled_date(habit, from_date=None):
     if active_pause and active_pause.start_date <= from_date:
         return None
 
+    interval = _schedule_interval_days(habit)
     if habit.schedule_type == Habit.SCHEDULE_DAILY:
         candidate = from_date
-    elif habit.schedule_type == Habit.SCHEDULE_WEEKLY:
-        interval = max(1, habit.weekly_interval) * 7
-        delta_days = (from_date - habit.start_date).days
-        remainder = delta_days % interval
-        if remainder == 0:
-            candidate = from_date
-        else:
-            candidate = from_date + timedelta(days=interval - remainder)
-    elif habit.schedule_type == Habit.SCHEDULE_INTERVAL:
-        interval = max(1, habit.interval_days)
-        delta_days = (from_date - habit.start_date).days
-        remainder = delta_days % interval
-        if remainder == 0:
-            candidate = from_date
-        else:
-            candidate = from_date + timedelta(days=interval - remainder)
+    elif interval is not None:
+        candidate = _next_aligned_date(habit, from_date, interval)
     elif habit.schedule_type == Habit.SCHEDULE_DAYS:
         days = habit.get_days_of_week_set()
         if not days:
@@ -957,10 +974,8 @@ def get_next_scheduled_date(habit, from_date=None):
     def advance(next_date):
         if habit.schedule_type == Habit.SCHEDULE_DAILY:
             return next_date + timedelta(days=1)
-        if habit.schedule_type == Habit.SCHEDULE_WEEKLY:
-            return next_date + timedelta(days=max(1, habit.weekly_interval) * 7)
-        if habit.schedule_type == Habit.SCHEDULE_INTERVAL:
-            return next_date + timedelta(days=max(1, habit.interval_days))
+        if interval is not None:
+            return next_date + timedelta(days=interval)
         if habit.schedule_type == Habit.SCHEDULE_DAYS:
             days = habit.get_days_of_week_set()
             if not days:
@@ -980,3 +995,166 @@ def get_next_scheduled_date(habit, from_date=None):
             return None
 
     return candidate
+
+
+def compute_user_metrics(habits, start_date, end_date):
+    """Single source of truth for per-user cross-habit aggregation.
+
+    Returns a dict with ``per_habit`` (list of habit cards with the same shape
+    used by the dashboard), ``aggregate`` (overall totals), and
+    ``consistency_score`` (priority- and frequency-weighted).
+    """
+    per_habit = []
+    total_scheduled = 0
+    total_completion = 0.0
+    total_completed = 0
+    weighted_score = 0.0
+    total_weight = 0.0
+    best_streak = 0
+
+    for habit in habits:
+        metrics = habit_performance_metrics(habit, start_date, end_date)
+        per_habit.append(
+            {
+                "habit": habit,
+                "metrics": metrics,
+                "scheduled": metrics["scheduled_total"],
+                "completed": metrics["completed_total"],
+                "rate": metrics["completion_rate"],
+                "consistency": metrics["consistency_score"],
+                "completion_quality": metrics["completion_quality"],
+                "full_completion": metrics["full_completion_reliability"],
+                "rhythm_stability": metrics["streak_stability"],
+                "recent_momentum": metrics["recent_momentum"],
+            }
+        )
+        if metrics["scheduled_total"] == 0:
+            continue
+        total_scheduled += metrics["scheduled_total"]
+        total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
+        total_completed += metrics["completed_total"]
+        if metrics["max_streak"] > best_streak:
+            best_streak = metrics["max_streak"]
+        weight = _habit_consistency_weight(habit, metrics["scheduled_total"])
+        total_weight += weight
+        weighted_score += metrics["consistency_score"] * weight
+
+    overall_rate = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
+    consistency_score = (
+        round(weighted_score / total_weight, 1) if total_weight else 0.0
+    )
+
+    return {
+        "per_habit": per_habit,
+        "aggregate": {
+            "total_scheduled": total_scheduled,
+            "total_completed": total_completed,
+            "completion_rate": overall_rate,
+        },
+        "consistency_score": consistency_score,
+        "best_streak": best_streak,
+    }
+
+
+def compute_today_metrics(user, target_date):
+    """Single source of truth for the today-page summary.
+
+    Returns ``scheduled_count``, ``completed_count``, ``completion_rate``
+    (priority-weighted), and the per-habit rows used by the template.
+    """
+    from .models import HabitCompletion  # local import to avoid cycle
+
+    habits = list(
+        Habit.objects.filter(user=user)
+        .prefetch_related("categories", "pauses")
+        .order_by("sort_order", "name")
+    )
+    completions = HabitCompletion.objects.filter(habit__in=habits, date=target_date)
+    completion_map = {completion.habit_id: completion for completion in completions}
+
+    scheduled_habits = []
+    completion_lookup = {}
+    completed_count = 0
+    for habit in habits:
+        if not habit.is_scheduled_on(target_date):
+            continue
+        completion = completion_map.get(habit.id)
+        completion_percentage = (
+            float(completion.completion_percentage) if completion else 0.0
+        )
+        if completion_percentage >= 100:
+            completed_count += 1
+        scheduled_habits.append(habit)
+        completion_lookup[habit.id] = completion_percentage
+
+    completion_rate = weighted_completion_rate(scheduled_habits, completion_lookup)
+
+    rows = []
+    for habit in scheduled_habits:
+        completion = completion_map.get(habit.id)
+        completion_percentage = completion_lookup.get(habit.id, 0.0)
+        raw_value = None
+        if completion and completion.raw_value is not None:
+            raw_value = float(completion.raw_value)
+            if habit.habit_type == Habit.HABIT_QUANTITATIVE:
+                raw_value = int(raw_value)
+        rows.append(
+            {
+                "habit": habit,
+                "completed": completion_percentage >= 100,
+                "completion_percentage": completion_percentage,
+                "raw_value": raw_value,
+                "tags": habit.get_tags(),
+            }
+        )
+
+    return {
+        "scheduled_count": len(scheduled_habits),
+        "completed_count": completed_count,
+        "completion_rate": completion_rate,
+        "rows": rows,
+    }
+
+
+def daily_average_completion_series(habits, start_date, end_date):
+    """Return a per-day average completion series across the supplied habits.
+
+    Each value is the unweighted mean of ``completion_percentage`` across every
+    habit scheduled on that day. Today's slot is included as ``None`` until the
+    first habit is logged (matching the dashboard / profile / compare charts).
+
+    Returns a list of dicts ``{"date", "label", "value"}`` so callers can pick
+    either the raw date or formatted label and either float or ``None``.
+    """
+    today = timezone.localdate()
+    completions = HabitCompletion.objects.filter(
+        habit__in=habits,
+        date__range=(start_date, end_date),
+    )
+    completion_map = {
+        (completion.habit_id, completion.date): float(completion.completion_percentage or 0)
+        for completion in completions
+    }
+
+    series = []
+    span = (end_date - start_date).days
+    for offset in range(span + 1):
+        current_day = start_date + timedelta(days=offset)
+        daily_values = []
+        for habit in habits:
+            if not habit.is_scheduled_on(current_day):
+                continue
+            completion_key = (habit.id, current_day)
+            if current_day == today and completion_key not in completion_map:
+                # Today's slot has not been logged yet — leave the value blank.
+                continue
+            daily_values.append(completion_map.get(completion_key, 0.0))
+        rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else None
+        series.append(
+            {
+                "date": current_day,
+                "label": current_day.strftime("%b %d"),
+                "value": rate,
+            }
+        )
+    return series

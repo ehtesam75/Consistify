@@ -102,8 +102,10 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["completion_quality"], 90.0)
         self.assertEqual(metrics["full_completion_reliability"], 0.0)
         self.assertEqual(metrics["streak_stability"], 100.0)
-        self.assertEqual(metrics["recent_momentum"], 90.0)
-        self.assertEqual(metrics["consistency_score"], 69.0)
+        # Calendar-based momentum: 4 consecutive 90% days near end of 14-day window
+        # fall at weights 11,12,13,14 → 0.9 * (11+12+13+14) / 105 * 100 ≈ 42.9.
+        self.assertAlmostEqual(metrics["recent_momentum"], 42.9, places=1)
+        self.assertEqual(metrics["consistency_score"], 61.9)
 
     def test_recent_momentum_rewards_improvement(self):
         start = date(2026, 1, 1)
@@ -158,9 +160,19 @@ class ConsistencyScoreTests(TestCase):
             start + timedelta(days=3),
         )
 
+        # Calendar-based momentum credits completion(s) against the trailing
+        # 14-day window (weights 1..14, sum 105) rather than the per-habit
+        # scheduled range. With a single logged session, the weekly habit's
+        # weighted momentum is 11/105, yielding a per-habit score of 86.6.
+        # The daily habit has no logged completions, so its score is 0.
         high_weight = 1.3 * sqrt(1)
         low_weight = 0.8 * sqrt(4)
-        expected_score = round((100 * high_weight) / (high_weight + low_weight), 1)
+        weekly_score = 86.6
+        expected_score = round(
+            (weekly_score * high_weight + 0 * low_weight)
+            / (high_weight + low_weight),
+            1,
+        )
         self.assertEqual(overall_score, expected_score)
 
     def test_unlogged_today_does_not_count_as_missed_until_logged(self):
@@ -175,7 +187,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["scheduled_total"], 1)
         self.assertEqual(metrics["completed_total"], 1)
         self.assertEqual(metrics["current_streak"], 1)
-        self.assertEqual(metrics["consistency_score"], 100.0)
+        # Calendar-based momentum dilutes a single session across the 14-day window
+        # (weight 14 of 105 → ~13.3%); other components remain at 100.
+        self.assertEqual(metrics["consistency_score"], 86.9)
 
         self.log_completion(habit, today, 0)
         with patch("habits.services.timezone.localdate", return_value=today):
@@ -204,13 +218,13 @@ class ConsistencyScoreTests(TestCase):
         components = {item["key"]: item for item in breakdown["components"]}
 
         self.assertTrue(breakdown["has_previous"])
-        self.assertEqual(breakdown["current_score"], 100.0)
-        self.assertEqual(breakdown["previous_score"], 45.0)
-        self.assertEqual(breakdown["score_delta"], 55.0)
+        self.assertEqual(breakdown["current_score"], 92.1)
+        self.assertEqual(breakdown["previous_score"], 41.1)
+        self.assertEqual(breakdown["score_delta"], 51.0)
         self.assertEqual(components["completion_quality"]["points_delta"], 22.5)
         self.assertEqual(components["full_completion"]["points_delta"], 25.0)
         self.assertEqual(components["rhythm_stability"]["points_delta"], 0.0)
-        self.assertEqual(components["recent_momentum"]["points_delta"], 7.5)
+        self.assertEqual(components["recent_momentum"]["points_delta"], 3.5)
 
     def test_habit_score_drivers_identify_booster_drag_and_movement(self):
         start = date(2026, 1, 1)
@@ -251,9 +265,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(drivers["booster"]["habit"], booster)
         self.assertEqual(drivers["drag"]["habit"], drag)
         self.assertEqual(drivers["improved"]["habit"], improved)
-        self.assertEqual(drivers["improved"]["score_delta"], 100.0)
+        self.assertEqual(drivers["improved"]["score_delta"], 92.1)
         self.assertEqual(drivers["declined"]["habit"], declined)
-        self.assertEqual(drivers["declined"]["score_delta"], -100.0)
+        self.assertEqual(drivers["declined"]["score_delta"], -92.1)
 
     def test_category_analytics_marks_best_and_weakest_categories(self):
         start = date(2026, 1, 1)
@@ -446,16 +460,16 @@ class ConsistencyScoreTests(TestCase):
             {"date": today.isoformat()},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["completion_rate"], 50)
+        self.assertEqual(response.context["completion_rate"], 50.0)
         self.assertContains(response, "scheduled-summary-desktop")
-        self.assertContains(response, "50% completed")
+        self.assertContains(response, "50.0% completed")
 
     def test_today_page_completion_rate_weights_priority_and_partials(self):
         today = date(2026, 5, 24)
         # Weights mirror the Consistency score: Low=0.8, Medium=1.0, High=1.3
         # Completion: Low@100%, Medium@50%, High@0%
         # weighted_total = 0.8*100 + 1.0*50 + 1.3*0 = 130; weight_sum = 3.1
-        # rate = round(130 / (3.1 * 100) * 100) = round(41.935) = 42
+        # rate = round(130 / (3.1 * 100) * 100, 1) = 41.9
         low = Habit.objects.create(
             user=self.user,
             name="Low habit",
@@ -499,8 +513,8 @@ class ConsistencyScoreTests(TestCase):
             {"date": today.isoformat()},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["completion_rate"], 42)
-        self.assertContains(response, "42% completed")
+        self.assertEqual(response.context["completion_rate"], 41.9)
+        self.assertContains(response, "41.9% completed")
 
     def _extract_progress_input(self, response, habit_id, name):
         from django.urls import reverse
