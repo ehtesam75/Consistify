@@ -328,6 +328,194 @@ class ConsistencyScoreTests(TestCase):
         self.assertContains(shown_response, "Hide completed")
         self.assertContains(shown_response, "data-progress-form")
 
+    def test_today_page_inputs_enabled_for_today_and_yesterday_only(self):
+        today = date(2026, 5, 24)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Editable habit",
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=5),
+        )
+
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            today_response = self.client.get(
+                reverse("habits:today"),
+                {"date": today.isoformat()},
+            )
+            self.assertEqual(today_response.status_code, 200)
+            self.assertNotIn(
+                "disabled",
+                self._extract_progress_input(today_response, habit.id, "name=\"completion_percentage\""),
+            )
+            self.assertTrue(today_response.context["can_edit_progress"])
+
+            yesterday_response = self.client.get(
+                reverse("habits:today"),
+                {"date": (today - timedelta(days=1)).isoformat()},
+            )
+            self.assertEqual(yesterday_response.status_code, 200)
+            self.assertNotIn(
+                "disabled",
+                self._extract_progress_input(yesterday_response, habit.id, "name=\"completion_percentage\""),
+            )
+            self.assertTrue(yesterday_response.context["can_edit_progress"])
+
+            older_response = self.client.get(
+                reverse("habits:today"),
+                {"date": (today - timedelta(days=3)).isoformat()},
+            )
+            self.assertEqual(older_response.status_code, 200)
+            self.assertIn(
+                "disabled",
+                self._extract_progress_input(older_response, habit.id, "name=\"completion_percentage\""),
+            )
+            self.assertFalse(older_response.context["can_edit_progress"])
+
+    def test_update_progress_rejects_dates_older_than_yesterday(self):
+        today = date(2026, 5, 24)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Old habit",
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=10),
+        )
+
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            # Older than yesterday should be rejected.
+            older = today - timedelta(days=2)
+            rejected = self.client.post(
+                reverse("habits:update_progress", args=[habit.id]),
+                {
+                    "date": older.isoformat(),
+                    "completion_percentage": "75",
+                    "next": reverse("habits:today"),
+                },
+            )
+            self.assertEqual(rejected.status_code, 302)
+            self.assertFalse(
+                HabitCompletion.objects.filter(habit=habit, date=older).exists()
+            )
+
+            # Yesterday should still be allowed.
+            yesterday = today - timedelta(days=1)
+            allowed = self.client.post(
+                reverse("habits:update_progress", args=[habit.id]),
+                {
+                    "date": yesterday.isoformat(),
+                    "completion_percentage": "60",
+                    "next": reverse("habits:today"),
+                },
+            )
+            self.assertEqual(allowed.status_code, 302)
+            self.assertTrue(
+                HabitCompletion.objects.filter(habit=habit, date=yesterday).exists()
+            )
+
+    def test_today_page_renders_completion_rate_in_summary(self):
+        today = date(2026, 5, 24)
+        scheduled_habit = Habit.objects.create(
+            user=self.user,
+            name="Done habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+        )
+        HabitCompletion.objects.create(
+            habit=scheduled_habit,
+            date=today,
+            completion_percentage=Decimal("100"),
+            raw_value=Decimal("100"),
+        )
+        Habit.objects.create(
+            user=self.user,
+            name="Pending habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("habits:today"),
+            {"date": today.isoformat()},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["completion_rate"], 50)
+        self.assertContains(response, "scheduled-summary-desktop")
+        self.assertContains(response, "50% completed")
+
+    def test_today_page_completion_rate_weights_priority_and_partials(self):
+        today = date(2026, 5, 24)
+        # Weights: Low=1, Medium=2, High=3
+        # Completion: Low@100%, Medium@50%, High@0%
+        # weighted_total = 1*100 + 2*50 + 3*0 = 200; weight_sum = 6
+        # rate = round(200 / (6 * 100) * 100) = round(33.333) = 33
+        low = Habit.objects.create(
+            user=self.user,
+            name="Low habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+            priority=Habit.PRIORITY_LOW,
+        )
+        HabitCompletion.objects.create(
+            habit=low,
+            date=today,
+            completion_percentage=Decimal("100"),
+            raw_value=Decimal("100"),
+        )
+        medium = Habit.objects.create(
+            user=self.user,
+            name="Medium habit",
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+            priority=Habit.PRIORITY_MEDIUM,
+        )
+        HabitCompletion.objects.create(
+            habit=medium,
+            date=today,
+            completion_percentage=Decimal("50"),
+            raw_value=Decimal("50"),
+        )
+        Habit.objects.create(
+            user=self.user,
+            name="High habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+            priority=Habit.PRIORITY_HIGH,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("habits:today"),
+            {"date": today.isoformat()},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["completion_rate"], 33)
+        self.assertContains(response, "33% completed")
+
+    def _extract_progress_input(self, response, habit_id, name):
+        from django.urls import reverse
+        needle = reverse("habits:update_progress", args=[habit_id])
+        content = response.content.decode("utf-8")
+        form_start = content.find(f'action="{needle}"')
+        self.assertGreater(form_start, -1, "Expected progress form for habit")
+        slice_end = content.find("</form>", form_start)
+        form_chunk = content[form_start:slice_end]
+        attr_index = form_chunk.find(name)
+        self.assertGreater(attr_index, -1, f"Expected attribute {name}")
+        tag_start = form_chunk.rfind("<", 0, attr_index)
+        tag_end = form_chunk.find(">", attr_index)
+        return form_chunk[tag_start:tag_end]
+
     def test_mobile_all_habits_page_renders_shared_all_habits_section(self):
         habit = Habit.objects.create(
             user=self.user,

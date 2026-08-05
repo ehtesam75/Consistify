@@ -166,6 +166,42 @@ def _is_completed(percentage_value):
     return percentage_value >= 100
 
 
+PRIORITY_WEIGHTS = {
+    "low": 1,
+    "medium": 2,
+    "high": 3,
+}
+
+
+def _priority_weight(habit):
+    """Difficulty weight derived from a habit's priority level."""
+    return PRIORITY_WEIGHTS.get(getattr(habit, "priority", ""), 1)
+
+
+def weighted_completion_rate(scheduled_habits, completion_lookup=None):
+    """Compute a priority-weighted, partial-aware completion rate (0-100).
+
+    Each scheduled habit contributes its per-habit ``completion_percentage``
+    (already 0-100 across binary/partial/quantitative types) scaled by the
+    habit's priority weight so harder habits count proportionally more.
+    """
+    completion_lookup = completion_lookup or {}
+    weighted_total = 0.0
+    weight_sum = 0.0
+    for habit in scheduled_habits:
+        weight = _priority_weight(habit)
+        weight_sum += weight
+        percent = completion_lookup.get(habit.id, 0.0) or 0.0
+        try:
+            percent = float(percent)
+        except (TypeError, ValueError):
+            percent = 0.0
+        weighted_total += weight * max(0.0, min(100.0, percent))
+    if weight_sum <= 0:
+        return 0
+    return round((weighted_total / (weight_sum * 100)) * 100)
+
+
 def _clamped_percentage(percentage_value):
     return max(0.0, min(100.0, float(percentage_value or 0)))
 

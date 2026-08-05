@@ -317,12 +317,13 @@ window.ConsistifyUI = (() => {
             }
 
             const updateSummaryCounter = (data) => {
-                if (data.completed_count == null || data.scheduled_count == null) {
+                if (data.completion_rate == null) {
                     return;
                 }
                 const summaries = document.querySelectorAll(".scheduled-summary-desktop");
+                const rate = Math.round(data.completion_rate);
                 summaries.forEach((el) => {
-                    el.textContent = data.completed_count + "/" + data.scheduled_count + " completed";
+                    el.textContent = rate + "% completed";
                 });
             };
 

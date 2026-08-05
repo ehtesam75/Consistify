@@ -39,6 +39,7 @@ from .services import (
     habit_performance_metrics,
     should_prompt_daily_recap,
     iter_scheduled_dates,
+    weighted_completion_rate,
 )
 
 
@@ -151,14 +152,25 @@ def _build_today_habit_context(request):
         all_paused = False
         all_pause_scheduled = False
 
+    completion_lookup = {
+        item["habit"].id: item["completion_percentage"]
+        for item in scheduled_habits
+    }
+    completion_rate = weighted_completion_rate(
+        [item["habit"] for item in scheduled_habits],
+        completion_lookup,
+    )
+
     return {
         "target_date": target_date,
         "today": today,
         "prev_date": target_date - timedelta(days=1),
         "next_date": target_date + timedelta(days=1),
+        "can_edit_progress": target_date >= today - timedelta(days=1) and target_date <= today,
         "scheduled_habits": visible_scheduled_habits,
         "scheduled_count": len(scheduled_habits),
         "completed_count": completed_count,
+        "completion_rate": completion_rate,
         "hide_completed": hide_completed,
         "visible_scheduled_count": len(visible_scheduled_habits),
         "habits": habits,
@@ -594,6 +606,15 @@ def _schedule_habit_pause(habit, start_date):
 def update_progress(request, habit_id):
     habit = get_object_or_404(Habit, id=habit_id, user=request.user)
     target_date = _get_date_from_request(request)
+    today = timezone.localdate()
+
+    if target_date < today - timedelta(days=1):
+        messages.error(
+            request,
+            "You can only update progress for today and the previous day.",
+        )
+        next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
+        return redirect(next_url or reverse("habits:today"))
 
     if habit.is_paused_on(target_date):
         messages.error(request, "This habit is paused for that day.")
@@ -638,21 +659,33 @@ def update_progress(request, habit_id):
     completion.save(update_fields=["completion_percentage", "raw_value"])
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        scheduled_habits = Habit.objects.filter(user=request.user, archived=False)
+        scheduled_habits = list(
+            Habit.objects.filter(user=request.user, archived=False)
+        )
         scheduled_count = 0
         completed_count_total = 0
+        scheduled_habit_objs = []
+        completion_lookup = {}
         for h in scheduled_habits:
             if h.is_scheduled_on(target_date):
                 scheduled_count += 1
+                scheduled_habit_objs.append(h)
                 comp = HabitCompletion.objects.filter(habit=h, date=target_date).first()
                 if comp and comp.completion_percentage >= 100:
                     completed_count_total += 1
+                completion_lookup[h.id] = (
+                    float(comp.completion_percentage) if comp else 0.0
+                )
+        completion_rate = weighted_completion_rate(
+            scheduled_habit_objs, completion_lookup
+        )
         return JsonResponse({
             "ok": True,
             "completion_percentage": float(completion_percentage),
             "raw_value": float(raw_value) if raw_value is not None else None,
             "completed_count": completed_count_total,
             "scheduled_count": scheduled_count,
+            "completion_rate": completion_rate,
         })
 
     next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
