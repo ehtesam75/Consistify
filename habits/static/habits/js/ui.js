@@ -321,7 +321,7 @@ window.ConsistifyUI = (() => {
                     return;
                 }
                 const summaries = document.querySelectorAll(".scheduled-summary-desktop");
-                const rate = Math.round(data.completion_rate);
+                const rate = parseNumber(data.completion_rate, 0).toFixed(1);
                 summaries.forEach((el) => {
                     el.textContent = rate + "% completed";
                 });

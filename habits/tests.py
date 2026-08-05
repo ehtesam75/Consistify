@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from math import sqrt
@@ -23,6 +24,7 @@ from .services import (
     build_overall_score_breakdown,
     build_weekly_reports,
     calculate_overall_consistency,
+    daily_average_completion_series,
     habit_performance_metrics,
 )
 
@@ -102,10 +104,10 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["completion_quality"], 90.0)
         self.assertEqual(metrics["full_completion_reliability"], 0.0)
         self.assertEqual(metrics["streak_stability"], 100.0)
-        # Calendar-based momentum: 4 consecutive 90% days near end of 14-day window
-        # fall at weights 11,12,13,14 → 0.9 * (11+12+13+14) / 105 * 100 ≈ 42.9.
-        self.assertAlmostEqual(metrics["recent_momentum"], 42.9, places=1)
-        self.assertEqual(metrics["consistency_score"], 61.9)
+        # Momentum is normalized over eligible scheduled sessions, so a new habit
+        # performing at 90% is not penalized for pre-start calendar days.
+        self.assertEqual(metrics["recent_momentum"], 90.0)
+        self.assertEqual(metrics["consistency_score"], 69.0)
 
     def test_recent_momentum_rewards_improvement(self):
         start = date(2026, 1, 1)
@@ -139,6 +141,102 @@ class ConsistencyScoreTests(TestCase):
             declining_metrics["consistency_score"],
         )
 
+    def test_recent_momentum_treats_perfect_daily_and_weekly_habits_equally(self):
+        start = date(2026, 1, 1)
+        end = start + timedelta(days=13)
+        daily = self.make_habit("Perfect daily", start)
+        weekly = self.make_habit(
+            "Perfect weekly",
+            start,
+            schedule_type=Habit.SCHEDULE_WEEKLY,
+        )
+
+        for offset in range(14):
+            self.log_completion(daily, start + timedelta(days=offset), 100)
+        self.log_completion(weekly, start, 100)
+        self.log_completion(weekly, start + timedelta(days=7), 100)
+
+        daily_metrics = habit_performance_metrics(daily, start, end)
+        weekly_metrics = habit_performance_metrics(weekly, start, end)
+
+        self.assertEqual(daily_metrics["recent_momentum"], 100.0)
+        self.assertEqual(weekly_metrics["recent_momentum"], 100.0)
+        self.assertEqual(daily_metrics["consistency_score"], 100.0)
+        self.assertEqual(weekly_metrics["consistency_score"], 100.0)
+
+    def test_recent_momentum_excludes_paused_dates_from_its_denominator(self):
+        start = date(2026, 1, 1)
+        end = start + timedelta(days=13)
+        habit = self.make_habit("Paused then perfect", start)
+        HabitPause.objects.create(
+            habit=habit,
+            start_date=start,
+            end_date=start + timedelta(days=7),
+        )
+        for offset in range(7, 14):
+            self.log_completion(habit, start + timedelta(days=offset), 100)
+
+        metrics = habit_performance_metrics(habit, start, end)
+
+        self.assertEqual(metrics["scheduled_total"], 7)
+        self.assertEqual(metrics["recent_momentum"], 100.0)
+        self.assertEqual(metrics["consistency_score"], 100.0)
+
+    def test_recent_momentum_does_not_decay_during_a_long_pause(self):
+        start = date(2026, 1, 1)
+        end = start + timedelta(days=29)
+        habit = self.make_habit("Long pause", start)
+        for offset in range(16):
+            self.log_completion(habit, start + timedelta(days=offset), 100)
+        HabitPause.objects.create(
+            habit=habit,
+            start_date=start + timedelta(days=16),
+            end_date=None,
+        )
+
+        metrics = habit_performance_metrics(habit, start, end)
+
+        self.assertEqual(metrics["scheduled_total"], 16)
+        self.assertEqual(metrics["recent_momentum"], 100.0)
+        self.assertEqual(metrics["consistency_score"], 100.0)
+
+    def test_recent_momentum_loads_lookback_before_a_short_report_period(self):
+        start = date(2026, 1, 1)
+        report_start = start + timedelta(days=7)
+        report_end = start + timedelta(days=13)
+        habit = self.make_habit("Two-week context", start)
+        for offset in range(7):
+            self.log_completion(habit, start + timedelta(days=offset), 100)
+
+        metrics = habit_performance_metrics(habit, report_start, report_end)
+        cached_metrics = habit_performance_metrics(
+            habit,
+            report_start,
+            report_end,
+            completion_map={},
+            value_map={},
+        )
+
+        self.assertEqual(metrics["scheduled_total"], 7)
+        self.assertEqual(metrics["completion_rate"], 0.0)
+        self.assertEqual(metrics["recent_momentum"], 26.7)
+        self.assertEqual(cached_metrics["recent_momentum"], 26.7)
+
+    def test_daily_completion_series_counts_unlogged_today_as_zero(self):
+        today = date(2026, 1, 2)
+        first = self.make_habit("Series complete", today)
+        second = self.make_habit("Series pending", today)
+        self.log_completion(first, today, 100)
+
+        series = daily_average_completion_series(
+            [first, second],
+            today - timedelta(days=1),
+            today,
+        )
+
+        self.assertIsNone(series[0]["value"])
+        self.assertEqual(series[1]["value"], 50.0)
+
     def test_overall_consistency_uses_priority_and_sqrt_frequency_weighting(self):
         start = date(2026, 1, 1)
         high_priority = self.make_habit(
@@ -160,14 +258,11 @@ class ConsistencyScoreTests(TestCase):
             start + timedelta(days=3),
         )
 
-        # Calendar-based momentum credits completion(s) against the trailing
-        # 14-day window (weights 1..14, sum 105) rather than the per-habit
-        # scheduled range. With a single logged session, the weekly habit's
-        # weighted momentum is 11/105, yielding a per-habit score of 86.6.
+        # Perfect performance earns full momentum regardless of schedule cadence.
         # The daily habit has no logged completions, so its score is 0.
         high_weight = 1.3 * sqrt(1)
         low_weight = 0.8 * sqrt(4)
-        weekly_score = 86.6
+        weekly_score = 100.0
         expected_score = round(
             (weekly_score * high_weight + 0 * low_weight)
             / (high_weight + low_weight),
@@ -175,7 +270,7 @@ class ConsistencyScoreTests(TestCase):
         )
         self.assertEqual(overall_score, expected_score)
 
-    def test_unlogged_today_does_not_count_as_missed_until_logged(self):
+    def test_unlogged_today_matches_an_explicit_zero_completion(self):
         today = date(2026, 1, 2)
         yesterday = today - timedelta(days=1)
         habit = self.make_habit("Daily", yesterday)
@@ -184,12 +279,12 @@ class ConsistencyScoreTests(TestCase):
         with patch("habits.services.timezone.localdate", return_value=today):
             metrics = habit_performance_metrics(habit, yesterday, today)
 
-        self.assertEqual(metrics["scheduled_total"], 1)
+        self.assertEqual(metrics["scheduled_total"], 2)
         self.assertEqual(metrics["completed_total"], 1)
-        self.assertEqual(metrics["current_streak"], 1)
-        # Calendar-based momentum dilutes a single session across the 14-day window
-        # (weight 14 of 105 → ~13.3%); other components remain at 100.
-        self.assertEqual(metrics["consistency_score"], 86.9)
+        self.assertEqual(metrics["completion_rate"], 50.0)
+        self.assertEqual(metrics["current_streak"], 0)
+        self.assertEqual(metrics["consistency_score"], 42.2)
+        unlogged_metrics = metrics
 
         self.log_completion(habit, today, 0)
         with patch("habits.services.timezone.localdate", return_value=today):
@@ -198,7 +293,7 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["scheduled_total"], 2)
         self.assertEqual(metrics["completed_total"], 1)
         self.assertEqual(metrics["current_streak"], 0)
-        self.assertLess(metrics["consistency_score"], 100.0)
+        self.assertEqual(metrics, unlogged_metrics)
 
     def test_overall_score_breakdown_explains_score_change(self):
         start = date(2026, 1, 1)
@@ -218,13 +313,13 @@ class ConsistencyScoreTests(TestCase):
         components = {item["key"]: item for item in breakdown["components"]}
 
         self.assertTrue(breakdown["has_previous"])
-        self.assertEqual(breakdown["current_score"], 92.1)
-        self.assertEqual(breakdown["previous_score"], 41.1)
-        self.assertEqual(breakdown["score_delta"], 51.0)
+        self.assertEqual(breakdown["current_score"], 97.0)
+        self.assertEqual(breakdown["previous_score"], 45.0)
+        self.assertEqual(breakdown["score_delta"], 52.0)
         self.assertEqual(components["completion_quality"]["points_delta"], 22.5)
         self.assertEqual(components["full_completion"]["points_delta"], 25.0)
         self.assertEqual(components["rhythm_stability"]["points_delta"], 0.0)
-        self.assertEqual(components["recent_momentum"]["points_delta"], 3.5)
+        self.assertEqual(components["recent_momentum"]["points_delta"], 4.5)
 
     def test_habit_score_drivers_identify_booster_drag_and_movement(self):
         start = date(2026, 1, 1)
@@ -265,9 +360,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(drivers["booster"]["habit"], booster)
         self.assertEqual(drivers["drag"]["habit"], drag)
         self.assertEqual(drivers["improved"]["habit"], improved)
-        self.assertEqual(drivers["improved"]["score_delta"], 92.1)
+        self.assertEqual(drivers["improved"]["score_delta"], 93.9)
         self.assertEqual(drivers["declined"]["habit"], declined)
-        self.assertEqual(drivers["declined"]["score_delta"], -92.1)
+        self.assertEqual(drivers["declined"]["score_delta"], -93.9)
 
     def test_category_analytics_marks_best_and_weakest_categories(self):
         start = date(2026, 1, 1)
@@ -431,6 +526,90 @@ class ConsistencyScoreTests(TestCase):
                 HabitCompletion.objects.filter(habit=habit, date=yesterday).exists()
             )
 
+    def test_update_progress_rejects_future_dates_without_mutating_data(self):
+        today = date(2026, 5, 24)
+        future = today + timedelta(days=1)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Future habit",
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today,
+        )
+        existing = HabitCompletion.objects.create(
+            habit=habit,
+            date=future,
+            completion_percentage=Decimal("0"),
+            raw_value=Decimal("0"),
+        )
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            response = self.client.post(
+                reverse("habits:update_progress", args=[habit.id]),
+                {
+                    "date": future.isoformat(),
+                    "completion_percentage": "100",
+                    "next": "https://evil.example/",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("habits:today"))
+        existing.refresh_from_db()
+        self.assertEqual(existing.completion_percentage, Decimal("0"))
+
+    def test_update_progress_rejects_missing_and_invalid_post_dates(self):
+        today = date(2026, 5, 24)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Strict date habit",
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today,
+        )
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            for raw_date in (None, "not-a-date", "2026-02-30"):
+                payload = {"completion_percentage": "100"}
+                if raw_date is not None:
+                    payload["date"] = raw_date
+                response = self.client.post(
+                    reverse("habits:update_progress", args=[habit.id]),
+                    payload,
+                )
+                self.assertEqual(response.status_code, 302)
+
+        self.assertFalse(
+            HabitCompletion.objects.filter(habit=habit, date=today).exists()
+        )
+
+    def test_update_progress_uses_post_date_instead_of_query_string(self):
+        today = date(2026, 5, 24)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Posted date habit",
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today,
+        )
+        self.client.force_login(self.user)
+        url = (
+            reverse("habits:update_progress", args=[habit.id])
+            + f"?date={(today + timedelta(days=5)).isoformat()}"
+        )
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            response = self.client.post(
+                url,
+                {"date": today.isoformat(), "completion_percentage": "75"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        completion = HabitCompletion.objects.get(habit=habit, date=today)
+        self.assertEqual(completion.completion_percentage, Decimal("75"))
+
     def test_today_page_renders_completion_rate_in_summary(self):
         today = date(2026, 5, 24)
         scheduled_habit = Habit.objects.create(
@@ -515,6 +694,54 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["completion_rate"], 41.9)
         self.assertContains(response, "41.9% completed")
+
+    def test_today_and_dashboard_both_count_unlogged_current_sessions(self):
+        today = date(2026, 5, 24)
+        completed = Habit.objects.create(
+            user=self.user,
+            name="Current complete",
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            priority=Habit.PRIORITY_MEDIUM,
+            start_date=today,
+        )
+        Habit.objects.create(
+            user=self.user,
+            name="Current pending",
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            priority=Habit.PRIORITY_MEDIUM,
+            start_date=today,
+        )
+        HabitCompletion.objects.create(
+            habit=completed,
+            date=today,
+            completion_percentage=Decimal("100"),
+            raw_value=Decimal("100"),
+        )
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today), patch(
+            "habits.services.timezone.localdate",
+            return_value=today,
+        ):
+            today_response = self.client.get(reverse("habits:today"))
+            dashboard_response = self.client.get(reverse("habits:dashboard"))
+            profile_response = self.client.get(
+                reverse("habits:user_profile", args=[self.user.username])
+            )
+            reports_response = self.client.get(reverse("habits:reports"))
+
+        self.assertEqual(today_response.context["completion_rate"], 50.0)
+        self.assertEqual(dashboard_response.context["overall_rate"], 50.0)
+        self.assertEqual(dashboard_response.context["total_scheduled"], 2)
+        self.assertEqual(json.loads(dashboard_response.context["chart_rates"])[-1], 50.0)
+        self.assertEqual(profile_response.context["overall_completion"], 50.0)
+        self.assertEqual(json.loads(profile_response.context["daily_rates"])[-1], 50.0)
+        self.assertEqual(
+            reports_response.context["weekly_reports"][-1]["completion_rate"],
+            50.0,
+        )
 
     def _extract_progress_input(self, response, habit_id, name):
         from django.urls import reverse
@@ -630,7 +857,7 @@ class ConsistencyScoreTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["stats"]["average_completion"], 0.0)
-        self.assertEqual(response.context["all_time_stats"]["average_completion"], 37.0)
+        self.assertEqual(response.context["all_time_stats"]["average_completion"], 36.2)
         self.assertEqual(len(response.context["history"]), 20)
         self.assertContains(response, "All time")
 
@@ -944,3 +1171,162 @@ class DailyRecapPromptTests(TestCase):
         self.assertContains(response, "Finish yesterday's check-ins")
         self.assertContains(response, "Unfinished daily")
         self.assertEqual(self.client.session["daily_recap_date"], yesterday.isoformat())
+
+    def test_daily_recap_rejects_direct_posts_without_server_session(self):
+        today = date(2026, 5, 23)
+        old_date = today - timedelta(days=20)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Protected history",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=old_date,
+        )
+        completion = HabitCompletion.objects.create(
+            habit=habit,
+            date=old_date,
+            completion_percentage=Decimal("0"),
+            raw_value=Decimal("0"),
+        )
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            response = self.client.post(
+                reverse("habits:daily_recap"),
+                {
+                    "date": old_date.isoformat(),
+                    f"completed_{habit.id}": "1",
+                    "next": "https://evil.example/",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("habits:today"))
+        completion.refresh_from_db()
+        self.assertEqual(completion.completion_percentage, Decimal("0"))
+        self.assertNotIn("daily_recap_dismissed_for", self.client.session)
+
+    def test_daily_recap_rejects_stale_and_future_session_dates(self):
+        today = date(2026, 5, 23)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Expired recap",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=10),
+        )
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            for target_date in (
+                today - timedelta(days=2),
+                today + timedelta(days=1),
+            ):
+                session = self.client.session
+                session["daily_recap_date"] = target_date.isoformat()
+                session.save()
+                response = self.client.post(
+                    reverse("habits:daily_recap"),
+                    {
+                        "date": target_date.isoformat(),
+                        f"completed_{habit.id}": "1",
+                    },
+                )
+                self.assertEqual(response.status_code, 302)
+                self.assertNotIn("daily_recap_date", self.client.session)
+                self.assertNotIn("daily_recap_dismissed_for", self.client.session)
+
+        self.assertFalse(HabitCompletion.objects.filter(habit=habit).exists())
+
+    def test_daily_recap_rejects_a_date_that_does_not_match_session(self):
+        today = date(2026, 5, 23)
+        yesterday = today - timedelta(days=1)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Mismatch protection",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=yesterday,
+        )
+        self.client.force_login(self.user)
+        session = self.client.session
+        session["daily_recap_date"] = yesterday.isoformat()
+        session.save()
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            response = self.client.post(
+                reverse("habits:daily_recap"),
+                {
+                    "date": (yesterday - timedelta(days=1)).isoformat(),
+                    f"completed_{habit.id}": "1",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(HabitCompletion.objects.filter(habit=habit).exists())
+        self.assertNotIn("daily_recap_date", self.client.session)
+        self.assertNotIn("daily_recap_dismissed_for", self.client.session)
+
+    def test_daily_recap_accepts_matching_server_issued_yesterday(self):
+        today = date(2026, 5, 23)
+        yesterday = today - timedelta(days=1)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Valid recap",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=yesterday,
+        )
+        self.client.force_login(self.user)
+        session = self.client.session
+        session["daily_recap_date"] = yesterday.isoformat()
+        session.save()
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            response = self.client.post(
+                reverse("habits:daily_recap"),
+                {
+                    "date": yesterday.isoformat(),
+                    f"completed_{habit.id}": "1",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        completion = HabitCompletion.objects.get(habit=habit, date=yesterday)
+        self.assertEqual(completion.completion_percentage, Decimal("100"))
+        self.assertNotIn("daily_recap_date", self.client.session)
+        self.assertEqual(
+            self.client.session["daily_recap_dismissed_for"],
+            yesterday.isoformat(),
+        )
+
+    def test_daily_recap_prompt_replaces_a_stale_session_date(self):
+        today = date(2026, 5, 23)
+        yesterday = today - timedelta(days=1)
+        Habit.objects.create(
+            user=self.user,
+            name="Fresh recap target",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=yesterday,
+        )
+        self.client.force_login(self.user)
+        self.user.last_login = timezone.make_aware(datetime(2026, 5, 22, 23, 45))
+        self.user.save(update_fields=["last_login"])
+        session = self.client.session
+        session["daily_recap_date"] = (today - timedelta(days=3)).isoformat()
+        session.save()
+
+        original_localdate = timezone.localdate
+
+        def fake_localdate(value=None):
+            if value is None:
+                return today
+            return original_localdate(value)
+
+        with patch("habits.context_processors.timezone.localdate", side_effect=fake_localdate):
+            response = self.client.get(reverse("habits:today"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.session["daily_recap_date"], yesterday.isoformat())
+        self.assertContains(response, "May 22, 2026")

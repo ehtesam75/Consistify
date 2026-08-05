@@ -57,16 +57,23 @@ Users can create multiple habits with different tracking types:
 
 ## 📈 Analytics & Insights
 
-#### 📊 Average Daily Value
-- Overall completion is calculated using **average daily performance**
+#### 📊 Average Scheduled-Session Progress
+- Historical completion is the average percentage across **every scheduled session**
+- Missing scheduled sessions count as 0%, including sessions due today
+- The Today summary is priority-adjusted using Low `0.8`, Medium `1.0`, and High `1.3`
 - Used for:
   - Habit progress evaluation
   - Performance reports
   - Global statistics
 
 #### 🧠 Consistency Score
-- Measures discipline based on full completion behavior
-- Only days with **100% completion** are counted
+- Blends completion quality (45%), full completion ratio (25%), rhythm stability
+  (15%), and recent momentum (15%)
+- Partial progress contributes to completion quality and momentum, while a session
+  counts as fully completed only at **100%**
+- Recent momentum uses a 14-day window anchored to the latest eligible scheduled
+  session, weighting newer sessions more heavily without penalizing unscheduled or
+  paused dates
 
 #### 🔥 Streak System
 - Tracks consecutive fully completed days (100% only)

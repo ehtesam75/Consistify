@@ -1,10 +1,11 @@
-from datetime import timedelta
-
 from django.utils import timezone
-from django.utils.dateparse import parse_date
 
 from .models import FriendRequest
-from .services import get_pending_habits_for_date, should_prompt_daily_recap
+from .services import (
+    daily_recap_target_date,
+    get_pending_habits_for_date,
+    should_prompt_daily_recap,
+)
 
 
 def friend_request_notifications(request):
@@ -34,23 +35,23 @@ def daily_recap_prompt(request):
         return {"daily_recap": None}
 
     today = timezone.localdate()
+    target_date = daily_recap_target_date(today)
+    expected_recap_value = target_date.isoformat()
     recap_date_value = request.session.get("daily_recap_date")
+    if recap_date_value and recap_date_value != expected_recap_value:
+        request.session.pop("daily_recap_date", None)
+        recap_date_value = None
+
     if not recap_date_value:
         if not should_prompt_daily_recap(request.user.last_login, today):
             return {"daily_recap": None}
 
         dismissed_for = request.session.get("daily_recap_dismissed_for")
-        target_date = today - timedelta(days=1)
-        if dismissed_for == target_date.isoformat():
+        if dismissed_for == expected_recap_value:
             return {"daily_recap": None}
 
-        request.session["daily_recap_date"] = target_date.isoformat()
+        request.session["daily_recap_date"] = expected_recap_value
         recap_date_value = request.session["daily_recap_date"]
-
-    target_date = parse_date(recap_date_value)
-    if not target_date:
-        request.session.pop("daily_recap_date", None)
-        return {"daily_recap": None}
 
     pending = get_pending_habits_for_date(request.user, target_date)
     if not pending:

@@ -30,11 +30,14 @@ from .services import (
     build_monthly_reports,
     build_overall_score_breakdown,
     build_weekly_reports,
+    can_update_progress_on,
     calculate_overall_consistency,
     calculate_streaks,
     completion_stats,
     compute_today_metrics,
     compute_user_metrics,
+    daily_recap_target_date,
+    daily_average_completion_series,
     get_pending_habits_for_date,
     get_completion_maps,
     get_next_scheduled_date,
@@ -69,7 +72,7 @@ class ConsistifyLoginView(auth_views.LoginView):
         today = timezone.localdate()
         should_prompt = should_prompt_daily_recap(previous_login, today)
         if should_prompt:
-            recap_date = today - timedelta(days=1)
+            recap_date = daily_recap_target_date(today)
             pending = get_pending_habits_for_date(user, recap_date)
             if pending:
                 self.request.session["daily_recap_date"] = recap_date.isoformat()
@@ -134,7 +137,7 @@ def _build_today_habit_context(request):
         "today": today,
         "prev_date": target_date - timedelta(days=1),
         "next_date": target_date + timedelta(days=1),
-        "can_edit_progress": target_date >= today - timedelta(days=1) and target_date <= today,
+        "can_edit_progress": can_update_progress_on(target_date, today),
         "scheduled_habits": visible_scheduled_habits,
         "scheduled_count": today_metrics["scheduled_count"],
         "completed_count": today_metrics["completed_count"],
@@ -210,30 +213,9 @@ def dashboard(request):
 
     chart_days = 14
     chart_start = today - timedelta(days=chart_days - 1)
-    chart_labels = []
-    chart_rates = []
-    recent_completions = HabitCompletion.objects.filter(
-        habit__in=habits,
-        date__range=(chart_start, today),
-    )
-    completion_map = {
-        (completion.habit_id, completion.date): float(completion.completion_percentage or 0)
-        for completion in recent_completions
-    }
-
-    for offset in range(chart_days):
-        current_day = chart_start + timedelta(days=offset)
-        daily_values = []
-        for habit in habits:
-            if not habit.is_scheduled_on(current_day):
-                continue
-            completion_key = (habit.id, current_day)
-            if current_day == today and completion_key not in completion_map:
-                continue
-            daily_values.append(completion_map.get(completion_key, 0.0))
-        rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else None
-        chart_labels.append(current_day.strftime("%b %d"))
-        chart_rates.append(rate)
+    chart_series = daily_average_completion_series(habits, chart_start, today)
+    chart_labels = [item["label"] for item in chart_series]
+    chart_rates = [item["value"] for item in chart_series]
 
     context = {
         "today": today,
@@ -340,10 +322,7 @@ def habit_detail(request, habit_id):
     chart_labels = json.dumps([date.strftime("%b %d") for date in chart_dates])
     chart_values = []
     for scheduled_date in chart_dates:
-        if scheduled_date == today and scheduled_date not in completion_map:
-            chart_values.append(None)
-        else:
-            chart_values.append(completion_map.get(scheduled_date, 0))
+        chart_values.append(completion_map.get(scheduled_date, 0))
     chart_percentages = json.dumps(chart_values)
 
     context = {
@@ -554,25 +533,29 @@ def _schedule_habit_pause(habit, start_date):
 @require_POST
 def update_progress(request, habit_id):
     habit = get_object_or_404(Habit, id=habit_id, user=request.user)
-    target_date = _get_date_from_request(request)
+    target_date = _parse_date_value(request.POST.get("date"))
     today = timezone.localdate()
 
-    if target_date < today - timedelta(days=1):
-        messages.error(
+    if target_date is None:
+        return _progress_error_response(
+            request,
+            "Choose a valid date before updating progress.",
+        )
+
+    if not can_update_progress_on(target_date, today):
+        return _progress_error_response(
             request,
             "You can only update progress for today and the previous day.",
         )
-        next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
-        return redirect(next_url or reverse("habits:today"))
 
     if habit.is_paused_on(target_date):
-        messages.error(request, "This habit is paused for that day.")
-        next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
-        return redirect(next_url or reverse("habits:today"))
+        return _progress_error_response(request, "This habit is paused for that day.")
 
     if not habit.is_scheduled_on(target_date):
-        messages.error(request, "This habit is not scheduled for that day.")
-        return redirect("habits:today")
+        return _progress_error_response(
+            request,
+            "This habit is not scheduled for that day.",
+        )
 
     completion, _ = HabitCompletion.objects.get_or_create(
         habit=habit,
@@ -591,9 +574,10 @@ def update_progress(request, habit_id):
         raw_value = completion_percentage
     else:
         if not habit.target_value or habit.target_value <= 0:
-            messages.error(request, "Add a target value before logging progress.")
-            next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
-            return redirect(next_url or reverse("habits:today"))
+            return _progress_error_response(
+                request,
+                "Add a target value before logging progress.",
+            )
         target_value = habit.target_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
         raw_value = _parse_decimal(request.POST.get("current_value")) or Decimal("0")
         raw_value = raw_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
@@ -618,8 +602,7 @@ def update_progress(request, habit_id):
             "completion_rate": today_metrics["completion_rate"],
         })
 
-    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
-    return redirect(next_url or reverse("habits:today"))
+    return redirect(_safe_next_url(request) or reverse("habits:today"))
 
 
 @csrf_exempt
@@ -792,9 +775,6 @@ def _build_compare_chart_payload(selected_habits, today):
                     points.append(None)
                     continue
                 is_scheduled = habit.is_scheduled_on(day)
-                if day == today and is_scheduled and day not in completion_map:
-                    points.append(None)
-                    continue
                 if is_scheduled:
                     running_total += completion_map.get(day, 0.0)
                     scheduled_count += 1
@@ -915,34 +895,13 @@ def _build_profile_context(profile_user, current_user):
 
     daily_window_days = 15
     daily_start = today - timedelta(days=daily_window_days - 1)
-    daily_labels = []
-    daily_rates = []
-    completion_map = {}
-    if metrics["habits"]:
-        recent_completions = HabitCompletion.objects.filter(
-            habit__in=metrics["habits"],
-            date__range=(daily_start, today),
-        )
-        completion_map = {
-            (completion.habit_id, completion.date): float(
-                completion.completion_percentage or 0
-            )
-            for completion in recent_completions
-        }
-
-    for offset in range(daily_window_days):
-        current_day = daily_start + timedelta(days=offset)
-        daily_values = []
-        for habit in metrics["habits"]:
-            if not habit.is_scheduled_on(current_day):
-                continue
-            completion_key = (habit.id, current_day)
-            if current_day == today and completion_key not in completion_map:
-                continue
-            daily_values.append(completion_map.get(completion_key, 0.0))
-        rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else None
-        daily_labels.append(current_day.strftime("%b %d"))
-        daily_rates.append(rate)
+    daily_series = daily_average_completion_series(
+        metrics["habits"],
+        daily_start,
+        today,
+    )
+    daily_labels = [item["label"] for item in daily_series]
+    daily_rates = [item["value"] for item in daily_series]
 
     context = {
         "profile_user": profile_user,
@@ -1177,10 +1136,18 @@ def remove_friend(request, request_id):
 @login_required
 @require_POST
 def daily_recap(request):
-    session_date = request.session.get("daily_recap_date")
-    target_date = parse_date(session_date) if session_date else None
-    if not target_date:
-        target_date = _get_date_from_request(request)
+    today = timezone.localdate()
+    target_date = daily_recap_target_date(today)
+    session_date_value = request.session.get("daily_recap_date")
+    posted_date = _parse_date_value(request.POST.get("date"))
+
+    if (
+        session_date_value != target_date.isoformat()
+        or posted_date != target_date
+    ):
+        request.session.pop("daily_recap_date", None)
+        messages.error(request, "That daily recap has expired. Refresh the page to continue.")
+        return redirect(_safe_next_url(request) or reverse("habits:today"))
 
     pending = get_pending_habits_for_date(request.user, target_date)
     if not pending:
@@ -1334,6 +1301,13 @@ def _safe_next_url(request):
     return None
 
 
+def _progress_error_response(request, message):
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"ok": False, "error": message}, status=400)
+    messages.error(request, message)
+    return redirect(_safe_next_url(request) or reverse("habits:today"))
+
+
 def _parse_decimal(raw_value):
     try:
         return Decimal(str(raw_value))
@@ -1365,11 +1339,19 @@ def _percentage_from_value(current_value, target_value):
 
 def _get_date_from_request(request):
     raw_date = request.GET.get("date") or request.POST.get("date")
-    if raw_date:
-        parsed = parse_date(raw_date)
-        if parsed:
-            return parsed
+    parsed = _parse_date_value(raw_date)
+    if parsed:
+        return parsed
     return timezone.localdate()
+
+
+def _parse_date_value(raw_date):
+    if not raw_date:
+        return None
+    try:
+        return parse_date(raw_date)
+    except (TypeError, ValueError):
+        return None
 
 
 def _extract_authorization_token(authorization_header):

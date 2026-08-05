@@ -56,6 +56,20 @@ def should_prompt_daily_recap(previous_login, today=None):
     return timezone.localdate(previous_login) < today
 
 
+def can_update_progress_on(target_date, today=None):
+    """Return whether normal progress editing is allowed for ``target_date``."""
+    if today is None:
+        today = timezone.localdate()
+    return today - timedelta(days=1) <= target_date <= today
+
+
+def daily_recap_target_date(today=None):
+    """Return the only date that may be updated through daily recap."""
+    if today is None:
+        today = timezone.localdate()
+    return today - timedelta(days=1)
+
+
 def _schedule_interval_days(habit):
     """Return the spacing (in days) between scheduled sessions, or ``None``
     when the schedule is daily / days-of-week (which use a 1-day iterator)."""
@@ -221,17 +235,6 @@ def _has_meaningful_progress(percentage_value):
     return _clamped_percentage(percentage_value) > 0
 
 
-def _scored_scheduled_dates(scheduled_dates, completion_map, end_date):
-    if not scheduled_dates:
-        return scheduled_dates
-
-    today = timezone.localdate()
-    latest_scheduled_date = scheduled_dates[-1]
-    if end_date == today and latest_scheduled_date == today and today not in completion_map:
-        return scheduled_dates[:-1]
-    return scheduled_dates
-
-
 def _streak_metrics(scheduled_dates, completion_map):
     max_streak = 0
     current_run = 0
@@ -287,12 +290,14 @@ def _rhythm_stability(scheduled_dates, completion_map):
 
 
 def _recent_momentum(scheduled_dates, completion_map, end_date=None):
-    """Calendar-based recent momentum over the last RECENT_MOMENTUM_WINDOW days.
+    """Recency-weighted progress across eligible sessions in the last 14 days.
 
-    Earlier versions took the last ``RECENT_MOMENTUM_WINDOW`` *scheduled sessions*,
-    which silently underweighted low-frequency habits (e.g. weekly habits only
-    contributed two slots). This implementation buckets by calendar day so daily
-    and weekly habits are weighted on the same absolute window.
+    Calendar position determines each session's weight, but only scheduled,
+    non-paused sessions contribute to the denominator. A perfect weekly habit
+    therefore earns the same 100% momentum factor as a perfect daily habit, while
+    newer scheduled sessions still carry more influence than older ones. Callers
+    anchor ``end_date`` to the latest eligible occurrence so a pause or an
+    unscheduled gap cannot erode momentum by itself.
     """
     if end_date is None:
         end_date = scheduled_dates[-1] if scheduled_dates else timezone.localdate()
@@ -300,24 +305,22 @@ def _recent_momentum(scheduled_dates, completion_map, end_date=None):
         return 0.0
 
     window_start = end_date - timedelta(days=RECENT_MOMENTUM_WINDOW - 1)
-    completion_by_date = {}
-    for scheduled_date in scheduled_dates:
-        if scheduled_date >= window_start:
-            completion_by_date[scheduled_date] = completion_map.get(scheduled_date, 0)
-
-    if not completion_by_date:
+    eligible_dates = [
+        scheduled_date
+        for scheduled_date in scheduled_dates
+        if window_start <= scheduled_date <= end_date
+    ]
+    if not eligible_dates:
         return 0.0
 
     weighted_completion = 0.0
     total_weight = 0
-    for offset in range(RECENT_MOMENTUM_WINDOW):
-        day = window_start + timedelta(days=offset)
-        weight = offset + 1
+    for scheduled_date in eligible_dates:
+        weight = (scheduled_date - window_start).days + 1
         total_weight += weight
-        if day in completion_by_date:
-            weighted_completion += (
-                _clamped_percentage(completion_by_date[day]) / 100
-            ) * weight
+        weighted_completion += (
+            _clamped_percentage(completion_map.get(scheduled_date, 0)) / 100
+        ) * weight
 
     if total_weight == 0:
         return 0.0
@@ -698,11 +701,29 @@ def build_category_analytics(habits, start_date, end_date):
 
 def habit_performance_metrics(habit, start_date, end_date, completion_map=None, value_map=None):
     scheduled_dates = list(iter_scheduled_dates(habit, start_date, end_date))
+    momentum_end = scheduled_dates[-1] if scheduled_dates else end_date
+    momentum_start = momentum_end - timedelta(days=RECENT_MOMENTUM_WINDOW - 1)
+    data_start = min(start_date, momentum_start)
 
-    if completion_map is None or value_map is None:
-        completion_map, value_map = get_completion_maps(habit, start_date, end_date)
+    loaded_completion_map = None
+    loaded_value_map = None
+    if completion_map is None or value_map is None or momentum_start < start_date:
+        loaded_completion_map, loaded_value_map = get_completion_maps(
+            habit,
+            data_start,
+            end_date,
+        )
 
-    scheduled_dates = _scored_scheduled_dates(scheduled_dates, completion_map, end_date)
+    if completion_map is None:
+        completion_map = loaded_completion_map or {}
+    elif momentum_start < start_date:
+        completion_map = {
+            **(loaded_completion_map or {}),
+            **completion_map,
+        }
+    if value_map is None:
+        value_map = loaded_value_map or {}
+
     scheduled_total = len(scheduled_dates)
 
     if scheduled_total == 0:
@@ -740,7 +761,14 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
     completion_quality = (total_completion / scheduled_total) / 100
     full_completion_ratio = completed_total / scheduled_total
     streak_stability = _rhythm_stability(scheduled_dates, completion_map)
-    recent_momentum = _recent_momentum(scheduled_dates, completion_map, end_date)
+    momentum_scheduled_dates = list(
+        iter_scheduled_dates(habit, momentum_start, momentum_end)
+    )
+    recent_momentum = _recent_momentum(
+        momentum_scheduled_dates,
+        completion_map,
+        momentum_end,
+    )
     consistency_score = _consistency_score(
         completion_quality=completion_quality,
         full_completion_ratio=full_completion_ratio,
@@ -1120,13 +1148,12 @@ def daily_average_completion_series(habits, start_date, end_date):
     """Return a per-day average completion series across the supplied habits.
 
     Each value is the unweighted mean of ``completion_percentage`` across every
-    habit scheduled on that day. Today's slot is included as ``None`` until the
-    first habit is logged (matching the dashboard / profile / compare charts).
+    habit scheduled on that day. Missing completion rows contribute 0% on every
+    scored date, including today, matching the headline analytics policy.
 
     Returns a list of dicts ``{"date", "label", "value"}`` so callers can pick
     either the raw date or formatted label and either float or ``None``.
     """
-    today = timezone.localdate()
     completions = HabitCompletion.objects.filter(
         habit__in=habits,
         date__range=(start_date, end_date),
@@ -1145,9 +1172,6 @@ def daily_average_completion_series(habits, start_date, end_date):
             if not habit.is_scheduled_on(current_day):
                 continue
             completion_key = (habit.id, current_day)
-            if current_day == today and completion_key not in completion_map:
-                # Today's slot has not been logged yet — leave the value blank.
-                continue
             daily_values.append(completion_map.get(completion_key, 0.0))
         rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else None
         series.append(
