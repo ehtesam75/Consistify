@@ -300,6 +300,37 @@ window.ConsistifyUI = (() => {
         }
     }
 
+    function initDailyRecapQuantControls() {
+        const form = document.querySelector(".daily-recap-form");
+        if (!form) {
+            return;
+        }
+
+        form.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-step]");
+            if (!button || !form.contains(button)) {
+                return;
+            }
+
+            const quantRow = button.closest(".daily-recap-quant");
+            const input = quantRow ? quantRow.querySelector("[data-quant-input]") : null;
+            if (!input || input.disabled) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const step = parseNumber(button.dataset.step, 0);
+            const minValue = parseNumber(input.min, 0);
+            const maxValue = parseNumber(input.max, Number.POSITIVE_INFINITY);
+            const currentValue = parseNumber(input.value, 0);
+            const nextValue = clampNumber(currentValue + step, minValue, maxValue);
+
+            input.value = formatNumber(Math.round(nextValue * 100) / 100, 2);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+    }
+
     function initHabitProgressControls() {
         const forms = document.querySelectorAll("[data-progress-form]");
         forms.forEach((form) => {
@@ -319,6 +350,7 @@ window.ConsistifyUI = (() => {
             }
 
             const updateSummaryCounter = (data) => {
+                    initDailyRecapQuantControls();
                 if (data.completion_rate == null) {
                     return;
                 }

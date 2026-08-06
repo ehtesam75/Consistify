@@ -2054,7 +2054,7 @@ class DailyRecapPromptTests(TestCase):
         # The editable value and the max live in the same bordered field, and
         # the input still clamps to the target.
         self.assertIn('class="quant-field"', recap)
-        self.assertIn('<span class="quant-suffix">/ 10</span>', recap)
+        self.assertIn('<span class="quant-suffix">/ 10 glasses</span>', recap)
         self.assertIn('max="10"', recap)
         self.assertIn('value="6"', recap)
 

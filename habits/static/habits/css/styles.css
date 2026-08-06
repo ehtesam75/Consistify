@@ -2533,6 +2533,11 @@ body.recap-open {
     overflow: hidden;
 }
 
+body.recap-open > :not(.daily-recap-overlay) {
+    filter: blur(7px);
+    transition: filter 0.18s ease;
+}
+
 .daily-recap-overlay {
     position: fixed;
     inset: 0;
@@ -2595,29 +2600,47 @@ body.recap-open {
     justify-content: flex-end;
 }
 
+.daily-recap-row-quant .daily-recap-controls {
+    flex-wrap: nowrap;
+}
+
 .daily-recap-field {
     min-width: 110px;
 }
 
-/* Quantitative rows reuse the desktop "value / max" combined field so the
-   target is readable inside the control itself. */
 .daily-recap-quant {
     display: inline-flex;
     align-items: center;
-    min-width: 110px;
+    gap: 0.35rem;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.daily-recap-quant .step-button {
+    flex: 0 0 auto;
 }
 
 .daily-recap-quant .quant-field {
-    padding: 0.7rem 0.9rem;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.22rem;
+    min-width: 0;
+    padding: 0.55rem 0.7rem;
     border-radius: 12px;
-    font-size: 1rem;
+    font-size: 0.95rem;
+    flex: 0 1 auto;
 }
 
-/* The input drops the shared .progress-input class here, so restore the
-   typography it would otherwise not inherit from the wrapper. */
 .daily-recap-quant .quant-value {
     font: inherit;
     color: inherit;
+    width: 3.4ch;
+    min-width: 2.4rem;
+    max-width: 5rem;
+}
+
+.daily-recap-quant .quant-suffix {
+    font-size: 0.95em;
 }
 
 .daily-recap-select {
@@ -3629,8 +3652,17 @@ body.auth-page main {
         align-items: flex-start;
     }
 
+    .daily-recap-row-quant {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+    }
+
     .daily-recap-controls {
         justify-content: flex-start;
+    }
+
+    .daily-recap-row-quant .daily-recap-controls {
+        justify-content: flex-end;
     }
 
     .daily-recap-actions {
