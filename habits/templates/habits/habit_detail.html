@@ -1,7 +1,9 @@
 {% extends "habits/base.html" %}
 
+{% block body_class %}habit-detail-page{% endblock %}
+
 {% block content %}
-<section class="hero compact">
+<section class="hero compact habit-detail-hero">
     <div>
         <p class="eyebrow">Habit focus</p>
         <h1>{{ habit.name }}</h1>
@@ -31,11 +33,11 @@
     </div>
 </section>
 
-<section class="card-grid">
-    <div class="card" style="--i: 0;">
+<section class="card-grid habit-detail-card-grid">
+    <div class="card habit-overview-card" style="--i: 0;">
         <h2>Overview</h2>
         <p class="description">{{ habit.description|default:"No description yet." }}</p>
-        <div class="stats-grid">
+        <div class="stats-grid habit-detail-stats">
             <div class="stat">
                 <span class="stat-label">Current streak</span>
                 <span class="stat-value">{{ current_streak }}</span>
@@ -78,12 +80,16 @@
         {% endif %}
     </div>
 
-    <div class="card" style="--i: 1;">
+    <div class="card habit-history-card" style="--i: 1;">
         <div class="card-header">
             <h2>Completion history</h2>
-            <span class="tag">Last {{ history|length }} scheduled dates</span>
+            <span class="tag">
+                <span class="habit-detail-label-desktop">Last {{ history|length }} scheduled dates</span>
+                <span class="habit-detail-label-mobile">{{ history|length }} dates</span>
+            </span>
         </div>
         {% if history %}
+            <p class="habit-history-mobile-hint">Swipe to see more</p>
             <ul class="history-grid">
                 {% for item in history %}
                     <li class="history-item {{ item.status }}">
@@ -101,10 +107,13 @@
     </div>
 </section>
 
-<section class="card" style="--i: 2;">
+<section class="card habit-trend-card" style="--i: 2;">
     <div class="card-header">
         <h2>Progress trend</h2>
-        <span class="tag">Last 15 scheduled occurrences</span>
+        <span class="tag">
+            <span class="habit-detail-label-desktop">Last 15 scheduled occurrences</span>
+            <span class="habit-detail-label-mobile">15 sessions</span>
+        </span>
     </div>
     <div class="chart-wrap">
         <canvas id="habitChart"></canvas>

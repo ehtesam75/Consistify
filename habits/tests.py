@@ -1078,6 +1078,10 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(response.context["all_time_stats"]["average_completion"], 36.2)
         self.assertEqual(len(response.context["history"]), 15)
         self.assertContains(response, "All time")
+        self.assertContains(response, "Habit focus")
+        self.assertContains(response, 'class="habit-detail-page"')
+        self.assertContains(response, "Swipe to see more")
+        self.assertContains(response, "15 sessions")
 
     def test_paused_dates_are_excluded_from_metrics(self):
         start = date(2026, 1, 1)
