@@ -350,7 +350,6 @@ window.ConsistifyUI = (() => {
             }
 
             const updateSummaryCounter = (data) => {
-                    initDailyRecapQuantControls();
                 if (data.completion_rate == null) {
                     return;
                 }
@@ -772,6 +771,7 @@ window.ConsistifyUI = (() => {
 
     function initUiFeatures() {
         initThemeToggle();
+        initDailyRecapQuantControls();
         initHabitProgressControls();
         initDeleteConfirmations();
         initNotificationMenus();
