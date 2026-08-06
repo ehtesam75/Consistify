@@ -5,6 +5,19 @@ from django import forms
 from .models import Habit, HabitCategory
 
 
+class TargetValueInput(forms.NumberInput):
+    def format_value(self, value):
+        if isinstance(value, Decimal):
+            normalized = value.normalize()
+            if normalized == normalized.to_integral_value():
+                normalized = normalized.quantize(Decimal("1"))
+            rendered = format(normalized, "f")
+            if "." in rendered:
+                rendered = rendered.rstrip("0").rstrip(".")
+            return rendered
+        return super().format_value(value)
+
+
 class HabitForm(forms.ModelForm):
     DAYS_OF_WEEK_CHOICES = [
         ("0", "Monday"),
@@ -39,7 +52,7 @@ class HabitForm(forms.ModelForm):
         required=False,
         min_value=0,
         decimal_places=2,
-        widget=forms.NumberInput(
+        widget=TargetValueInput(
             attrs={"class": "input", "min": 0, "step": "any"}
         ),
         help_text="Only used for quantitative habits.",

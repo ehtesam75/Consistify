@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from .forms import HabitForm
 from .models import (
     DEFAULT_CATEGORIES,
     DailyRecapCompletion,
@@ -87,11 +88,44 @@ class DashboardPresentationTests(TestCase):
             response,
             "The share of scheduled sessions you finished completely",
         )
-
         self.assertContains(response, "helping your overall Consistency Score")
         self.assertContains(response, "holding your overall Consistency Score back")
         self.assertContains(response, "largest increase in Consistency Score")
         self.assertContains(response, "largest decrease in Consistency Score")
+
+
+class HabitFormPresentationTests(TestCase):
+    def test_target_value_display_strips_unnecessary_trailing_zeros(self):
+        user = get_user_model().objects.create_user(
+            username="habit-form-display-user",
+            password="not-used",
+        )
+        integer_habit = Habit.objects.create(
+            user=user,
+            name="Integer target",
+            habit_type=Habit.HABIT_QUANTITATIVE,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=date(2026, 1, 1),
+            target_value=Decimal("10"),
+            unit="pages",
+        )
+        decimal_habit = Habit.objects.create(
+            user=user,
+            name="Decimal target",
+            habit_type=Habit.HABIT_QUANTITATIVE,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=date(2026, 1, 1),
+            target_value=Decimal("10.5"),
+            unit="pages",
+        )
+
+        integer_target_html = str(HabitForm(instance=integer_habit)["target_value"])
+        decimal_target_html = str(HabitForm(instance=decimal_habit)["target_value"])
+
+        self.assertIn('value="10"', integer_target_html)
+        self.assertNotIn('value="10.0"', integer_target_html)
+        self.assertIn('value="10.5"', decimal_target_html)
+        self.assertNotIn('value="10.50"', decimal_target_html)
 
     def test_driver_cards_keep_current_metrics_in_desktop_markup(self):
         user = get_user_model().objects.create_user(
