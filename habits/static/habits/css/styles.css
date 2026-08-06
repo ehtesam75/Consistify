@@ -2001,9 +2001,17 @@ html {
 }
 
 .score-driver-card {
+    position: relative;
     display: grid;
     align-content: start;
     gap: 0.45rem;
+}
+
+.score-driver-card:hover,
+.score-driver-card:focus-within,
+.stats-grid .stat-card:hover,
+.stats-grid .stat-card:focus-within {
+    z-index: 9;
 }
 
 .score-driver-heading {
