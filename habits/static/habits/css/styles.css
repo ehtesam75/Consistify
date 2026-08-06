@@ -3937,18 +3937,55 @@ body.auth-page main {
         font-size: 0.6rem;
     }
 
-    .score-change-summary,
     .score-component {
         grid-template-columns: 1fr;
     }
 
     .score-change-summary {
-        align-items: flex-start;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+    }
+
+    .score-change-summary > div {
+        display: contents;
+    }
+
+    .score-change-summary .stat-label {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .score-change-summary .score-change-value {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .score-change-summary .delta-pill {
+        grid-column: 2;
+        grid-row: 2;
+        justify-self: end;
+    }
+
+    .score-change-summary > .stat-note {
+        grid-column: 1 / -1;
+        grid-row: 3;
     }
 
     .score-component-metrics {
-        justify-items: start;
+        display: flex;
+        align-items: baseline;
+        gap: 0.25rem;
+        min-width: 0;
+        white-space: nowrap;
+    }
+
+    .score-component-metrics small::before {
+        content: "(";
+    }
+
+    .score-component-metrics small::after {
+        content: ")";
     }
 
     .category-summary-grid {
