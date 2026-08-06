@@ -1,6 +1,7 @@
 {% load static %}
-const CACHE_NAME = "consistify-static-v5";
+const CACHE_NAME = "consistify-static-v6";
 const OFFLINE_URL = "{% url 'habits:index' %}";
+const VERSIONED_STATIC_ASSET = /\.[0-9a-f]{12}\./;
 
 const PRECACHE_URLS = [
   OFFLINE_URL,
@@ -40,7 +41,11 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.pathname.startsWith("/static/")) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(
+      VERSIONED_STATIC_ASSET.test(url.pathname)
+        ? cacheFirst(request)
+        : networkFirstStatic(request)
+    );
     return;
   }
 
@@ -61,6 +66,19 @@ async function cacheFirst(request) {
     cache.put(request, response.clone());
   }
   return response;
+}
+
+async function networkFirstStatic(request) {
+  try {
+    const response = await fetch(request, { cache: "no-cache" });
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    return (await caches.match(request)) || Response.error();
+  }
 }
 
 async function networkFirstNavigation(request) {

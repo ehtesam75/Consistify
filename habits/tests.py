@@ -30,6 +30,45 @@ from .services import (
 )
 
 
+class PwaAssetDeliveryTests(TestCase):
+    def test_service_worker_forces_updates_and_revalidates_unversioned_assets(self):
+        response = self.client.get(reverse("service_worker"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("no-cache", response["Cache-Control"])
+        self.assertIn('const CACHE_NAME = "consistify-static-v6";', response.content.decode())
+        self.assertIn("networkFirstStatic(request)", response.content.decode())
+
+    def test_manifest_has_stable_identity_and_requires_revalidation(self):
+        response = self.client.get(reverse("manifest"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("no-cache", response["Cache-Control"])
+        self.assertEqual(response.json()["id"], "/")
+
+
+class DashboardPresentationTests(TestCase):
+    def test_dashboard_contains_responsive_stat_labels_and_weighted_rate_note(self):
+        user = get_user_model().objects.create_user(
+            username="dashboard-presentation-user",
+            password="not-used",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("habits:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Overall completion")
+        self.assertContains(response, "Completion")
+        self.assertContains(response, "Scheduled sessions")
+        self.assertContains(response, "Scheduled")
+        self.assertContains(response, "Completed sessions")
+        self.assertContains(response, "Completed")
+        self.assertContains(response, "Consistency score")
+        self.assertContains(response, "Consistency")
+        self.assertContains(response, "Priority-weighted rate")
+
+
 class ConsistencyScoreTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(

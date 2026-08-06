@@ -20,7 +20,23 @@ function lockPortraitOrientation() {
 
 window.addEventListener("load", () => {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/service-worker.js", { scope: "/" }).catch(() => {});
+    const shouldReloadForUpdate = Boolean(navigator.serviceWorker.controller);
+    let reloading = false;
+
+    if (shouldReloadForUpdate) {
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (reloading) {
+          return;
+        }
+        reloading = true;
+        window.location.reload();
+      });
+    }
+
+    navigator.serviceWorker
+      .register("/service-worker.js", { scope: "/", updateViaCache: "none" })
+      .then((registration) => registration.update())
+      .catch(() => {});
   }
 
   lockPortraitOrientation();

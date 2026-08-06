@@ -2,6 +2,7 @@
   "name": "Consistify",
   "short_name": "Consistify",
   "description": "Build steady progress with daily habits.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

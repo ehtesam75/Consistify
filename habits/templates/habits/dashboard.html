@@ -17,17 +17,26 @@
 
 <section class="stats-grid wide">
     <div class="stat-card">
-        <span class="stat-label">Overall completion</span>
+        <span class="stat-label">
+            <span class="dashboard-stat-label-desktop">Overall completion</span>
+            <span class="dashboard-stat-label-mobile">Completion</span>
+        </span>
         <span class="stat-value">{{ overall_rate }}%</span>
-        <span class="stat-note">{{ dashboard_window_note }}</span>
+        <span class="stat-note">Priority-weighted · {{ dashboard_window_note }}</span>
     </div>
     <div class="stat-card">
-        <span class="stat-label">Scheduled sessions</span>
+        <span class="stat-label">
+            <span class="dashboard-stat-label-desktop">Scheduled sessions</span>
+            <span class="dashboard-stat-label-mobile">Scheduled</span>
+        </span>
         <span class="stat-value">{{ total_scheduled }}</span>
         <span class="stat-note">Across all habits · {{ dashboard_window_note }}</span>
     </div>
     <div class="stat-card">
-        <span class="stat-label">Completed sessions</span>
+        <span class="stat-label">
+            <span class="dashboard-stat-label-desktop">Completed sessions</span>
+            <span class="dashboard-stat-label-mobile">Completed</span>
+        </span>
         <span class="stat-value">{{ total_completed }}</span>
         <span class="stat-note">100% completion · {{ dashboard_window_note }}</span>
     </div>
@@ -37,7 +46,10 @@
         <span class="stat-note">Currently tracked</span>
     </div>
     <div class="stat-card">
-        <span class="stat-label">Consistency score</span>
+        <span class="stat-label">
+            <span class="dashboard-stat-label-desktop">Consistency score</span>
+            <span class="dashboard-stat-label-mobile">Consistency</span>
+        </span>
         <span class="stat-value">{{ overall_consistency }}</span>
         <span class="stat-note">Across all habits · {{ dashboard_window_note }}</span>
     </div>

@@ -1134,6 +1134,10 @@ main > section + section {
     color: var(--ink-soft);
 }
 
+.dashboard-stat-label-mobile {
+    display: none;
+}
+
 .stat-value {
     display: block;
     font-size: 1.5rem;
@@ -3359,6 +3363,14 @@ body.auth-page main {
     .mobile-hide-find-users,
     .dashboard-page .mobile-hide-active-habits {
         display: none;
+    }
+
+    .dashboard-page .dashboard-stat-label-desktop {
+        display: none;
+    }
+
+    .dashboard-page .dashboard-stat-label-mobile {
+        display: inline;
     }
 
     .today-page .hero-title-row {

@@ -14,7 +14,7 @@ def service_worker(request):
 
 
 @require_GET
-@cache_control(max_age=86400)
+@cache_control(max_age=0, no_cache=True, must_revalidate=True)
 def manifest(request):
     content = render_to_string("pwa/manifest.json", request=request)
     return HttpResponse(content, content_type="application/manifest+json; charset=utf-8")
