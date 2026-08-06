@@ -819,6 +819,59 @@ main > section + section {
     border-color: var(--accent);
 }
 
+.quant-field {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.2rem;
+    min-width: 0;
+    padding: 0.4rem 0.6rem;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 0.9rem;
+}
+
+.quant-field:focus-within {
+    outline: 2px solid rgba(176, 122, 55, 0.2);
+    border-color: var(--accent);
+}
+
+.quant-field .quant-value {
+    width: 3ch;
+    min-width: 1.4rem;
+    max-width: 5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.quant-field .quant-value:focus {
+    outline: none;
+    border: 0;
+}
+
+.quant-field .quant-value::-webkit-outer-spin-button,
+.quant-field .quant-value::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.quant-field .quant-value {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.quant-suffix {
+    color: var(--ink-soft);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+
 .step-button {
     width: 28px;
     height: 28px;
@@ -4367,10 +4420,29 @@ body.auth-page main {
         width: 54px;
     }
 
+    /* On mobile the "Max:" helper below is the sole target indicator, so
+       collapse the combined field wrapper and hide the inline suffix. */
+    .today-page .quant-field {
+        display: contents;
+    }
+
+    .today-page .quant-field .quant-suffix {
+        display: none;
+    }
+
+    .today-page .quant-field .quant-value {
+        padding: 0.4rem 0.55rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        text-align: center;
+    }
+
     .today-page .progress-caption.inline {
         font-size: 0.76rem;
         text-align: right;
     }
+
 
     .notification-panel {
         top: 4.6rem;
