@@ -823,9 +823,9 @@ def _build_score_driver_cards(score_drivers):
             "value_label": "weighted share",
             "empty": "No scored habits yet.",
             "help_text": (
-                "The habit adding the largest weighted share to your overall "
-                "Consistency Score in the current window. Its share combines "
-                "its score with priority and scheduled frequency."
+                "This is the habit helping your overall Consistency Score the "
+                "most. A habit has more impact when it has a strong score, "
+                "higher priority, and more scheduled sessions."
             ),
         },
         {
@@ -835,9 +835,9 @@ def _build_score_driver_cards(score_drivers):
             "value_label": "possible score gap",
             "empty": "No scored habits yet.",
             "help_text": (
-                "The habit creating the largest weighted gap from a perfect "
-                "Consistency Score in the current window. The gap combines its "
-                "distance from 100 with priority and scheduled frequency."
+                "This is the habit holding your overall Consistency Score back "
+                "the most. The gap is larger when its score is farther from "
+                "100, especially with higher priority or more scheduled sessions."
             ),
         },
         {

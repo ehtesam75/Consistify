@@ -17,39 +17,66 @@
 
 <section class="stats-grid wide">
     <div class="stat-card">
-        <span class="stat-label">
-            <span class="dashboard-stat-label-desktop">Overall completion</span>
-            <span class="dashboard-stat-label-mobile">Completion</span>
-        </span>
+        <div class="stat-card-heading">
+            <span class="stat-label">
+                <span class="dashboard-stat-label-desktop">Overall completion</span>
+                <span class="dashboard-stat-label-mobile">Completion</span>
+            </span>
+            <div class="score-driver-help">
+                <button type="button" class="score-driver-help-button" aria-label="About completion" aria-describedby="dashboard-stat-help-completion" aria-expanded="false" data-score-driver-help>
+                    <span aria-hidden="true">ⓘ</span>
+                </button>
+                <span class="score-driver-tooltip" id="dashboard-stat-help-completion" role="tooltip">Average progress across scheduled sessions, weighted by each habit's priority.</span>
+            </div>
+        </div>
         <span class="stat-value">{{ overall_rate }}%</span>
         <span class="stat-note">Priority-weighted · {{ dashboard_window_note }}</span>
     </div>
     <div class="stat-card">
-        <span class="stat-label">
-            <span class="dashboard-stat-label-desktop">Scheduled sessions</span>
-            <span class="dashboard-stat-label-mobile">Scheduled</span>
-        </span>
+        <div class="stat-card-heading">
+            <span class="stat-label">
+                <span class="dashboard-stat-label-desktop">Scheduled sessions</span>
+                <span class="dashboard-stat-label-mobile">Scheduled</span>
+            </span>
+            <div class="score-driver-help">
+                <button type="button" class="score-driver-help-button" aria-label="About scheduled sessions" aria-describedby="dashboard-stat-help-scheduled" aria-expanded="false" data-score-driver-help>
+                    <span aria-hidden="true">ⓘ</span>
+                </button>
+                <span class="score-driver-tooltip" id="dashboard-stat-help-scheduled" role="tooltip">Total habit sessions scheduled during the current 30-day window.</span>
+            </div>
+        </div>
         <span class="stat-value">{{ total_scheduled }}</span>
         <span class="stat-note">Across all habits · {{ dashboard_window_note }}</span>
     </div>
     <div class="stat-card">
-        <span class="stat-label">
-            <span class="dashboard-stat-label-desktop">Completed sessions</span>
-            <span class="dashboard-stat-label-mobile">Completed</span>
-        </span>
+        <div class="stat-card-heading">
+            <span class="stat-label">
+                <span class="dashboard-stat-label-desktop">Completed sessions</span>
+                <span class="dashboard-stat-label-mobile">Completed</span>
+            </span>
+            <div class="score-driver-help">
+                <button type="button" class="score-driver-help-button" aria-label="About completed sessions" aria-describedby="dashboard-stat-help-completed" aria-expanded="false" data-score-driver-help>
+                    <span aria-hidden="true">ⓘ</span>
+                </button>
+                <span class="score-driver-tooltip" id="dashboard-stat-help-completed" role="tooltip">Scheduled sessions that reached 100% completion in the current window.</span>
+            </div>
+        </div>
         <span class="stat-value">{{ total_completed }}</span>
         <span class="stat-note">100% completion · {{ dashboard_window_note }}</span>
     </div>
-    <div class="stat-card mobile-hide-active-habits">
-        <span class="stat-label">Active habits</span>
-        <span class="stat-value">{{ total_habits }}</span>
-        <span class="stat-note">Currently tracked</span>
-    </div>
     <div class="stat-card">
-        <span class="stat-label">
-            <span class="dashboard-stat-label-desktop">Consistency score</span>
-            <span class="dashboard-stat-label-mobile">Consistency</span>
-        </span>
+        <div class="stat-card-heading">
+            <span class="stat-label">
+                <span class="dashboard-stat-label-desktop">Consistency score</span>
+                <span class="dashboard-stat-label-mobile">Consistency</span>
+            </span>
+            <div class="score-driver-help">
+                <button type="button" class="score-driver-help-button" aria-label="About consistency" aria-describedby="dashboard-stat-help-consistency" aria-expanded="false" data-score-driver-help>
+                    <span aria-hidden="true">ⓘ</span>
+                </button>
+                <span class="score-driver-tooltip" id="dashboard-stat-help-consistency" role="tooltip">Weighted score combining completion quality, full completion, rhythm stability, and recent momentum.</span>
+            </div>
+        </div>
         <span class="stat-value">{{ overall_consistency }}</span>
         <span class="stat-note">Across all habits · {{ dashboard_window_note }}</span>
     </div>

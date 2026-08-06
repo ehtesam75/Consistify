@@ -2004,6 +2004,28 @@ html {
     gap: 0.6rem;
 }
 
+.stat-card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+
+.stats-grid .stat-card {
+    position: relative;
+}
+
+.stats-grid .score-driver-help {
+    position: static;
+}
+
+.stats-grid .score-driver-tooltip {
+    top: 2.9rem;
+    right: 1rem;
+    left: 1rem;
+    width: auto;
+}
+
 .score-driver-help {
     position: relative;
     flex: 0 0 auto;
@@ -3421,8 +3443,7 @@ body.auth-page main {
     }
 
     .mobile-hide-action,
-    .mobile-hide-find-users,
-    .dashboard-page .mobile-hide-active-habits {
+    .mobile-hide-find-users {
         display: none;
     }
 
@@ -4067,6 +4088,36 @@ body.auth-page main {
 
     .category-summary-grid {
         grid-template-columns: 1fr;
+        gap: 0.65rem;
+    }
+
+    .category-analytics-card {
+        gap: 0.65rem;
+    }
+
+    .category-analytics-card .card-header {
+        margin-bottom: 0;
+    }
+
+    .category-summary {
+        gap: 0.6rem;
+        padding: 0.8rem;
+    }
+
+    .category-summary-head {
+        min-height: 0;
+    }
+
+    .category-summary-stats {
+        gap: 0.5rem;
+    }
+
+    .category-summary-stats strong {
+        margin-top: 0.1rem;
+    }
+
+    .category-summary .habit-meta {
+        margin-top: 0;
     }
 
     .card {
