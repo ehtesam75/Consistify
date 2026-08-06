@@ -2011,6 +2011,53 @@ class DailyRecapPromptTests(TestCase):
         self.assertContains(response, "Unfinished daily")
         self.assertEqual(self.client.session["daily_recap_date"], yesterday.isoformat())
 
+    def test_daily_recap_shows_target_inside_quantitative_input(self):
+        """Quantitative rows mirror the desktop "value / max" combined field."""
+        today = date(2026, 5, 23)
+        yesterday = today - timedelta(days=1)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Drink water",
+            habit_type=Habit.HABIT_QUANTITATIVE,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=yesterday,
+            target_value=Decimal("10"),
+            unit="glasses",
+        )
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=yesterday,
+            completion_percentage=Decimal("60"),
+            raw_value=Decimal("6"),
+        )
+
+        self.client.force_login(self.user)
+        self.user.last_login = timezone.make_aware(datetime(2026, 5, 22, 23, 45))
+        self.user.save(update_fields=["last_login"])
+
+        original_localdate = timezone.localdate
+
+        def fake_localdate(value=None):
+            if value is None:
+                return today
+            return original_localdate(value)
+
+        with patch(
+            "habits.context_processors.timezone.localdate", side_effect=fake_localdate
+        ):
+            response = self.client.get(reverse("habits:today"))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        recap = content.split('class="daily-recap-overlay"', 1)[1]
+
+        # The editable value and the max live in the same bordered field, and
+        # the input still clamps to the target.
+        self.assertIn('class="quant-field"', recap)
+        self.assertIn('<span class="quant-suffix">/ 10</span>', recap)
+        self.assertIn('max="10"', recap)
+        self.assertIn('value="6"', recap)
+
     def test_daily_recap_rejects_direct_posts_without_server_session(self):
         today = date(2026, 5, 23)
         old_date = today - timedelta(days=20)

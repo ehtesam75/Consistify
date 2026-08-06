@@ -2599,6 +2599,27 @@ body.recap-open {
     min-width: 110px;
 }
 
+/* Quantitative rows reuse the desktop "value / max" combined field so the
+   target is readable inside the control itself. */
+.daily-recap-quant {
+    display: inline-flex;
+    align-items: center;
+    min-width: 110px;
+}
+
+.daily-recap-quant .quant-field {
+    padding: 0.7rem 0.9rem;
+    border-radius: 12px;
+    font-size: 1rem;
+}
+
+/* The input drops the shared .progress-input class here, so restore the
+   typography it would otherwise not inherit from the wrapper. */
+.daily-recap-quant .quant-value {
+    font: inherit;
+    color: inherit;
+}
+
 .daily-recap-select {
     min-width: 140px;
 }
@@ -4421,16 +4442,18 @@ body.auth-page main {
     }
 
     /* On mobile the "Max:" helper below is the sole target indicator, so
-       collapse the combined field wrapper and hide the inline suffix. */
-    .today-page .quant-field {
+       collapse the combined field wrapper and hide the inline suffix. These are
+       scoped to .progress-form so the daily recap modal - which renders inside
+       body.today-page and has no "Max:" helper - keeps its inline "/ max". */
+    .today-page .progress-form .quant-field {
         display: contents;
     }
 
-    .today-page .quant-field .quant-suffix {
+    .today-page .progress-form .quant-field .quant-suffix {
         display: none;
     }
 
-    .today-page .quant-field .quant-value {
+    .today-page .progress-form .quant-field .quant-value {
         padding: 0.4rem 0.55rem;
         border: 1px solid var(--border);
         border-radius: 10px;

@@ -248,10 +248,14 @@
                                         </label>
                                         <span class="daily-recap-unit">%</span>
                                     {% else %}
-                                        <label class="daily-recap-field">
+                                        <label class="daily-recap-quant">
                                             <span class="sr-only">Progress value</span>
-                                            <input class="input" type="number" min="0" step="any" name="value_{{ item.habit.id }}" value="{{ item.raw_value|default_if_none:0|floatformat:'-2' }}" required>
-
+                                            <span class="quant-field">
+                                                <input class="quant-value" type="number" min="0" step="any" {% if item.target_value %}max="{{ item.target_value|floatformat:'-2' }}"{% endif %} name="value_{{ item.habit.id }}" value="{{ item.raw_value|default_if_none:0|floatformat:'-2' }}" required>
+                                                {% if item.target_value %}
+                                                    <span class="quant-suffix">/ {{ item.target_value|floatformat:'-2' }}</span>
+                                                {% endif %}
+                                            </span>
                                         </label>
                                         <span class="daily-recap-unit">{{ item.unit }}</span>
                                     {% endif %}
