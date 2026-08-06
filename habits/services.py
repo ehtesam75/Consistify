@@ -32,6 +32,11 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "metric_key": "completion_quality",
         "weight": CONSISTENCY_COMPLETION_QUALITY_WEIGHT,
         "description": "Average progress across every scheduled session.",
+        "help_text": (
+            "The average progress you log across every scheduled session, so "
+            "partial and measurable wins still count. Finishing at 60% counts "
+            "more than a miss, but less than a full 100%."
+        ),
     },
     {
         "key": "full_completion",
@@ -39,6 +44,11 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "metric_key": "full_completion_reliability",
         "weight": CONSISTENCY_FULL_COMPLETION_WEIGHT,
         "description": "How often scheduled sessions reached 100%.",
+        "help_text": (
+            "The share of scheduled sessions you finished completely (100%). "
+            "Partial progress does not count here, so this rewards fully "
+            "closing out what you planned."
+        ),
     },
     {
         "key": "rhythm_stability",
@@ -46,6 +56,11 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "metric_key": "streak_stability",
         "weight": CONSISTENCY_RHYTHM_WEIGHT,
         "description": "Recent success coverage and consecutive successful sessions.",
+        "help_text": (
+            "How steady your recent cadence is. It rewards both a high share of "
+            "recent sessions above 50% and consecutive successful sessions that "
+            "keep a reliable rhythm going."
+        ),
     },
     {
         "key": "recent_momentum",
@@ -53,7 +68,13 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "metric_key": "recent_momentum",
         "weight": CONSISTENCY_RECENT_MOMENTUM_WEIGHT,
         "description": "Confidence-adjusted direction across recent scheduled sessions.",
+        "help_text": (
+            "The direction of your latest sessions, rewarding meaningful "
+            "improvement while filtering out small fluctuations and sparse "
+            "data. Trending upward lifts it; slipping recently lowers it."
+        ),
     },
+
 )
 
 
@@ -830,7 +851,9 @@ def build_overall_score_breakdown(
                 "key": component["key"],
                 "label": component["label"],
                 "description": component["description"],
+                "help_text": component["help_text"],
                 "weight": int(component["weight"] * 100),
+
                 "current_value": current_component["value"],
                 "current_points": current_component["points"],
                 "previous_value": (

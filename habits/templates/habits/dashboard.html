@@ -114,9 +114,25 @@
         {% for component in score_breakdown.components %}
             <div class="score-component">
                 <div class="score-component-copy">
-                    <span class="score-component-title">{{ component.label }}</span>
+                    <div class="score-component-title-row">
+                        <span class="score-component-title">{{ component.label }}</span>
+                        <div class="score-driver-help">
+                            <button type="button"
+                                    class="score-driver-help-button"
+                                    aria-label="About {{ component.label }}"
+                                    aria-describedby="score-component-help-{{ forloop.counter }}"
+                                    aria-expanded="false"
+                                    data-score-driver-help>
+                                <span aria-hidden="true">ⓘ</span>
+                            </button>
+                            <span class="score-driver-tooltip" id="score-component-help-{{ forloop.counter }}" role="tooltip">
+                                {{ component.help_text }}
+                            </span>
+                        </div>
+                    </div>
                     <p>{{ component.description }}</p>
                 </div>
+
                 <div class="score-component-metrics">
                     <strong>{{ component.current_points }}</strong>
                     <span>pts</span>

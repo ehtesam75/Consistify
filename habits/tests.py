@@ -75,12 +75,17 @@ class DashboardPresentationTests(TestCase):
         self.assertContains(response, "Priority-weighted")
         self.assertEqual(
             response.content.decode().count('class="score-driver-help"'),
-            8,
+            12,
         )
         self.assertContains(response, "Average progress across scheduled sessions")
         self.assertContains(response, "Total habit sessions scheduled")
         self.assertContains(response, "reached 100% completion")
         self.assertContains(response, "completion quality, full completion")
+        self.assertContains(
+            response,
+            "The share of scheduled sessions you finished completely",
+        )
+
         self.assertContains(response, "helping your overall Consistency Score")
         self.assertContains(response, "holding your overall Consistency Score back")
         self.assertContains(response, "largest increase in Consistency Score")

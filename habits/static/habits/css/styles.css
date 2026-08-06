@@ -2019,11 +2019,22 @@ html {
     border: 1px solid rgba(228, 222, 212, 0.7);
 }
 
+.score-component-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.2rem;
+}
+
+.score-component-title-row .score-driver-help {
+    line-height: 0;
+}
+
 .score-component-title {
     display: block;
-    margin-bottom: 0.2rem;
     font-weight: 700;
 }
+
 
 .score-component-copy p {
     margin-bottom: 0;
