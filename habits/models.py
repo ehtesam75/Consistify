@@ -182,7 +182,20 @@ class HabitPlanVersion(models.Model):
     )
     effective_from = models.DateField()
     schedule_anchor = models.DateField()
+    habit_type = models.CharField(
+        max_length=14,
+        choices=Habit.HABIT_TYPE_CHOICES,
+        default=Habit.HABIT_BINARY,
+    )
+    target_value = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    unit = models.CharField(max_length=24, blank=True)
     schedule_type = models.CharField(max_length=12, choices=Habit.SCHEDULE_CHOICES)
+
     interval_days = models.PositiveSmallIntegerField(default=1)
     weekly_interval = models.PositiveSmallIntegerField(default=1)
     days_of_week = models.CharField(max_length=20, blank=True)

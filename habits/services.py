@@ -91,10 +91,17 @@ class HabitPlanConfig:
     days_of_week: frozenset
     priority: str
     category_ids: frozenset
+    habit_type: str = Habit.HABIT_BINARY
+    target_value: object = None
+    unit: str = ""
 
     @property
     def priority_label(self):
         return PRIORITY_LABELS.get(self.priority, self.priority.title())
+
+    @property
+    def is_quantitative(self):
+        return self.habit_type == Habit.HABIT_QUANTITATIVE
 
     @property
     def schedule_summary(self):
@@ -167,6 +174,9 @@ def _mutable_habit_plan_config(habit):
         days_of_week=frozenset(habit.get_days_of_week_set()),
         priority=habit.priority,
         category_ids=_related_category_ids(habit),
+        habit_type=habit.habit_type,
+        target_value=habit.target_value,
+        unit=habit.unit or "",
     )
 
 
@@ -197,6 +207,9 @@ def _habit_plan_configs(habit):
             days_of_week=frozenset(version.get_days_of_week_set()),
             priority=version.priority,
             category_ids=_related_category_ids(version),
+            habit_type=version.habit_type,
+            target_value=version.target_value,
+            unit=version.unit or "",
         )
         for version in versions
     )
@@ -737,6 +750,7 @@ def get_pending_habits_for_date(user, target_date):
         occurrence = scheduled_occurrence_on(habit, target_date)
         if occurrence is None:
             continue
+        config = occurrence.config
         completion = completion_map.get(habit.id)
         completion_percentage = (
             float(completion.completion_percentage) if completion else 0.0
@@ -744,13 +758,17 @@ def get_pending_habits_for_date(user, target_date):
         raw_value = None
         if completion and completion.raw_value is not None:
             raw_value = float(completion.raw_value)
-            if habit.habit_type == Habit.HABIT_QUANTITATIVE:
+            if config.is_quantitative:
                 raw_value = int(raw_value)
 
         if completion is None or completion_percentage < 100:
             pending.append(
                 {
                     "habit": habit,
+                    "config": config,
+                    "habit_type": config.habit_type,
+                    "target_value": config.target_value,
+                    "unit": config.unit,
                     "schedule_summary": occurrence.schedule_summary,
                     "completion_percentage": completion_percentage,
                     "raw_value": raw_value,
@@ -1536,16 +1554,21 @@ def compute_today_metrics(user, target_date):
     rows = []
     for habit in scheduled_habits:
         occurrence = occurrence_lookup[habit.id]
+        config = occurrence.config
         completion = completion_map.get(habit.id)
         completion_percentage = completion_lookup.get(habit.id, 0.0)
         raw_value = None
         if completion and completion.raw_value is not None:
             raw_value = float(completion.raw_value)
-            if habit.habit_type == Habit.HABIT_QUANTITATIVE:
+            if config.is_quantitative:
                 raw_value = int(raw_value)
         rows.append(
             {
                 "habit": habit,
+                "config": config,
+                "habit_type": config.habit_type,
+                "target_value": config.target_value,
+                "unit": config.unit,
                 "schedule_summary": occurrence.schedule_summary,
                 "priority": occurrence.priority,
                 "priority_label": occurrence.priority_label,

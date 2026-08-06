@@ -454,6 +454,9 @@ def habit_edit(request, habit_id):
         form = HabitForm(request.POST, instance=habit)
         if form.is_valid():
             versioned_fields = {
+                "habit_type",
+                "target_value",
+                "unit",
                 "schedule_type",
                 "categories",
                 "priority",
@@ -469,9 +472,6 @@ def habit_edit(request, habit_id):
                     for field in (
                         "name",
                         "description",
-                        "habit_type",
-                        "target_value",
-                        "unit",
                         "tags",
                     )
                 }
@@ -479,6 +479,9 @@ def habit_edit(request, habit_id):
                 with transaction.atomic(using=database):
                     schedule_habit_plan_edit(
                         habit,
+                        habit_type=form.cleaned_data["habit_type"],
+                        target_value=form.cleaned_data["target_value"],
+                        unit=form.cleaned_data["unit"],
                         schedule_type=form.cleaned_data["schedule_type"],
                         start_date=form.cleaned_data["start_date"],
                         interval_days=form.cleaned_data["interval_days"] or 1,
@@ -668,23 +671,31 @@ def update_progress(request, habit_id):
         date=target_date,
     )
 
+    plan_config = resolve_habit_plan_on(habit, target_date)
+    effective_habit_type = plan_config.habit_type if plan_config else habit.habit_type
+    effective_target_value = (
+        plan_config.target_value if plan_config else habit.target_value
+    )
+
     completion_percentage = Decimal("0")
     raw_value = None
 
-    if habit.habit_type == Habit.HABIT_BINARY:
+    if effective_habit_type == Habit.HABIT_BINARY:
         is_done = request.POST.get("completed") is not None
         completion_percentage = Decimal("100") if is_done else Decimal("0")
         raw_value = completion_percentage
-    elif habit.habit_type == Habit.HABIT_PARTIAL:
+    elif effective_habit_type == Habit.HABIT_PARTIAL:
         completion_percentage = _clamp_percentage(request.POST.get("completion_percentage"))
         raw_value = completion_percentage
     else:
-        if not habit.target_value or habit.target_value <= 0:
+        if not effective_target_value or effective_target_value <= 0:
             return _progress_error_response(
                 request,
                 "Add a target value before logging progress.",
             )
-        target_value = habit.target_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        target_value = effective_target_value.quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
         raw_value = _parse_decimal(request.POST.get("current_value")) or Decimal("0")
         raw_value = raw_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
         if raw_value < 0:
@@ -1307,11 +1318,13 @@ def daily_recap(request):
 
     for item in pending:
         habit = item["habit"]
-        if habit.habit_type == Habit.HABIT_BINARY:
+        effective_habit_type = item.get("habit_type", habit.habit_type)
+        effective_target_value = item.get("target_value", habit.target_value)
+        if effective_habit_type == Habit.HABIT_BINARY:
             is_done = request.POST.get(f"completed_{habit.id}") == "1"
             completion_percentage = Decimal("100") if is_done else Decimal("0")
             raw_value = completion_percentage
-        elif habit.habit_type == Habit.HABIT_PARTIAL:
+        elif effective_habit_type == Habit.HABIT_PARTIAL:
             raw_value = request.POST.get(f"percentage_{habit.id}")
             if raw_value in (None, ""):
                 errors.append(habit.name)
@@ -1319,14 +1332,14 @@ def daily_recap(request):
             completion_percentage = _clamp_percentage(raw_value)
             raw_value = completion_percentage
         else:
-            if not habit.target_value or habit.target_value <= 0:
+            if not effective_target_value or effective_target_value <= 0:
                 errors.append(habit.name)
                 continue
             raw_value = request.POST.get(f"value_{habit.id}")
             if raw_value in (None, ""):
                 errors.append(habit.name)
                 continue
-            target_value = habit.target_value.quantize(
+            target_value = effective_target_value.quantize(
                 Decimal("1"), rounding=ROUND_HALF_UP
             )
             raw_value = _parse_decimal(raw_value) or Decimal("0")

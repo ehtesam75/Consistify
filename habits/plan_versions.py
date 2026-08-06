@@ -1,6 +1,8 @@
 from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
+
 from django.db import DEFAULT_DB_ALIAS, transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -9,6 +11,9 @@ from .models import Habit, HabitCategory, HabitPlanVersion
 
 
 PLAN_MIRROR_FIELDS = (
+    "habit_type",
+    "target_value",
+    "unit",
     "schedule_type",
     "start_date",
     "interval_days",
@@ -33,12 +38,27 @@ def _local_creation_date(habit):
 def _plan_defaults(habit):
     return {
         "schedule_anchor": habit.start_date,
+        "habit_type": habit.habit_type,
+        "target_value": habit.target_value,
+        "unit": habit.unit or "",
         "schedule_type": habit.schedule_type,
         "interval_days": max(1, habit.interval_days or 1),
         "weekly_interval": max(1, habit.weekly_interval or 1),
         "days_of_week": habit.days_of_week or "",
         "priority": habit.priority,
     }
+
+
+def _normalized_target_value(value):
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValidationError(
+            {"target_value": "Enter a valid target value."}
+        ) from None
+
 
 
 def _ensure_initial_for_locked(habit):
@@ -117,6 +137,9 @@ def _category_ids(categories, database):
 def schedule_habit_plan_edit(
     habit,
     *,
+    habit_type=None,
+    target_value=None,
+    unit=None,
     schedule_type=None,
     start_date=None,
     interval_days=None,
@@ -143,6 +166,12 @@ def schedule_habit_plan_edit(
         _ensure_initial_for_locked(locked)
 
         values = _plan_defaults(locked)
+        if habit_type is not None:
+            values["habit_type"] = habit_type
+        if target_value is not None:
+            values["target_value"] = _normalized_target_value(target_value)
+        if unit is not None:
+            values["unit"] = unit or ""
         if schedule_type is not None:
             values["schedule_type"] = schedule_type
         if start_date is not None:
@@ -190,6 +219,9 @@ def schedule_habit_plan_edit(
         )
         version.categories.set(category_ids)
 
+        locked.habit_type = values["habit_type"]
+        locked.target_value = values["target_value"]
+        locked.unit = values["unit"]
         locked.schedule_type = values["schedule_type"]
         locked.start_date = values["schedule_anchor"]
         locked.interval_days = values["interval_days"]

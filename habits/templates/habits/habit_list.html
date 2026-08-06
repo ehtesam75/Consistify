@@ -81,7 +81,7 @@
                             </div>
                         </div>
                         <div class="habit-progress">
-                            <form method="post" action="{% url 'habits:update_progress' item.habit.id %}" class="progress-form" data-progress-form data-habit-type="{{ item.habit.habit_type }}" data-target-value="{{ item.habit.target_value|default_if_none:0|floatformat:0 }}" data-unit="{{ item.habit.unit }}">
+                            <form method="post" action="{% url 'habits:update_progress' item.habit.id %}" class="progress-form" data-progress-form data-habit-type="{{ item.habit_type }}" data-target-value="{{ item.target_value|default_if_none:0|floatformat:0 }}" data-unit="{{ item.unit }}">
                                 {% csrf_token %}
                                 <input type="hidden" name="date" value="{{ target_date|date:'Y-m-d' }}">
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -92,27 +92,27 @@
                                     <span class="progress-percent" data-progress-percent>{{ item.completion_percentage|floatformat:0 }}%</span>
                                 </div>
                                 <div class="progress-controls">
-                                    {% if item.habit.habit_type == "binary" %}
+                                    {% if item.habit_type == "binary" %}
                                         <label class="checkbox">
                                             <input type="checkbox" name="completed" value="1" {% if item.completed %}checked{% endif %} data-progress-checkbox {% if not can_edit_progress %}disabled{% endif %}>
                                             <span></span>
                                         </label>
-                                    {% elif item.habit.habit_type == "partial" %}
+                                    {% elif item.habit_type == "partial" %}
                                         <input type="range" class="progress-range" min="0" max="100" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-range {% if not can_edit_progress %}disabled{% endif %}>
                                         <input type="number" class="progress-input" name="completion_percentage" min="0" max="100" step="1" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-input {% if not can_edit_progress %}disabled{% endif %}>
                                     {% else %}
                                         <button type="button" class="step-button" data-step="-1" aria-label="Decrease value" {% if not can_edit_progress %}disabled{% endif %}>-</button>
-                                        <input type="number" class="progress-input" name="current_value" min="0" step="1" {% if item.habit.target_value %}max="{{ item.habit.target_value|floatformat:0 }}"{% endif %} value="{{ item.raw_value|default_if_none:0|floatformat:0 }}" data-quant-input {% if not can_edit_progress %}disabled{% endif %}>
+                                        <input type="number" class="progress-input" name="current_value" min="0" step="1" {% if item.target_value %}max="{{ item.target_value|floatformat:0 }}"{% endif %} value="{{ item.raw_value|default_if_none:0|floatformat:0 }}" data-quant-input {% if not can_edit_progress %}disabled{% endif %}>
                                         <button type="button" class="step-button" data-step="1" aria-label="Increase value" {% if not can_edit_progress %}disabled{% endif %}>+</button>
                                     {% endif %}
                                 </div>
-                                {% if item.habit.habit_type == "binary" %}
+                                {% if item.habit_type == "binary" %}
                                     <p class="progress-helper mobile-only">Check if completed</p>
-                                {% elif item.habit.habit_type == "partial" %}
+                                {% elif item.habit_type == "partial" %}
                                     <p class="progress-helper mobile-only">100% is max</p>
                                 {% else %}
                                     <p class="progress-helper mobile-only">
-                                        Max: {{ item.habit.target_value|default_if_none:0|floatformat:0 }}{% if item.habit.unit %} {{ item.habit.unit }}{% endif %}
+                                        Max: {{ item.target_value|default_if_none:0|floatformat:0 }}{% if item.unit %} {{ item.unit }}{% endif %}
                                     </p>
                                 {% endif %}
                             </form>

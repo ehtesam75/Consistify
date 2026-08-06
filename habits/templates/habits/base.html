@@ -233,7 +233,7 @@
                                     <span class="habit-meta">{{ item.schedule_summary }}</span>
                                 </div>
                                 <div class="daily-recap-controls">
-                                    {% if item.habit.habit_type == "binary" %}
+                                    {% if item.habit_type == "binary" %}
                                         <label class="daily-recap-select">
                                             <span class="sr-only">Completed</span>
                                             <select class="select" name="completed_{{ item.habit.id }}" aria-label="Mark {{ item.habit.name }} done or not done">
@@ -241,7 +241,7 @@
                                                 <option value="1" {% if item.completion_percentage >= 100 %}selected{% endif %}>Done</option>
                                             </select>
                                         </label>
-                                    {% elif item.habit.habit_type == "partial" %}
+                                    {% elif item.habit_type == "partial" %}
                                         <label class="daily-recap-field">
                                             <span class="sr-only">Completion percentage</span>
                                             <input class="input" type="number" min="0" max="100" step="1" name="percentage_{{ item.habit.id }}" value="{{ item.completion_percentage|floatformat:0 }}" required>
@@ -252,7 +252,7 @@
                                             <span class="sr-only">Progress value</span>
                                             <input class="input" type="number" min="0" step="1" name="value_{{ item.habit.id }}" value="{{ item.raw_value|default_if_none:0|floatformat:0 }}" required>
                                         </label>
-                                        <span class="daily-recap-unit">{{ item.habit.unit }}</span>
+                                        <span class="daily-recap-unit">{{ item.unit }}</span>
                                     {% endif %}
                                 </div>
                             </div>
