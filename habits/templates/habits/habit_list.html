@@ -14,6 +14,10 @@
     </div>
     <div class="hero-actions">
         <a class="btn primary" href="{% url 'habits:habit_create' %}">Create habit</a>
+        {% if archived_count %}
+            <a class="btn ghost" href="{% url 'habits:archived_habits' %}">Archived Habits ({{ archived_count }})</a>
+        {% endif %}
+
         {% if all_paused %}
             <form class="inline-action-form" method="post" action="{% url 'habits:resume_all_habits' %}">
                 {% csrf_token %}
@@ -130,7 +134,9 @@
     </div>
     {% include "habits/partials/all_habits_card.html" %}
 </section>
+
 {% endblock %}
+
 
 {% block scripts %}
 <script>

@@ -147,13 +147,16 @@ class ConsistifyLogoutView(auth_views.LogoutView):
 def _build_today_habit_context(request):
     today = timezone.localdate()
     target_date = _get_date_from_request(request)
-    habits = list(
+    all_habits = list(
         Habit.objects.filter(user=request.user)
         .prefetch_related("categories", "pauses", "plan_versions__categories")
         .order_by("sort_order", "name")
     )
-    _attach_active_plan_display(habits, today)
+    _attach_active_plan_display(all_habits, today)
+    habits = [habit for habit in all_habits if not habit.is_archived]
+    archived_habits = [habit for habit in all_habits if habit.is_archived]
     active_habits = [habit for habit in habits if not habit.is_paused_on(target_date)]
+
 
     today_metrics = compute_today_metrics(request.user, target_date)
     scheduled_habits = today_metrics["rows"]
@@ -200,10 +203,13 @@ def _build_today_habit_context(request):
         "hide_completed": hide_completed,
         "visible_scheduled_count": len(visible_scheduled_habits),
         "habits": habits,
+        "archived_habits": archived_habits,
+        "archived_count": len(archived_habits),
         "all_count": len(active_habits),
         "all_paused": all_paused,
         "all_pause_scheduled": all_pause_scheduled,
     }
+
 
 
 @login_required
@@ -216,6 +222,24 @@ def habit_list(request):
 def mobile_all_habits(request):
     context = _build_today_habit_context(request)
     return render(request, "habits/mobile_all_habits.html", context)
+
+
+@login_required
+def archived_habits(request):
+    today = timezone.localdate()
+    habits = list(
+        Habit.objects.filter(user=request.user, archived_at__isnull=False)
+        .prefetch_related("categories", "pauses", "plan_versions__categories")
+        .order_by("sort_order", "name")
+    )
+    _attach_active_plan_display(habits, today)
+    context = {
+        "today": today,
+        "archived_habits": habits,
+        "archived_count": len(habits),
+    }
+    return render(request, "habits/archived_habits.html", context)
+
 
 
 @login_required
@@ -232,9 +256,12 @@ def dashboard(request):
         .prefetch_related("categories", "pauses", "plan_versions__categories")
         .order_by("sort_order", "name")
     )
-    total_habits = sum(1 for habit in habits if not habit.is_paused)
+    total_habits = sum(
+        1 for habit in habits if not habit.is_paused and not habit.is_archived
+    )
 
     aggregated = compute_user_metrics(habits, window_start, today)
+
     habit_cards = aggregated["per_habit"]
     aggregate = aggregated["aggregate"]
     total_scheduled = aggregate["total_scheduled"]
@@ -532,6 +559,42 @@ def habit_delete(request, habit_id):
 
 @login_required
 @require_POST
+def archive_habit(request, habit_id):
+    habit = get_object_or_404(Habit, id=habit_id, user=request.user)
+    if habit.is_archived:
+        messages.info(request, f'"{habit.name}" is already archived.')
+    else:
+        effective_date = timezone.localdate() + timedelta(days=1)
+        habit.archive(effective_date=effective_date)
+        messages.success(
+            request,
+            f'"{habit.name}" archived starting tomorrow. '
+            "All history and reports are preserved.",
+        )
+
+    return redirect(
+        _safe_next_url(request) or reverse("habits:habit_detail", args=[habit.id])
+    )
+
+
+@login_required
+@require_POST
+def unarchive_habit(request, habit_id):
+    habit = get_object_or_404(Habit, id=habit_id, user=request.user)
+    if not habit.is_archived:
+        messages.info(request, "This habit is not archived.")
+    else:
+        habit.unarchive()
+        messages.success(request, f'"{habit.name}" restored to active tracking.')
+
+    return redirect(
+        _safe_next_url(request) or reverse("habits:habit_detail", args=[habit.id])
+    )
+
+
+
+@login_required
+@require_POST
 def pause_habit(request, habit_id):
     habit = get_object_or_404(Habit, id=habit_id, user=request.user)
     start_date = timezone.localdate() + timedelta(days=1)
@@ -547,11 +610,12 @@ def pause_habit(request, habit_id):
 @require_POST
 def pause_all_habits(request):
     habits = list(
-        Habit.objects.filter(user=request.user)
+        Habit.objects.filter(user=request.user, archived_at__isnull=True)
         .prefetch_related("pauses")
         .order_by("sort_order", "name")
     )
     start_date = timezone.localdate() + timedelta(days=1)
+
     paused_count = sum(
         1 for habit in habits if _schedule_habit_pause(habit, start_date)
     )
@@ -574,11 +638,12 @@ def pause_all_habits(request):
 @require_POST
 def resume_all_habits(request):
     habits = list(
-        Habit.objects.filter(user=request.user)
+        Habit.objects.filter(user=request.user, archived_at__isnull=True)
         .prefetch_related("pauses")
         .order_by("sort_order", "name")
     )
     today = timezone.localdate()
+
 
     if not habits:
         messages.info(request, "No habits to resume yet.")
@@ -750,12 +815,19 @@ def reorder_habits(request):
     except ValueError:
         return JsonResponse({"ok": False, "error": "Invalid habit ids."}, status=400)
 
-    user_habit_ids = list(Habit.objects.filter(user=request.user).values_list("id", flat=True))
-    if sorted(ordered_ids) != sorted(user_habit_ids):
+    # Archived habits are shown in a separate, non-draggable list, so the
+    # reorder payload only needs to be a valid subset of the user's habits.
+    user_habit_ids = set(
+        Habit.objects.filter(user=request.user).values_list("id", flat=True)
+    )
+    if len(set(ordered_ids)) != len(ordered_ids) or (
+        set(ordered_ids) - user_habit_ids
+    ):
         return JsonResponse({"ok": False, "error": "Habit set mismatch."}, status=400)
 
     for index, habit_id in enumerate(ordered_ids):
         Habit.objects.filter(id=habit_id, user=request.user).update(sort_order=index + 1)
+
 
     return JsonResponse({"ok": True})
 
@@ -1096,8 +1168,11 @@ def _build_user_metrics(user, today, start_date=None):
         start_date = today
 
     aggregated = compute_user_metrics(habits, start_date, today)
-    total_habits = sum(1 for habit in habits if not habit.is_paused)
+    total_habits = sum(
+        1 for habit in habits if not habit.is_paused and not habit.is_archived
+    )
     aggregate = aggregated["aggregate"]
+
 
     return {
         "habits": habits,

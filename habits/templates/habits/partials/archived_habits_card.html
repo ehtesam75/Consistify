@@ -1,0 +1,55 @@
+{% if archived_habits %}
+<div class="card archived-habits-card" style="--i: 2;">
+    <div class="card-header">
+        <h2>Archived habits</h2>
+        <span class="tag muted">{{ archived_count }} archived · history kept</span>
+    </div>
+    <p class="help">
+        Archived habits keep all their history, reports, analytics, and Consistify Scores,
+        but are no longer tracked going forward. Restore one anytime to resume tracking.
+    </p>
+    <ul class="habit-list">
+        {% for habit in archived_habits %}
+            <li class="habit-row compact is-archived" style="--i: {{ forloop.counter0 }};">
+                <div>
+                    <a class="habit-name" href="{% url 'habits:habit_detail' habit.id %}">{{ habit.name }}</a>
+                    <p class="habit-meta">{{ habit.active_schedule_summary }}</p>
+                    <div class="habit-flags">
+                        {% for category in habit.active_categories %}
+                            <span class="badge category {{ category.key }}">{{ category.label }}</span>
+                        {% endfor %}
+                        <span class="badge priority {{ habit.active_priority }}">{{ habit.active_priority_label }}</span>
+                        <span class="tag muted">Archived{% if habit.archive_effective_date %} · {{ habit.archive_effective_date|date:"M d" }}{% endif %}</span>
+                        {% for tag in habit.get_tags %}
+                            <span class="tag-chip">#{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="habit-row-actions">
+                    <form method="post" action="{% url 'habits:unarchive_habit' habit.id %}" class="icon-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="icon-link" type="submit" aria-label="Restore {{ habit.name }}" title="Restore {{ habit.name }} (resume tracking)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+                                <path d="M3 3v5h5"></path>
+                            </svg>
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'habits:habit_delete' habit.id %}" class="icon-form" data-confirm-delete data-confirm-message="Permanently delete this habit and all its history? This cannot be undone." onsubmit="return window.confirm('Permanently delete this habit and all its history? This cannot be undone.')">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="icon-link icon-danger" type="submit" aria-label="Delete {{ habit.name }}" title="Delete {{ habit.name }}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}

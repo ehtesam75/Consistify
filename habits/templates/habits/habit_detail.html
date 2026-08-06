@@ -13,9 +13,13 @@
                 <span class="badge category {{ category.key }}">{{ category.label }}</span>
             {% endfor %}
             <span class="badge priority {{ habit.active_priority }}">{{ habit.active_priority_label }}</span>
+            {% if habit.is_archived %}
+                <span class="tag muted">Archived{% if habit.archive_effective_date %} · {{ habit.archive_effective_date|date:"M d" }}{% endif %}</span>
+            {% endif %}
             {% if habit.pending_plan_date %}
                 <span class="tag muted">Plan changes {{ habit.pending_plan_date|date:"M d" }}</span>
             {% endif %}
+
             {% if habit.is_paused %}
                 <span class="tag muted">Paused</span>
             {% else %}

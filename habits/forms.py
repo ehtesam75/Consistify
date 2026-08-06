@@ -92,6 +92,24 @@ class HabitForm(forms.ModelForm):
             self.initial["tags"] = ", ".join(
                 [f"#{tag}" for tag in self.instance.get_tags()]
             )
+        # The start date is locked once a habit exists so historical
+        # analytics, reports, and Consistify Scores stay accurate.
+        if self.instance and self.instance.pk:
+            start_field = self.fields["start_date"]
+            start_field.disabled = True
+            start_field.required = False
+            start_field.help_text = (
+                "Start date is locked after creation to preserve history."
+            )
+            start_field.widget.attrs["readonly"] = True
+
+    def clean_start_date(self):
+        # A disabled field always returns its initial value, but guard the
+        # immutable start date explicitly so it can never change post-creation.
+        if self.instance and self.instance.pk:
+            return self.instance.start_date
+        return self.cleaned_data.get("start_date")
+
 
     def clean(self):
         cleaned_data = super().clean()

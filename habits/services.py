@@ -315,14 +315,32 @@ def _iter_config_dates(config, start_date, end_date):
         current += step
 
 
+def _archive_cutoff_date(habit):
+    """Return the last date an archived habit is still tracked, or ``None``.
+
+    Archiving takes effect on ``archive_effective_date`` (tomorrow when the
+    user archives), so the final tracked date is the day before it. History,
+    reports, and Consistify Scores up to that date are preserved.
+    """
+    effective_date = getattr(habit, "archive_effective_date", None)
+    if effective_date is None:
+        return None
+    return effective_date - timedelta(days=1)
+
+
 def iter_scheduled_occurrences(habit, start_date, end_date):
     """Yield scheduled sessions with their occurrence-time configuration."""
+    archive_cutoff = _archive_cutoff_date(habit)
+    if archive_cutoff is not None:
+        end_date = min(end_date, archive_cutoff)
+
     if end_date < start_date:
         return
 
     configs = _habit_plan_configs(habit)
     if end_date < configs[0].effective_from:
         return
+
 
     pause_ranges = _pause_ranges_for_habit(habit, start_date, end_date)
     for index, config in enumerate(configs):
@@ -1380,6 +1398,11 @@ def get_next_scheduled_date(habit, from_date=None):
 
     configs = _habit_plan_configs(habit)
     from_date = max(from_date, habit_tracking_start(habit))
+
+    archive_cutoff = _archive_cutoff_date(habit)
+    if archive_cutoff is not None and from_date > archive_cutoff:
+        return None
+
 
     prefetched = getattr(habit, "_prefetched_objects_cache", None) or {}
     if "pauses" in prefetched:

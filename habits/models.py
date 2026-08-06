@@ -1,9 +1,11 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
+
 
 
 DEFAULT_CATEGORIES = [
@@ -91,6 +93,8 @@ class Habit(models.Model):
     interval_days = models.PositiveSmallIntegerField(default=1)
     weekly_interval = models.PositiveSmallIntegerField(default=1)
     days_of_week = models.CharField(max_length=20, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archive_effective_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -99,6 +103,32 @@ class Habit(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_archived(self):
+        return self.archived_at is not None
+
+    def archive(self, effective_date=None, now=None):
+        """Stop future tracking from ``effective_date`` while keeping history.
+
+        Archiving takes effect starting tomorrow by default. Every completion,
+        report, and Consistify Score for dates before the effective date is
+        preserved; the habit simply stops producing new scheduled sessions.
+        """
+        if now is None:
+            now = timezone.now()
+        if effective_date is None:
+            effective_date = timezone.localdate() + timedelta(days=1)
+        self.archived_at = now
+        self.archive_effective_date = effective_date
+        self.save(update_fields=["archived_at", "archive_effective_date", "updated_at"])
+
+    def unarchive(self):
+        """Resume future tracking for a previously archived habit."""
+        self.archived_at = None
+        self.archive_effective_date = None
+        self.save(update_fields=["archived_at", "archive_effective_date", "updated_at"])
+
 
     def get_days_of_week_set(self):
         if not self.days_of_week:

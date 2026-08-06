@@ -1,0 +1,31 @@
+{% extends "habits/base.html" %}
+
+{% block body_class %}archived-habits-page{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Archive</p>
+        <div class="hero-title-row">
+            <h1>Archived habits</h1>
+        </div>
+        <p class="subtitle">{{ archived_count }} archived · history kept</p>
+    </div>
+    <div class="hero-actions">
+        <a class="btn ghost" href="{% url 'habits:today' %}">Back to today</a>
+    </div>
+</section>
+
+<section class="card-grid">
+    {% if archived_habits %}
+        {% include "habits/partials/archived_habits_card.html" %}
+    {% else %}
+        <div class="card" style="--i: 0;">
+            <div class="card-header">
+                <h2>Archived habits</h2>
+            </div>
+            <p class="empty">You have no archived habits. Archive a habit to keep its history while stopping future tracking.</p>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

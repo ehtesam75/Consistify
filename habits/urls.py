@@ -10,6 +10,8 @@ urlpatterns = [
     path("cron-job/", views.cron_job, name="cron_job"),
     path("today/", views.habit_list, name="today"),
     path("today/all-habits/", views.mobile_all_habits, name="mobile_all_habits"),
+    path("archived/", views.archived_habits, name="archived_habits"),
+
     path("dashboard/", views.dashboard, name="dashboard"),
     path("reports/", views.reports, name="reports"),
     path("compare/", views.habit_compare, name="habit_compare"),
@@ -35,7 +37,14 @@ urlpatterns = [
     path("habits/pause-all/", views.pause_all_habits, name="pause_all_habits"),
     path("habits/resume-all/", views.resume_all_habits, name="resume_all_habits"),
     path("habits/<int:habit_id>/resume/", views.resume_habit, name="resume_habit"),
+    path("habits/<int:habit_id>/archive/", views.archive_habit, name="archive_habit"),
+    path(
+        "habits/<int:habit_id>/unarchive/",
+        views.unarchive_habit,
+        name="unarchive_habit",
+    ),
     path("habits/<int:habit_id>/delete/", views.habit_delete, name="habit_delete"),
+
     path("habits/<int:habit_id>/toggle/", views.update_progress, name="toggle_completion"),
     path("habits/<int:habit_id>/progress/", views.update_progress, name="update_progress"),
     path("habits/reorder/", views.reorder_habits, name="reorder_habits"),
