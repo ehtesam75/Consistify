@@ -306,6 +306,42 @@ class HabitCompletion(models.Model):
         return f"{self.habit.name} - {self.date}"
 
 
+class DailyRecapCompletion(models.Model):
+    """Persisted record that a user finished the daily recap for a date.
+
+    The "Finish yesterday's check-ins" prompt must be driven by account-level
+    state stored in the database rather than by session, browser, or device
+    state. Submitting the recap can legitimately persist completions below
+    100% (an unchecked binary habit saves 0%), so the presence of pending
+    habits alone cannot tell us whether the user already answered the prompt.
+    This record is that answer, so finishing the recap on one device hides it
+    on every other device, browser, and session.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="daily_recap_completions",
+    )
+    date = models.DateField()
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date"]
+        indexes = [
+            models.Index(fields=["user", "date"], name="daily_recap_user_date_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "date"],
+                name="daily_recap_completion_unique",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user} finished recap for {self.date}"
+
+
 class HabitPause(models.Model):
     habit = models.ForeignKey(
         Habit,

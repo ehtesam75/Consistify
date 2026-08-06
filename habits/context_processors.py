@@ -1,11 +1,7 @@
 from django.utils import timezone
 
 from .models import FriendRequest
-from .services import (
-    daily_recap_target_date,
-    get_pending_habits_for_date,
-    should_prompt_daily_recap,
-)
+from .services import should_show_daily_recap
 
 
 def friend_request_notifications(request):
@@ -31,33 +27,28 @@ def friend_request_notifications(request):
 
 
 def daily_recap_prompt(request):
+    """Decide the recap prompt from the user's persisted database state.
+
+    Visibility is resolved on every request from the stored recap record and
+    stored completions, never from session, browser, or device state. Finishing
+    the recap anywhere therefore hides it everywhere, on any device, browser,
+    session, or repeated login.
+
+    ``daily_recap_date`` is still written to the session, but only as a CSRF-style
+    guard so the recap POST can confirm the form was server-issued for the
+    current target date. It never decides whether the prompt is shown.
+    """
     if not request.user.is_authenticated:
         return {"daily_recap": None}
 
     today = timezone.localdate()
-    target_date = daily_recap_target_date(today)
-    expected_recap_value = target_date.isoformat()
-    recap_date_value = request.session.get("daily_recap_date")
-    if recap_date_value and recap_date_value != expected_recap_value:
+    should_show, target_date, pending = should_show_daily_recap(request.user, today)
+
+    if not should_show:
         request.session.pop("daily_recap_date", None)
-        recap_date_value = None
-
-    if not recap_date_value:
-        if not should_prompt_daily_recap(request.user.last_login, today):
-            return {"daily_recap": None}
-
-        dismissed_for = request.session.get("daily_recap_dismissed_for")
-        if dismissed_for == expected_recap_value:
-            return {"daily_recap": None}
-
-        request.session["daily_recap_date"] = expected_recap_value
-        recap_date_value = request.session["daily_recap_date"]
-
-    pending = get_pending_habits_for_date(request.user, target_date)
-    if not pending:
-        request.session.pop("daily_recap_date", None)
-        request.session["daily_recap_dismissed_for"] = target_date.isoformat()
         return {"daily_recap": None}
+
+    request.session["daily_recap_date"] = target_date.isoformat()
 
     return {
         "daily_recap": {

@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from .models import (
     DEFAULT_CATEGORIES,
+    DailyRecapCompletion,
     FriendRequest,
     Habit,
     HabitCategory,
@@ -18,6 +19,7 @@ from .models import (
     HabitPause,
     HabitPlanVersion,
 )
+
 from .plan_versions import ensure_initial_plan_version, schedule_habit_plan_edit
 from .services import (
     build_category_analytics,
@@ -1672,7 +1674,16 @@ class ConsistencyScoreTests(TestCase):
         for offset in range(17):
             self.log_completion(habit, habit.start_date + timedelta(days=offset), 100)
 
+        # This test is about the detail page, not the recap prompt. Yesterday's
+        # recap is genuinely unfinished here, so record it as done to keep the
+        # blocking overlay (and its extra body class) out of the assertions.
+        DailyRecapCompletion.objects.create(
+            user=self.user,
+            date=today - timedelta(days=1),
+        )
+
         self.client.force_login(self.user)
+
         with patch("habits.views.timezone.localdate", return_value=today), patch(
             "habits.services.timezone.localdate",
             return_value=today,
@@ -2032,7 +2043,9 @@ class DailyRecapPromptTests(TestCase):
         self.assertEqual(response.url, reverse("habits:today"))
         completion.refresh_from_db()
         self.assertEqual(completion.completion_percentage, Decimal("0"))
-        self.assertNotIn("daily_recap_dismissed_for", self.client.session)
+        self.assertFalse(
+            DailyRecapCompletion.objects.filter(user=self.user).exists()
+        )
 
     def test_daily_recap_rejects_stale_and_future_session_dates(self):
         today = date(2026, 5, 23)
@@ -2062,7 +2075,9 @@ class DailyRecapPromptTests(TestCase):
                 )
                 self.assertEqual(response.status_code, 302)
                 self.assertNotIn("daily_recap_date", self.client.session)
-                self.assertNotIn("daily_recap_dismissed_for", self.client.session)
+                self.assertFalse(
+                    DailyRecapCompletion.objects.filter(user=self.user).exists()
+                )
 
         self.assertFalse(HabitCompletion.objects.filter(habit=habit).exists())
 
@@ -2093,7 +2108,9 @@ class DailyRecapPromptTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(HabitCompletion.objects.filter(habit=habit).exists())
         self.assertNotIn("daily_recap_date", self.client.session)
-        self.assertNotIn("daily_recap_dismissed_for", self.client.session)
+        self.assertFalse(
+            DailyRecapCompletion.objects.filter(user=self.user).exists()
+        )
 
     def test_daily_recap_accepts_matching_server_issued_yesterday(self):
         today = date(2026, 5, 23)
@@ -2123,9 +2140,13 @@ class DailyRecapPromptTests(TestCase):
         completion = HabitCompletion.objects.get(habit=habit, date=yesterday)
         self.assertEqual(completion.completion_percentage, Decimal("100"))
         self.assertNotIn("daily_recap_date", self.client.session)
-        self.assertEqual(
-            self.client.session["daily_recap_dismissed_for"],
-            yesterday.isoformat(),
+        # The finished recap is recorded in the database, not the session, so it
+        # is visible to every other device, browser, and session.
+        self.assertTrue(
+            DailyRecapCompletion.objects.filter(
+                user=self.user,
+                date=yesterday,
+            ).exists()
         )
 
     def test_daily_recap_prompt_replaces_a_stale_session_date(self):
@@ -2158,3 +2179,297 @@ class DailyRecapPromptTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.client.session["daily_recap_date"], yesterday.isoformat())
         self.assertContains(response, "May 22, 2026")
+
+
+class DailyRecapMultiDeviceTests(TestCase):
+    """The prompt must be resolved from database state, not per-device state.
+
+    Submitting "Save and continue" can legitimately persist completions below
+    100% (an unchecked binary habit stores 0%), so the pending-habit check alone
+    can never tell whether the user already answered the prompt. These tests
+    pin the behaviour to the persisted recap record so the answer is identical
+    on every device, browser, session, and repeated login.
+    """
+
+    TODAY = date(2026, 5, 23)
+    YESTERDAY = date(2026, 5, 22)
+    PREVIOUS_LOGIN = datetime(2026, 5, 22, 23, 45)
+
+    def setUp(self):
+        self.password = "multi-device-pass-123"
+        self.user = get_user_model().objects.create_user(
+            username="multi-device-user",
+            password=self.password,
+        )
+
+    def _make_habit(self, name, habit_type=Habit.HABIT_BINARY, target_value=None):
+        return Habit.objects.create(
+            user=self.user,
+            name=name,
+            habit_type=habit_type,
+            target_value=target_value,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=self.YESTERDAY,
+        )
+
+    def _stale_login(self):
+        """Make ``last_login`` land on the previous day so the prompt is due."""
+        self.user.last_login = timezone.make_aware(self.PREVIOUS_LOGIN)
+        self.user.save(update_fields=["last_login"])
+
+    def _fake_localdate(self):
+        original_localdate = timezone.localdate
+
+        def fake_localdate(value=None):
+            if value is None:
+                return self.TODAY
+            return original_localdate(value)
+
+        return fake_localdate
+
+    def _new_device(self):
+        """Return a client representing a separate device or browser."""
+        from django.test import Client
+
+        return Client()
+
+    def _load_today(self, client):
+        """Fetch the today page with the clock pinned, as a device would."""
+        with patch(
+            "habits.context_processors.timezone.localdate",
+            side_effect=self._fake_localdate(),
+        ):
+            return client.get(reverse("habits:today"))
+
+    def _login(self, client):
+        with patch(
+            "habits.views.timezone.localdate",
+            return_value=self.TODAY,
+        ), patch(
+            "habits.services.timezone.localdate",
+            return_value=self.TODAY,
+        ):
+            return client.post(
+                reverse("habits:login"),
+                {"username": self.user.username, "password": self.password},
+            )
+
+    def _submit_recap(self, client, payload):
+        with patch("habits.views.timezone.localdate", return_value=self.TODAY):
+            return client.post(
+                reverse("habits:daily_recap"),
+                {"date": self.YESTERDAY.isoformat(), **payload},
+            )
+
+    def _finish_recap_on(self, client, payload):
+        """Show and submit the recap on one device, as a real user would."""
+        self._stale_login()
+        prompt = self._load_today(client)
+        self.assertContains(prompt, "Finish yesterday's check-ins")
+        response = self._submit_recap(client, payload)
+        self.assertEqual(response.status_code, 302)
+        return response
+
+    def test_second_device_does_not_reprompt_after_save_and_continue(self):
+        # An unchecked binary habit is saved as 0%, so it stays "pending" while
+        # the recap itself is finished. This is the reported bug.
+        habit = self._make_habit("Left unchecked")
+        device_a = self._new_device()
+        device_a.force_login(self.user)
+
+        self._finish_recap_on(device_a, {})
+
+        completion = HabitCompletion.objects.get(habit=habit, date=self.YESTERDAY)
+        self.assertEqual(completion.completion_percentage, Decimal("0"))
+        self.assertTrue(
+            DailyRecapCompletion.objects.filter(
+                user=self.user,
+                date=self.YESTERDAY,
+            ).exists()
+        )
+
+        device_b = self._new_device()
+        device_b.force_login(self.user)
+        self._stale_login()
+        response = self._load_today(device_b)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["daily_recap"])
+        self.assertNotContains(response, "Finish yesterday's check-ins")
+        self.assertNotIn("daily_recap_date", device_b.session)
+
+    def test_partial_progress_still_hides_the_prompt_on_other_devices(self):
+        habit = self._make_habit("Partial habit", habit_type=Habit.HABIT_PARTIAL)
+        device_a = self._new_device()
+        device_a.force_login(self.user)
+
+        self._finish_recap_on(device_a, {f"percentage_{habit.id}": "60"})
+
+        completion = HabitCompletion.objects.get(habit=habit, date=self.YESTERDAY)
+        self.assertEqual(completion.completion_percentage, Decimal("60"))
+
+        device_b = self._new_device()
+        device_b.force_login(self.user)
+        self._stale_login()
+        response = self._load_today(device_b)
+
+        self.assertIsNone(response.context["daily_recap"])
+        self.assertNotContains(response, "Finish yesterday's check-ins")
+
+    def test_quantitative_partial_progress_hides_the_prompt_elsewhere(self):
+        habit = self._make_habit(
+            "Quantitative habit",
+            habit_type=Habit.HABIT_QUANTITATIVE,
+            target_value=Decimal("10"),
+        )
+        device_a = self._new_device()
+        device_a.force_login(self.user)
+
+        self._finish_recap_on(device_a, {f"value_{habit.id}": "4"})
+
+        completion = HabitCompletion.objects.get(habit=habit, date=self.YESTERDAY)
+        self.assertEqual(completion.raw_value, Decimal("4"))
+        self.assertLess(completion.completion_percentage, Decimal("100"))
+
+        device_b = self._new_device()
+        device_b.force_login(self.user)
+        self._stale_login()
+        response = self._load_today(device_b)
+
+        self.assertIsNone(response.context["daily_recap"])
+
+    def test_fresh_login_on_a_new_browser_does_not_reprompt(self):
+        # A brand new browser authenticates for the first time today, so it has
+        # no prior session at all and must rely purely on database state.
+        self._make_habit("Left unchecked")
+        device_a = self._new_device()
+        device_a.force_login(self.user)
+        self._finish_recap_on(device_a, {})
+
+        self._stale_login()
+        browser_b = self._new_device()
+        login_response = self._login(browser_b)
+
+        self.assertEqual(login_response.status_code, 302)
+        self.assertNotIn("daily_recap_date", browser_b.session)
+
+        response = self._load_today(browser_b)
+        self.assertIsNone(response.context["daily_recap"])
+        self.assertNotContains(response, "Finish yesterday's check-ins")
+
+    def test_login_still_prompts_when_the_recap_is_unfinished(self):
+        self._make_habit("Genuinely pending")
+        self._stale_login()
+        browser = self._new_device()
+
+        self._login(browser)
+        response = self._load_today(browser)
+
+        self.assertEqual(
+            browser.session["daily_recap_date"],
+            self.YESTERDAY.isoformat(),
+        )
+        self.assertIsNotNone(response.context["daily_recap"])
+        self.assertContains(response, "Finish yesterday's check-ins")
+
+    def test_repeated_logins_and_reloads_stay_hidden_once_finished(self):
+        self._make_habit("Left unchecked")
+        device_a = self._new_device()
+        device_a.force_login(self.user)
+        self._finish_recap_on(device_a, {})
+
+        for attempt in range(3):
+            with self.subTest(attempt=attempt):
+                client = self._new_device()
+                self._stale_login()
+                self._login(client)
+                first_load = self._load_today(client)
+                second_load = self._load_today(client)
+
+                self.assertIsNone(first_load.context["daily_recap"])
+                self.assertIsNone(second_load.context["daily_recap"])
+                self.assertNotIn("daily_recap_date", client.session)
+
+    def test_concurrent_sessions_for_one_user_agree_on_visibility(self):
+        habit = self._make_habit("Left unchecked")
+        session_one = self._new_device()
+        session_two = self._new_device()
+        session_one.force_login(self.user)
+        session_two.force_login(self.user)
+
+        # Both sessions render the prompt before either submits.
+        self._stale_login()
+        self.assertContains(
+            self._load_today(session_one),
+            "Finish yesterday's check-ins",
+        )
+        self.assertContains(
+            self._load_today(session_two),
+            "Finish yesterday's check-ins",
+        )
+
+        self._submit_recap(session_one, {f"completed_{habit.id}": "1"})
+
+        self._stale_login()
+        response = self._load_today(session_two)
+        self.assertIsNone(response.context["daily_recap"])
+        self.assertNotContains(response, "Finish yesterday's check-ins")
+
+    def test_recap_completion_is_scoped_per_user(self):
+        other_user = get_user_model().objects.create_user(
+            username="other-recap-user",
+            password="not-used",
+        )
+        Habit.objects.create(
+            user=other_user,
+            name="Other pending habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=self.YESTERDAY,
+        )
+        self._make_habit("Left unchecked")
+        device_a = self._new_device()
+        device_a.force_login(self.user)
+        self._finish_recap_on(device_a, {})
+
+        other_client = self._new_device()
+        other_client.force_login(other_user)
+        other_user.last_login = timezone.make_aware(self.PREVIOUS_LOGIN)
+        other_user.save(update_fields=["last_login"])
+        response = self._load_today(other_client)
+
+        self.assertIsNotNone(response.context["daily_recap"])
+        self.assertContains(response, "Finish yesterday's check-ins")
+
+    def test_a_new_days_recap_prompts_again_after_yesterdays_was_finished(self):
+        self._make_habit("Left unchecked")
+        DailyRecapCompletion.objects.create(
+            user=self.user,
+            date=self.YESTERDAY - timedelta(days=1),
+        )
+        client = self._new_device()
+        client.force_login(self.user)
+        self._stale_login()
+
+        response = self._load_today(client)
+
+        self.assertIsNotNone(response.context["daily_recap"])
+        self.assertEqual(response.context["daily_recap"]["date"], self.YESTERDAY)
+
+    def test_duplicate_recap_submissions_remain_idempotent(self):
+        habit = self._make_habit("Left unchecked")
+        client = self._new_device()
+        client.force_login(self.user)
+        self._finish_recap_on(client, {f"completed_{habit.id}": "1"})
+
+        # Replaying the submission has no server-issued session date, so it is
+        # rejected without creating a duplicate record.
+        self._submit_recap(client, {f"completed_{habit.id}": "1"})
+
+        self.assertEqual(
+            DailyRecapCompletion.objects.filter(
+                user=self.user,
+                date=self.YESTERDAY,
+            ).count(),
+            1,
+        )

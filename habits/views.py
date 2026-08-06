@@ -51,8 +51,9 @@ from .services import (
     habit_tracking_start,
     habit_performance_metrics,
     iter_scheduled_occurrences,
+    mark_daily_recap_completed,
     resolve_habit_plan_on,
-    should_prompt_daily_recap,
+    should_show_daily_recap,
     iter_scheduled_dates,
     weighted_completion_rate_from_totals,
 )
@@ -120,18 +121,21 @@ class ConsistifyLoginView(auth_views.LoginView):
 
     def form_valid(self, form):
         user = form.get_user()
-        previous_login = user.last_login
         response = super().form_valid(form)
         messages.success(self.request, "Logged in successfully.")
+
+        # ``login()`` rotates the session key, so the fresh session starts with
+        # no recap state at all. Re-derive the prompt purely from persisted
+        # database state so a recap already finished on another device, browser,
+        # or session stays hidden after this login, while one that is still
+        # unfinished is seeded here and can be submitted immediately.
         today = timezone.localdate()
-        should_prompt = should_prompt_daily_recap(previous_login, today)
-        if should_prompt:
-            recap_date = daily_recap_target_date(today)
-            pending = get_pending_habits_for_date(user, recap_date)
-            if pending:
-                self.request.session["daily_recap_date"] = recap_date.isoformat()
-            else:
-                self.request.session.pop("daily_recap_date", None)
+        should_show, recap_date, _ = should_show_daily_recap(user, today)
+
+        if should_show:
+            self.request.session["daily_recap_date"] = recap_date.isoformat()
+        else:
+            self.request.session.pop("daily_recap_date", None)
         return response
 
 
@@ -1386,7 +1390,7 @@ def daily_recap(request):
     pending = get_pending_habits_for_date(request.user, target_date)
     if not pending:
         request.session.pop("daily_recap_date", None)
-        request.session["daily_recap_dismissed_for"] = target_date.isoformat()
+        mark_daily_recap_completed(request.user, target_date)
         return redirect(_safe_next_url(request) or reverse("habits:today"))
 
     updates = []
@@ -1443,8 +1447,13 @@ def daily_recap(request):
             completion.raw_value = raw_value
             completion.save(update_fields=["completion_percentage", "raw_value"])
 
+        # Record the finished recap in the same transaction as the completions.
+        # "Save and continue" may legitimately persist progress below 100%, so
+        # this row, not the pending-habit check, is what stops the prompt from
+        # reappearing on other devices, browsers, and sessions.
+        mark_daily_recap_completed(request.user, target_date)
+
     request.session.pop("daily_recap_date", None)
-    request.session["daily_recap_dismissed_for"] = target_date.isoformat()
     return redirect(_safe_next_url(request) or reverse("habits:today"))
 
 

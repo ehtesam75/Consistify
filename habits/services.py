@@ -6,7 +6,12 @@ from math import isfinite, sqrt
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import Habit, HabitCategory, HabitCompletion
+from .models import (
+    DailyRecapCompletion,
+    Habit,
+    HabitCategory,
+    HabitCompletion,
+)
 CONSISTENCY_COMPLETION_QUALITY_WEIGHT = 0.45
 CONSISTENCY_FULL_COMPLETION_WEIGHT = 0.25
 CONSISTENCY_RHYTHM_WEIGHT = 0.15
@@ -78,13 +83,6 @@ CONSISTENCY_SCORE_COMPONENTS = (
 )
 
 
-def should_prompt_daily_recap(previous_login, today=None):
-    if today is None:
-        today = timezone.localdate()
-    if previous_login is None:
-        return True
-    return timezone.localdate(previous_login) < today
-
 
 def can_update_progress_on(target_date, today=None):
     """Return whether normal progress editing is allowed for ``target_date``."""
@@ -98,6 +96,62 @@ def daily_recap_target_date(today=None):
     if today is None:
         today = timezone.localdate()
     return today - timedelta(days=1)
+
+
+def has_completed_daily_recap(user, target_date):
+    """Return whether the database already records a finished recap.
+
+    This is the account-level source of truth for the prompt, so it is
+    consistent across every device, browser, and session.
+    """
+    return DailyRecapCompletion.objects.filter(
+        user=user,
+        date=target_date,
+    ).exists()
+
+
+def mark_daily_recap_completed(user, target_date):
+    """Persist that ``user`` finished the recap for ``target_date``.
+
+    Idempotent, so repeated submissions from different devices or duplicate
+    requests do not raise on the unique constraint.
+    """
+    completion, _ = DailyRecapCompletion.objects.get_or_create(
+        user=user,
+        date=target_date,
+    )
+    return completion
+
+
+def should_show_daily_recap(user, today=None):
+    """Resolve the prompt from persisted state only.
+
+    Returns ``(should_show, target_date, pending_habits)``. The decision uses
+    the user's stored recap record and their stored completions, never session,
+    browser, device, or login state, so the answer is identical on every
+    device, browser, session, and repeated login.
+
+    ``last_login`` is deliberately not consulted. Logging in overwrites it, so
+    it reports "already seen today" to every later request in the same day and
+    to every other device that logs in afterwards. Only the persisted recap
+    record can answer this correctly for the whole account.
+    """
+    if today is None:
+        today = timezone.localdate()
+
+    target_date = daily_recap_target_date(today)
+
+    # The persisted recap record is the account-level source of truth. If the
+    # user already finished this date's recap anywhere, it stays hidden here.
+
+    if has_completed_daily_recap(user, target_date):
+        return False, target_date, []
+
+    pending = get_pending_habits_for_date(user, target_date)
+    if not pending:
+        return False, target_date, []
+
+    return True, target_date, pending
 
 
 @dataclass(frozen=True)
