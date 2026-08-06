@@ -822,6 +822,11 @@ def _build_score_driver_cards(score_drivers):
             "value_key": "impact_points",
             "value_label": "weighted share",
             "empty": "No scored habits yet.",
+            "help_text": (
+                "The habit adding the largest weighted share to your overall "
+                "Consistency Score in the current window. Its share combines "
+                "its score with priority and scheduled frequency."
+            ),
         },
         {
             "title": "Biggest score drag",
@@ -829,6 +834,11 @@ def _build_score_driver_cards(score_drivers):
             "value_key": "drag_points",
             "value_label": "possible score gap",
             "empty": "No scored habits yet.",
+            "help_text": (
+                "The habit creating the largest weighted gap from a perfect "
+                "Consistency Score in the current window. The gap combines its "
+                "distance from 100 with priority and scheduled frequency."
+            ),
         },
         {
             "title": "Most improved",
@@ -837,6 +847,10 @@ def _build_score_driver_cards(score_drivers):
             "value_label": "score change",
             "empty": "No score improvement in the comparison window.",
             "show_sign": True,
+            "help_text": (
+                "The habit with the largest increase in Consistency Score from "
+                "the previous comparison window to the current one."
+            ),
         },
         {
             "title": "Most declined",
@@ -845,6 +859,10 @@ def _build_score_driver_cards(score_drivers):
             "value_label": "score change",
             "empty": "No score decline in the comparison window.",
             "show_sign": True,
+            "help_text": (
+                "The habit with the largest decrease in Consistency Score from "
+                "the previous comparison window to the current one."
+            ),
         },
     )
     cards = []
@@ -858,6 +876,7 @@ def _build_score_driver_cards(score_drivers):
                 "value_label": spec["value_label"],
                 "empty": spec["empty"],
                 "show_sign": spec.get("show_sign", False),
+                "help_text": spec["help_text"],
             }
         )
     return cards

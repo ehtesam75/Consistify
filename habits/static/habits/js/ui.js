@@ -615,6 +615,53 @@ window.ConsistifyUI = (() => {
         });
     }
 
+    function initScoreDriverHelp() {
+        const helpItems = Array.from(document.querySelectorAll(".score-driver-help"));
+        if (!helpItems.length) {
+            return;
+        }
+
+        const closeHelp = (item) => {
+            item.classList.remove("is-open");
+            const button = item.querySelector("[data-score-driver-help]");
+            if (button) {
+                button.setAttribute("aria-expanded", "false");
+            }
+        };
+
+        helpItems.forEach((item) => {
+            const button = item.querySelector("[data-score-driver-help]");
+            if (!button) {
+                return;
+            }
+
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                const willOpen = !item.classList.contains("is-open");
+                helpItems.forEach(closeHelp);
+                if (willOpen) {
+                    item.classList.add("is-open");
+                    button.setAttribute("aria-expanded", "true");
+                }
+            });
+        });
+
+        document.addEventListener("click", (event) => {
+            helpItems.forEach((item) => {
+                if (!item.contains(event.target)) {
+                    closeHelp(item);
+                }
+            });
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key !== "Escape") {
+                return;
+            }
+            helpItems.forEach(closeHelp);
+        });
+    }
+
     function initMobileNav() {
         const toggle = document.querySelector("[data-nav-toggle]");
         const panel = document.querySelector("[data-nav-panel]");
@@ -687,6 +734,7 @@ window.ConsistifyUI = (() => {
         initHabitProgressControls();
         initDeleteConfirmations();
         initNotificationMenus();
+        initScoreDriverHelp();
         initMobileNav();
     }
 

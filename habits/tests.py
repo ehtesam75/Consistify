@@ -66,7 +66,55 @@ class DashboardPresentationTests(TestCase):
         self.assertContains(response, "Completed")
         self.assertContains(response, "Consistency score")
         self.assertContains(response, "Consistency")
-        self.assertContains(response, "Priority-weighted rate")
+        self.assertContains(response, "Priority-weighted")
+        self.assertEqual(
+            response.content.decode().count('class="score-driver-help"'),
+            4,
+        )
+        self.assertContains(response, "largest weighted share")
+        self.assertContains(response, "largest weighted gap")
+        self.assertContains(response, "largest increase in Consistency Score")
+        self.assertContains(response, "largest decrease in Consistency Score")
+
+    def test_driver_cards_keep_current_metrics_in_desktop_markup(self):
+        user = get_user_model().objects.create_user(
+            username="dashboard-driver-user",
+            password="not-used",
+        )
+        habit = Habit.objects.create(
+            user=user,
+            name="Driver habit",
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=timezone.localdate(),
+        )
+        base_driver = {
+            "habit": habit,
+            "score": 91.0,
+            "completion_rate": 88.0,
+            "impact_points": 12.3,
+            "drag_points": 4.5,
+            "score_delta": 6.7,
+        }
+        declined_driver = {**base_driver, "score_delta": -6.7}
+        self.client.force_login(user)
+
+        with patch(
+            "habits.views.build_habit_score_drivers",
+            return_value={
+                "booster": base_driver,
+                "drag": base_driver,
+                "improved": base_driver,
+                "declined": declined_driver,
+            },
+        ):
+            response = self.client.get(reverse("habits:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Driver habit")
+        self.assertContains(
+            response,
+            "91.0 consistency &middot; 88.0% completion",
+        )
 
 
 class ConsistencyScoreTests(TestCase):

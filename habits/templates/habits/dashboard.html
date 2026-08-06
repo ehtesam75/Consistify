@@ -111,14 +111,29 @@
 <section class="score-driver-grid">
     {% for item in score_driver_cards %}
         <div class="card score-driver-card" style="--i: {{ forloop.counter }};">
-            <span class="stat-label">{{ item.title }}</span>
+            <div class="score-driver-heading">
+                <span class="stat-label">{{ item.title }}</span>
+                <div class="score-driver-help">
+                    <button type="button"
+                            class="score-driver-help-button"
+                            aria-label="About {{ item.title }}"
+                            aria-describedby="score-driver-help-{{ forloop.counter }}"
+                            aria-expanded="false"
+                            data-score-driver-help>
+                        <span aria-hidden="true">ⓘ</span>
+                    </button>
+                    <span class="score-driver-tooltip" id="score-driver-help-{{ forloop.counter }}" role="tooltip">
+                        {{ item.help_text }}
+                    </span>
+                </div>
+            </div>
             {% if item.driver %}
                 <a class="driver-habit-name" href="{% url 'habits:habit_detail' item.driver.habit.id %}">{{ item.driver.habit.name }}</a>
                 <span class="driver-value">
                     {% if item.show_sign and item.value > 0 %}+{% endif %}{{ item.value }}
                 </span>
                 <span class="stat-note">{{ item.value_label }}</span>
-                <p class="habit-meta">{{ item.driver.score }} consistency &middot; {{ item.driver.completion_rate }}% completion</p>
+                <p class="habit-meta score-driver-current-metrics">{{ item.driver.score }} consistency &middot; {{ item.driver.completion_rate }}% completion</p>
             {% else %}
                 <p class="empty">{{ item.empty }}</p>
             {% endif %}

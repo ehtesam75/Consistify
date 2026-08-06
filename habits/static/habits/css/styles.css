@@ -1997,6 +1997,67 @@ html {
     gap: 0.45rem;
 }
 
+.score-driver-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+
+.score-driver-help {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.score-driver-help-button {
+    display: grid;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    color: var(--teal);
+    background: transparent;
+    cursor: help;
+    font-size: 1.05rem;
+    list-style: none;
+    line-height: 1;
+}
+
+.score-driver-help-button:focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 2px;
+}
+
+.score-driver-tooltip {
+    position: absolute;
+    z-index: 8;
+    top: calc(100% + 0.55rem);
+    right: 0;
+    display: block;
+    visibility: hidden;
+    width: min(18rem, calc(100vw - 4rem));
+    padding: 0.75rem 0.85rem;
+    border-radius: 12px;
+    color: #ffffff;
+    background: #1c1f24;
+    box-shadow: var(--shadow-soft);
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.4;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-0.25rem);
+    transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+}
+
+.score-driver-help.is-open .score-driver-tooltip,
+.score-driver-help:hover .score-driver-tooltip {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+}
+
 .driver-habit-name {
     color: var(--ink);
     font-size: 1.08rem;
@@ -3371,6 +3432,10 @@ body.auth-page main {
 
     .dashboard-page .dashboard-stat-label-mobile {
         display: inline;
+    }
+
+    .dashboard-page .score-driver-current-metrics {
+        display: none;
     }
 
     .today-page .hero-title-row {
