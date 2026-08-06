@@ -58,6 +58,8 @@ class DashboardPresentationTests(TestCase):
         response = self.client.get(reverse("habits:dashboard"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Performance dashboard")
+        self.assertContains(response, 'class="dashboard-title-mobile">Dashboard</span>')
         self.assertContains(response, "Overall completion")
         self.assertContains(response, "Completion")
         self.assertContains(response, "Scheduled sessions")

@@ -1138,6 +1138,10 @@ main > section + section {
     display: none;
 }
 
+.dashboard-title-mobile {
+    display: none;
+}
+
 .stat-value {
     display: block;
     font-size: 1.5rem;
@@ -3455,6 +3459,14 @@ body.auth-page main {
         display: inline;
     }
 
+    .dashboard-page .dashboard-title-desktop {
+        display: none;
+    }
+
+    .dashboard-page .dashboard-title-mobile {
+        display: inline;
+    }
+
     .dashboard-page .score-driver-current-metrics {
         display: none;
     }
@@ -3770,6 +3782,25 @@ body.auth-page main {
 }
 
 @media (max-width: 520px) {
+    .dashboard-page .stats-grid.wide {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.65rem;
+    }
+
+    .dashboard-page .stats-grid.wide .stat-card {
+        min-width: 0;
+        padding: 0.85rem;
+    }
+
+    .dashboard-page .stats-grid.wide .stat-card-heading {
+        gap: 0.25rem;
+    }
+
+    .dashboard-page .stats-grid.wide .score-driver-help-button {
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+
     .date-nav {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
