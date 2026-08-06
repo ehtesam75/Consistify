@@ -3801,6 +3801,68 @@ body.auth-page main {
         height: 1.25rem;
     }
 
+    .dashboard-page .score-driver-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.65rem;
+    }
+
+    .dashboard-page .score-driver-card {
+        min-width: 0;
+        gap: 0.3rem;
+        padding: 0.85rem;
+        border-radius: 18px;
+    }
+
+    .dashboard-page .score-driver-heading {
+        gap: 0.25rem;
+    }
+
+    .dashboard-page .score-driver-card .stat-label {
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+    }
+
+    .dashboard-page .score-driver-card .score-driver-help-button {
+        width: 1.1rem;
+        height: 1.1rem;
+        font-size: 0.82rem;
+    }
+
+    .dashboard-page .score-driver-card .driver-habit-name {
+        overflow-wrap: anywhere;
+        font-size: 0.9rem;
+        line-height: 1.25;
+    }
+
+    .dashboard-page .score-driver-card .driver-value {
+        margin-top: 0.05rem;
+        font-size: 1.45rem;
+    }
+
+    .dashboard-page .score-driver-card > .stat-note {
+        font-size: 0.7rem;
+        line-height: 1.25;
+    }
+
+    .dashboard-page .score-driver-card .empty {
+        margin: 0;
+        font-size: 0.82rem;
+        line-height: 1.35;
+    }
+
+    .dashboard-page .score-driver-card .score-driver-tooltip {
+        top: calc(100% + 0.35rem);
+        width: min(10.5rem, calc(100vw - 2rem));
+        padding: 0.6rem 0.7rem;
+        border-radius: 10px;
+        font-size: 0.74rem;
+    }
+
+    .dashboard-page .score-driver-card:nth-child(odd) .score-driver-tooltip {
+        right: auto;
+        left: 0;
+    }
+
     .date-nav {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
