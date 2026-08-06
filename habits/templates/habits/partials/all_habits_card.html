@@ -39,7 +39,8 @@
                                 <path d="m16.5 3.5 4 4L8 20l-4 1 1-4 11.5-13.5z"></path>
                             </svg>
                         </a>
-                        <form method="post" action="{% url 'habits:archive_habit' habit.id %}" class="icon-form" onsubmit="return window.confirm('Archive this habit starting tomorrow? All history and reports are kept, and future tracking stops.')">
+                        <form method="post" action="{% url 'habits:archive_habit' habit.id %}" class="icon-form all-habits-extra-action" onsubmit="return window.confirm('Archive this habit starting tomorrow? All history and reports are kept, and future tracking stops.')">
+
                             {% csrf_token %}
                             <input type="hidden" name="next" value="{{ request.get_full_path }}">
                             <button class="icon-link" type="submit" aria-label="Archive {{ habit.name }}" title="Archive {{ habit.name }} (keeps history, stops future tracking)" draggable="false">

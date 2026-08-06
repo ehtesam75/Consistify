@@ -3386,10 +3386,16 @@ body.auth-page main {
 
     .mobile-all-habits-page .habit-row {
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         align-items: flex-start;
-        gap: 0.45rem;
+        justify-content: space-between;
+        gap: 0.6rem;
         padding: 0.7rem 0.8rem;
+    }
+
+    .mobile-all-habits-page .habit-row > div:first-child {
+        flex: 1 1 auto;
+        min-width: 0;
     }
 
     .mobile-all-habits-page .habit-name {
@@ -3397,6 +3403,7 @@ body.auth-page main {
         font-size: 0.98rem;
         line-height: 1.2;
     }
+
 
     .mobile-all-habits-page .habit-meta {
         font-size: 0.74rem;
@@ -3419,16 +3426,22 @@ body.auth-page main {
 
     .mobile-all-habits-page .habit-row-actions {
         display: flex;
-        justify-content: flex-start;
+        justify-content: flex-end;
         gap: 0.35rem;
         align-self: flex-start;
-        margin-top: 0.1rem;
+        margin-top: 0;
+        flex-shrink: 0;
+    }
+
+    .mobile-all-habits-page .all-habits-extra-action {
+        display: none;
     }
 
     .mobile-all-habits-page .icon-link {
         width: 2.1rem;
         height: 2.1rem;
     }
+
 
     .today-page .progress-input {
         width: 84px;
