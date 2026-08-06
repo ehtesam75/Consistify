@@ -137,21 +137,9 @@ class Habit(models.Model):
         return self.is_paused_on(timezone.localdate())
 
     def is_scheduled_on(self, target_date):
-        if target_date < self.start_date:
-            return False
-        if self.is_paused_on(target_date):
-            return False
-        if self.schedule_type == self.SCHEDULE_DAILY:
-            return True
-        if self.schedule_type == self.SCHEDULE_WEEKLY:
-            interval = max(1, self.weekly_interval) * 7
-            return (target_date - self.start_date).days % interval == 0
-        if self.schedule_type == self.SCHEDULE_INTERVAL:
-            interval = max(1, self.interval_days)
-            return (target_date - self.start_date).days % interval == 0
-        if self.schedule_type == self.SCHEDULE_DAYS:
-            return target_date.weekday() in self.get_days_of_week_set()
-        return False
+        from .services import is_habit_scheduled_on
+
+        return is_habit_scheduled_on(self, target_date)
 
     @property
     def schedule_summary(self):
@@ -182,6 +170,69 @@ class Habit(models.Model):
             ordered = [labels[idx] for idx in range(7) if idx in days]
             return "Every " + ", ".join(ordered)
         return ""
+
+
+class HabitPlanVersion(models.Model):
+    """Effective-dated scoring and scheduling configuration for a habit."""
+
+    habit = models.ForeignKey(
+        Habit,
+        on_delete=models.CASCADE,
+        related_name="plan_versions",
+    )
+    effective_from = models.DateField()
+    schedule_anchor = models.DateField()
+    schedule_type = models.CharField(max_length=12, choices=Habit.SCHEDULE_CHOICES)
+    interval_days = models.PositiveSmallIntegerField(default=1)
+    weekly_interval = models.PositiveSmallIntegerField(default=1)
+    days_of_week = models.CharField(max_length=20, blank=True)
+    priority = models.CharField(
+        max_length=6,
+        choices=Habit.PRIORITY_CHOICES,
+        default=Habit.PRIORITY_MEDIUM,
+    )
+    categories = models.ManyToManyField(
+        HabitCategory,
+        blank=True,
+        related_name="habit_plan_versions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["effective_from", "id"]
+        indexes = [
+            models.Index(
+                fields=["habit", "effective_from"],
+                name="habit_plan_effective_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["habit", "effective_from"],
+                name="habit_plan_effective_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(interval_days__gte=1),
+                name="habit_plan_interval_gte_1",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(weekly_interval__gte=1),
+                name="habit_plan_weekly_gte_1",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.habit.name} plan from {self.effective_from}"
+
+    def get_days_of_week_set(self):
+        if not self.days_of_week:
+            return set()
+        return {
+            int(value)
+            for value in self.days_of_week.split(",")
+            if value.strip()
+        }
 
 
 class HabitCompletion(models.Model):

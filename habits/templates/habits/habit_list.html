@@ -75,9 +75,9 @@
                     <li class="habit-row progress-row" style="--i: {{ forloop.counter0 }};">
                         <div class="habit-info">
                             <a class="habit-name" href="{% url 'habits:habit_detail' item.habit.id %}">{{ item.habit.name }}</a>
-                            <p class="habit-meta">{{ item.habit.schedule_summary }}</p>
+                            <p class="habit-meta">{{ item.schedule_summary }}</p>
                             <div class="habit-flags">
-                                <span class="badge priority {{ item.habit.priority }}">{{ item.habit.get_priority_display }}</span>
+                                <span class="badge priority {{ item.priority }}">{{ item.priority_label }}</span>
                             </div>
                         </div>
                         <div class="habit-progress">

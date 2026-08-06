@@ -7,12 +7,15 @@
     <div>
         <p class="eyebrow">Habit focus</p>
         <h1>{{ habit.name }}</h1>
-        <p class="subtitle">{{ habit.schedule_summary }}</p>
+        <p class="subtitle">{{ habit.active_schedule_summary }}</p>
         <div class="habit-flags top-space">
-            {% for category in habit.categories.all %}
+            {% for category in habit.active_categories %}
                 <span class="badge category {{ category.key }}">{{ category.label }}</span>
             {% endfor %}
-            <span class="badge priority {{ habit.priority }}">{{ habit.get_priority_display }}</span>
+            <span class="badge priority {{ habit.active_priority }}">{{ habit.active_priority_label }}</span>
+            {% if habit.pending_plan_date %}
+                <span class="tag muted">Plan changes {{ habit.pending_plan_date|date:"M d" }}</span>
+            {% endif %}
             {% if habit.is_paused %}
                 <span class="tag muted">Paused</span>
             {% else %}

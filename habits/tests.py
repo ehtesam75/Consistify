@@ -16,7 +16,9 @@ from .models import (
     HabitCategory,
     HabitCompletion,
     HabitPause,
+    HabitPlanVersion,
 )
+from .plan_versions import ensure_initial_plan_version, schedule_habit_plan_edit
 from .services import (
     build_category_analytics,
     build_habit_score_drivers,
@@ -26,7 +28,9 @@ from .services import (
     calculate_overall_consistency,
     compute_user_metrics,
     daily_average_completion_series,
+    habit_tracking_start,
     habit_performance_metrics,
+    iter_scheduled_dates,
 )
 
 
@@ -198,10 +202,326 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["completion_quality"], 90.0)
         self.assertEqual(metrics["full_completion_reliability"], 0.0)
         self.assertEqual(metrics["streak_stability"], 100.0)
-        # Momentum is normalized over eligible scheduled sessions, so a new habit
-        # performing at 90% is not penalized for pre-start calendar days.
-        self.assertEqual(metrics["recent_momentum"], 90.0)
-        self.assertEqual(metrics["consistency_score"], 69.0)
+        self.assertEqual(metrics["recent_momentum"], 50.0)
+        self.assertEqual(metrics["consistency_score"], 63.0)
+
+    def test_quality_is_proportional_and_full_completion_remains_exact(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Quality boundaries", start)
+        for offset, percentage in enumerate([100, 99, 50, 0]):
+            self.log_completion(habit, start + timedelta(days=offset), percentage)
+
+        metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=4),
+        )
+
+        self.assertEqual(metrics["scheduled_total"], 5)
+        self.assertEqual(metrics["completion_quality"], 49.8)
+        self.assertEqual(metrics["full_completion_reliability"], 20.0)
+        self.assertEqual(metrics["completed_total"], 1)
+
+    def test_consistency_rhythm_decreases_as_consecutive_misses_accumulate(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Fading rhythm", start)
+        self.log_completion(habit, start, 100)
+        self.log_completion(habit, start + timedelta(days=1), 51)
+
+        stable_metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=1),
+        )
+        one_miss_metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=2),
+        )
+        two_miss_metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=3),
+        )
+
+        self.assertEqual(stable_metrics["streak_stability"], 83.3)
+        self.assertEqual(one_miss_metrics["streak_stability"], 63.3)
+        self.assertEqual(two_miss_metrics["streak_stability"], 46.7)
+        self.assertGreater(
+            stable_metrics["streak_stability"],
+            one_miss_metrics["streak_stability"],
+        )
+        self.assertGreater(
+            one_miss_metrics["streak_stability"],
+            two_miss_metrics["streak_stability"],
+        )
+
+    def test_consistency_rhythm_does_not_recover_without_new_effort(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Broken rhythm", start)
+        self.log_completion(habit, start, 100)
+
+        one_miss_metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=1),
+        )
+        six_miss_metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=6),
+        )
+        seven_miss_metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=7),
+        )
+
+        self.assertEqual(one_miss_metrics["streak_stability"], 43.3)
+        self.assertEqual(six_miss_metrics["streak_stability"], 11.4)
+        self.assertEqual(seven_miss_metrics["streak_stability"], 0.0)
+        self.assertGreater(
+            one_miss_metrics["streak_stability"],
+            six_miss_metrics["streak_stability"],
+        )
+        self.assertGreater(
+            six_miss_metrics["streak_stability"],
+            seven_miss_metrics["streak_stability"],
+        )
+
+    def test_consistency_rhythm_requires_more_than_fifty_percent(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Threshold rhythm", start)
+        self.log_completion(habit, start, 100)
+        self.log_completion(habit, start + timedelta(days=1), 50)
+        self.log_completion(habit, start + timedelta(days=2), Decimal("50.01"))
+
+        metrics_at_threshold = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=1),
+        )
+        metrics_above_threshold = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=2),
+        )
+
+        self.assertEqual(metrics_at_threshold["streak_stability"], 43.3)
+        self.assertEqual(metrics_above_threshold["streak_stability"], 53.3)
+
+    def test_consistency_rhythm_uses_only_the_seven_most_recent_sessions(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Recent rhythm", start)
+        self.log_completion(habit, start, 0)
+        self.log_completion(habit, start + timedelta(days=1), 0)
+        for offset in range(2, 8):
+            self.log_completion(habit, start + timedelta(days=offset), 80)
+
+        metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=7),
+        )
+
+        self.assertEqual(metrics["streak_stability"], 85.2)
+
+    def test_consistency_rhythm_confidence_requires_three_sessions(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Building confidence", start)
+        for offset in range(3):
+            self.log_completion(habit, start + timedelta(days=offset), 80)
+
+        one_session = habit_performance_metrics(habit, start, start)
+        two_sessions = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=1),
+        )
+        three_sessions = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=2),
+        )
+
+        self.assertEqual(one_session["streak_stability"], 66.7)
+        self.assertEqual(two_sessions["streak_stability"], 83.3)
+        self.assertEqual(three_sessions["streak_stability"], 100.0)
+
+    def test_rhythm_rewards_continuity_when_success_coverage_is_equal(self):
+        start = date(2026, 1, 1)
+        alternating = self.make_habit("Alternating rhythm", start)
+        grouped = self.make_habit("Grouped rhythm", start)
+        for offset, percentage in enumerate([80, 20, 80, 20, 80]):
+            self.log_completion(
+                alternating,
+                start + timedelta(days=offset),
+                percentage,
+            )
+        for offset, percentage in enumerate([20, 20, 80, 80, 80]):
+            self.log_completion(
+                grouped,
+                start + timedelta(days=offset),
+                percentage,
+            )
+
+        alternating_metrics = habit_performance_metrics(
+            alternating,
+            start,
+            start + timedelta(days=4),
+        )
+        grouped_metrics = habit_performance_metrics(
+            grouped,
+            start,
+            start + timedelta(days=4),
+        )
+
+        self.assertEqual(alternating_metrics["streak_stability"], 48.0)
+        self.assertEqual(grouped_metrics["streak_stability"], 58.0)
+
+    def test_rhythm_and_momentum_measure_level_and_improvement_separately(self):
+        start = date(2026, 1, 1)
+        recovering = self.make_habit("Recovering", start)
+        steady = self.make_habit("Steady", start)
+        self.log_completion(recovering, start, 30)
+        self.log_completion(recovering, start + timedelta(days=1), 80)
+        self.log_completion(steady, start, 80)
+        self.log_completion(steady, start + timedelta(days=1), 75)
+
+        recovering_metrics = habit_performance_metrics(
+            recovering,
+            start,
+            start + timedelta(days=1),
+        )
+        steady_metrics = habit_performance_metrics(
+            steady,
+            start,
+            start + timedelta(days=1),
+        )
+
+        self.assertEqual(recovering_metrics["streak_stability"], 43.3)
+        self.assertEqual(recovering_metrics["recent_momentum"], 83.3)
+        self.assertEqual(steady_metrics["streak_stability"], 83.3)
+        self.assertEqual(steady_metrics["recent_momentum"], 50.0)
+
+    def test_momentum_ignores_noise_without_meaningful_progress(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Noise only", start)
+        self.log_completion(habit, start, 0)
+        self.log_completion(habit, start + timedelta(days=1), Decimal("0.01"))
+
+        metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=1),
+        )
+
+        self.assertEqual(metrics["recent_momentum"], 0.0)
+
+    def test_momentum_ignores_changes_within_five_percentage_points(self):
+        start = date(2026, 1, 1)
+        expected_momentum = {
+            75: 50.0,
+            85: 50.0,
+            74: 49.3,
+            86: 50.7,
+        }
+
+        for current_value, expected in expected_momentum.items():
+            habit = self.make_habit(f"Noise boundary {current_value}", start)
+            self.log_completion(habit, start, 80)
+            self.log_completion(habit, start + timedelta(days=1), current_value)
+
+            with self.subTest(current_value=current_value):
+                metrics = habit_performance_metrics(
+                    habit,
+                    start,
+                    start + timedelta(days=1),
+                )
+                self.assertEqual(metrics["recent_momentum"], expected)
+
+    def test_stable_low_progress_cannot_receive_high_momentum(self):
+        start = date(2026, 1, 1)
+
+        for completion, expected in ((5, 5.0), (10, 10.0)):
+            habit = self.make_habit(f"Stable at {completion}", start)
+            for offset in range(6):
+                self.log_completion(
+                    habit,
+                    start + timedelta(days=offset),
+                    completion,
+                )
+
+            with self.subTest(completion=completion):
+                metrics = habit_performance_metrics(
+                    habit,
+                    start,
+                    start + timedelta(days=5),
+                )
+                self.assertEqual(metrics["recent_momentum"], expected)
+
+    def test_old_high_progress_cannot_prop_up_sustained_low_momentum(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Old spike", start)
+        for offset, completion in enumerate([100, 10, 10, 10, 10, 10]):
+            self.log_completion(
+                habit,
+                start + timedelta(days=offset),
+                completion,
+            )
+
+        metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=5),
+        )
+
+        self.assertEqual(metrics["recent_momentum"], 9.3)
+
+    def test_momentum_is_equal_for_the_same_daily_and_weekly_recovery(self):
+        start = date(2026, 1, 1)
+        daily = self.make_habit("Daily recovery", start)
+        weekly = self.make_habit(
+            "Weekly recovery",
+            start,
+            schedule_type=Habit.SCHEDULE_WEEKLY,
+        )
+        self.log_completion(daily, start, 30)
+        self.log_completion(daily, start + timedelta(days=1), 80)
+        self.log_completion(weekly, start, 30)
+        self.log_completion(weekly, start + timedelta(days=7), 80)
+
+        daily_metrics = habit_performance_metrics(
+            daily,
+            start,
+            start + timedelta(days=1),
+        )
+        weekly_metrics = habit_performance_metrics(
+            weekly,
+            start,
+            start + timedelta(days=7),
+        )
+
+        self.assertEqual(daily_metrics["recent_momentum"], 83.3)
+        self.assertEqual(weekly_metrics["recent_momentum"], 83.3)
+        self.assertEqual(daily_metrics["streak_stability"], 43.3)
+        self.assertEqual(weekly_metrics["streak_stability"], 43.3)
+        self.assertEqual(daily_metrics["consistency_score"], 43.8)
+        self.assertEqual(weekly_metrics["consistency_score"], 43.8)
+
+    def test_momentum_uses_only_the_six_most_recent_scheduled_sessions(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Settled recovery", start)
+        for offset, percentage in enumerate([0, 100, 100, 100, 100, 100, 100]):
+            self.log_completion(habit, start + timedelta(days=offset), percentage)
+
+        metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=6),
+        )
+
+        self.assertEqual(metrics["recent_momentum"], 50.0)
 
     def test_recent_momentum_rewards_improvement(self):
         start = date(2026, 1, 1)
@@ -235,7 +555,7 @@ class ConsistencyScoreTests(TestCase):
             declining_metrics["consistency_score"],
         )
 
-    def test_recent_momentum_treats_perfect_daily_and_weekly_habits_equally(self):
+    def test_recent_momentum_treats_stable_daily_and_weekly_habits_equally(self):
         start = date(2026, 1, 1)
         end = start + timedelta(days=13)
         daily = self.make_habit("Perfect daily", start)
@@ -253,10 +573,10 @@ class ConsistencyScoreTests(TestCase):
         daily_metrics = habit_performance_metrics(daily, start, end)
         weekly_metrics = habit_performance_metrics(weekly, start, end)
 
-        self.assertEqual(daily_metrics["recent_momentum"], 100.0)
-        self.assertEqual(weekly_metrics["recent_momentum"], 100.0)
-        self.assertEqual(daily_metrics["consistency_score"], 100.0)
-        self.assertEqual(weekly_metrics["consistency_score"], 100.0)
+        self.assertEqual(daily_metrics["recent_momentum"], 50.0)
+        self.assertEqual(weekly_metrics["recent_momentum"], 50.0)
+        self.assertEqual(daily_metrics["consistency_score"], 92.5)
+        self.assertEqual(weekly_metrics["consistency_score"], 90.0)
 
     def test_recent_momentum_excludes_paused_dates_from_its_denominator(self):
         start = date(2026, 1, 1)
@@ -273,8 +593,8 @@ class ConsistencyScoreTests(TestCase):
         metrics = habit_performance_metrics(habit, start, end)
 
         self.assertEqual(metrics["scheduled_total"], 7)
-        self.assertEqual(metrics["recent_momentum"], 100.0)
-        self.assertEqual(metrics["consistency_score"], 100.0)
+        self.assertEqual(metrics["recent_momentum"], 50.0)
+        self.assertEqual(metrics["consistency_score"], 92.5)
 
     def test_recent_momentum_does_not_decay_during_a_long_pause(self):
         start = date(2026, 1, 1)
@@ -291,30 +611,310 @@ class ConsistencyScoreTests(TestCase):
         metrics = habit_performance_metrics(habit, start, end)
 
         self.assertEqual(metrics["scheduled_total"], 16)
-        self.assertEqual(metrics["recent_momentum"], 100.0)
-        self.assertEqual(metrics["consistency_score"], 100.0)
+        self.assertEqual(metrics["recent_momentum"], 50.0)
+        self.assertEqual(metrics["consistency_score"], 92.5)
 
-    def test_recent_momentum_loads_lookback_before_a_short_report_period(self):
+    def test_recent_components_are_isolated_to_the_report_period(self):
         start = date(2026, 1, 1)
         report_start = start + timedelta(days=7)
-        report_end = start + timedelta(days=13)
-        habit = self.make_habit("Two-week context", start)
+        report_end = start + timedelta(days=8)
+        strong_history = self.make_habit("Strong prior history", start)
+        weak_history = self.make_habit("Weak prior history", start)
         for offset in range(7):
-            self.log_completion(habit, start + timedelta(days=offset), 100)
+            self.log_completion(
+                strong_history,
+                start + timedelta(days=offset),
+                100,
+            )
+            self.log_completion(
+                weak_history,
+                start + timedelta(days=offset),
+                0,
+            )
+        for habit in (strong_history, weak_history):
+            self.log_completion(habit, report_start, 30)
+            self.log_completion(habit, report_end, 80)
 
-        metrics = habit_performance_metrics(habit, report_start, report_end)
-        cached_metrics = habit_performance_metrics(
-            habit,
+        strong_metrics = habit_performance_metrics(
+            strong_history,
             report_start,
             report_end,
-            completion_map={},
+        )
+        weak_metrics = habit_performance_metrics(
+            weak_history,
+            report_start,
+            report_end,
+        )
+        cached_metrics = habit_performance_metrics(
+            strong_history,
+            report_start,
+            report_end,
+            completion_map={
+                report_start: 30,
+                report_end: 80,
+            },
             value_map={},
         )
 
-        self.assertEqual(metrics["scheduled_total"], 7)
-        self.assertEqual(metrics["completion_rate"], 0.0)
-        self.assertEqual(metrics["recent_momentum"], 26.7)
-        self.assertEqual(cached_metrics["recent_momentum"], 26.7)
+        expected = {
+            "scheduled_total": 2,
+            "completion_quality": 55.0,
+            "full_completion_reliability": 0.0,
+            "streak_stability": 43.3,
+            "recent_momentum": 83.3,
+            "consistency_score": 43.8,
+        }
+        for key, value in expected.items():
+            self.assertEqual(strong_metrics[key], value)
+            self.assertEqual(weak_metrics[key], value)
+            self.assertEqual(cached_metrics[key], value)
+
+    def test_plan_edits_preserve_historical_schedule_score_and_categories(self):
+        start = date(2026, 1, 1)
+        today = start + timedelta(days=6)
+        habit = self.make_habit(
+            "Versioned routine",
+            start,
+            categories=[self.categories["spiritual"]],
+        )
+        self.log_completion(habit, start, 100)
+        self.log_completion(habit, start + timedelta(days=1), 80)
+        ensure_initial_plan_version(habit)
+
+        before_metrics = habit_performance_metrics(habit, start, today)
+        before_dates = list(iter_scheduled_dates(habit, start, today))
+
+        schedule_habit_plan_edit(
+            habit,
+            schedule_type=Habit.SCHEDULE_WEEKLY,
+            start_date=today + timedelta(days=1),
+            weekly_interval=1,
+            priority=Habit.PRIORITY_HIGH,
+            categories=[self.categories["health"]],
+            today=today,
+        )
+
+        after_metrics = habit_performance_metrics(habit, start, today)
+        after_dates = list(iter_scheduled_dates(habit, start, today))
+        historical_categories = {
+            item["key"]: item
+            for item in build_category_analytics([habit], start, today)["summaries"]
+        }
+        future_categories = {
+            item["key"]: item
+            for item in build_category_analytics(
+                [habit],
+                today + timedelta(days=1),
+                today + timedelta(days=8),
+            )["summaries"]
+        }
+
+        self.assertEqual(after_metrics, before_metrics)
+        self.assertEqual(after_dates, before_dates)
+        self.assertEqual(len(after_dates), 7)
+        self.assertEqual(
+            list(
+                iter_scheduled_dates(
+                    habit,
+                    today + timedelta(days=1),
+                    today + timedelta(days=15),
+                )
+            ),
+            [
+                today + timedelta(days=1),
+                today + timedelta(days=8),
+                today + timedelta(days=15),
+            ],
+        )
+        self.assertEqual(historical_categories["spiritual"]["scheduled_total"], 7)
+        self.assertEqual(historical_categories["health"]["scheduled_total"], 0)
+        self.assertEqual(future_categories["spiritual"]["scheduled_total"], 0)
+        self.assertEqual(future_categories["health"]["scheduled_total"], 2)
+
+    def test_priority_edit_changes_future_but_not_historical_aggregation(self):
+        start = date(2026, 1, 1)
+        today = start + timedelta(days=2)
+        completed = self.make_habit("Completed", start)
+        missed = self.make_habit("Missed", start)
+        for offset in range(3):
+            self.log_completion(completed, start + timedelta(days=offset), 100)
+        ensure_initial_plan_version(completed)
+        ensure_initial_plan_version(missed)
+
+        before = compute_user_metrics([completed, missed], start, today)
+        schedule_habit_plan_edit(
+            completed,
+            priority=Habit.PRIORITY_HIGH,
+            today=today,
+        )
+        after = compute_user_metrics([completed, missed], start, today)
+
+        tomorrow = today + timedelta(days=1)
+        self.log_completion(completed, tomorrow, 100)
+        future = compute_user_metrics([completed, missed], tomorrow, tomorrow)
+
+        self.assertEqual(after["aggregate"], before["aggregate"])
+        self.assertEqual(after["consistency_score"], before["consistency_score"])
+        self.assertEqual(future["aggregate"]["completion_rate"], 56.5)
+
+    def test_completion_rate_uses_priority_active_on_each_occurrence(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Changing priority", start)
+        self.log_completion(habit, start, 100)
+        ensure_initial_plan_version(habit)
+        schedule_habit_plan_edit(
+            habit,
+            priority=Habit.PRIORITY_HIGH,
+            today=start,
+        )
+
+        metrics = habit_performance_metrics(
+            habit,
+            start,
+            start + timedelta(days=1),
+        )
+
+        self.assertEqual(metrics["completion_quality"], 50.0)
+        self.assertEqual(metrics["completion_rate"], 43.5)
+        self.assertEqual(metrics["average_completion"], 43.5)
+
+    def test_repeated_same_day_plan_edits_share_one_pending_version(self):
+        today = date(2026, 1, 3)
+        habit = self.make_habit("Pending plan", date(2026, 1, 1))
+        ensure_initial_plan_version(habit)
+
+        schedule_habit_plan_edit(
+            habit,
+            priority=Habit.PRIORITY_HIGH,
+            today=today,
+        )
+        schedule_habit_plan_edit(
+            habit,
+            schedule_type=Habit.SCHEDULE_WEEKLY,
+            start_date=today + timedelta(days=1),
+            priority=Habit.PRIORITY_LOW,
+            today=today,
+        )
+
+        versions = list(
+            HabitPlanVersion.objects.filter(habit=habit).order_by("effective_from")
+        )
+        self.assertEqual(len(versions), 2)
+        self.assertEqual(versions[-1].effective_from, today + timedelta(days=1))
+        self.assertEqual(versions[-1].schedule_type, Habit.SCHEDULE_WEEKLY)
+        self.assertEqual(versions[-1].priority, Habit.PRIORITY_LOW)
+
+    def test_tracking_start_ignores_a_superseded_future_anchor(self):
+        habit = self.make_habit("Deferred twice", date(2026, 1, 10))
+        first = HabitPlanVersion.objects.create(
+            habit=habit,
+            effective_from=date(2026, 1, 1),
+            schedule_anchor=date(2026, 1, 10),
+            schedule_type=Habit.SCHEDULE_DAILY,
+            priority=Habit.PRIORITY_MEDIUM,
+        )
+        first.categories.set([self.categories["spiritual"]])
+        second = HabitPlanVersion.objects.create(
+            habit=habit,
+            effective_from=date(2026, 1, 6),
+            schedule_anchor=date(2026, 1, 20),
+            schedule_type=Habit.SCHEDULE_DAILY,
+            priority=Habit.PRIORITY_MEDIUM,
+        )
+        second.categories.set([self.categories["spiritual"]])
+
+        self.assertEqual(habit_tracking_start(habit), date(2026, 1, 20))
+
+    def test_habit_edit_view_versions_plan_changes_for_tomorrow(self):
+        start = date(2026, 1, 1)
+        today = start + timedelta(days=6)
+        habit = self.make_habit(
+            "Edit through view",
+            start,
+            categories=[self.categories["spiritual"]],
+        )
+        self.log_completion(habit, start, 100)
+        before = habit_performance_metrics(habit, start, today)
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            response = self.client.post(
+                reverse("habits:habit_edit", args=[habit.id]),
+                {
+                    "name": habit.name,
+                    "description": "",
+                    "habit_type": Habit.HABIT_PARTIAL,
+                    "target_value": "",
+                    "unit": "",
+                    "schedule_type": Habit.SCHEDULE_WEEKLY,
+                    "categories": [self.categories["health"].id],
+                    "priority": Habit.PRIORITY_HIGH,
+                    "tags": "",
+                    "start_date": (today + timedelta(days=1)).isoformat(),
+                    "interval_days": 1,
+                    "weekly_interval": 1,
+                    "days_of_week": [],
+                },
+            )
+
+        self.assertRedirects(
+            response,
+            reverse("habits:habit_detail", args=[habit.id]),
+            fetch_redirect_response=False,
+        )
+        habit.refresh_from_db()
+        self.assertEqual(habit.schedule_type, Habit.SCHEDULE_WEEKLY)
+        self.assertEqual(habit.priority, Habit.PRIORITY_HIGH)
+        self.assertEqual(
+            habit_performance_metrics(habit, start, today),
+            before,
+        )
+        pending = HabitPlanVersion.objects.get(
+            habit=habit,
+            effective_from=today + timedelta(days=1),
+        )
+        self.assertEqual(pending.schedule_type, Habit.SCHEDULE_WEEKLY)
+        self.assertEqual(
+            list(pending.categories.values_list("pk", flat=True)),
+            [self.categories["health"].id],
+        )
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            detail = self.client.get(
+                reverse("habits:habit_detail", args=[habit.id])
+            )
+        displayed_habit = detail.context["habit"]
+        self.assertEqual(displayed_habit.active_schedule_summary, "Every day")
+        self.assertEqual(
+            displayed_habit.active_priority,
+            Habit.PRIORITY_MEDIUM,
+        )
+        self.assertEqual(
+            [category.id for category in displayed_habit.active_categories],
+            [self.categories["spiritual"].id],
+        )
+        self.assertEqual(
+            displayed_habit.pending_plan_date,
+            today + timedelta(days=1),
+        )
+
+    def test_historical_completion_edit_recomputes_score_without_stale_cache(self):
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Editable outcome", start)
+        completion = self.log_completion(habit, start, 80)
+        ensure_initial_plan_version(habit)
+
+        before = habit_performance_metrics(habit, start, start)
+        completion.completion_percentage = Decimal("100")
+        completion.raw_value = Decimal("100")
+        completion.save(update_fields=["completion_percentage", "raw_value"])
+        after = habit_performance_metrics(habit, start, start)
+
+        self.assertEqual(before["completion_quality"], 80.0)
+        self.assertEqual(before["full_completion_reliability"], 0.0)
+        self.assertEqual(after["completion_quality"], 100.0)
+        self.assertEqual(after["full_completion_reliability"], 100.0)
+        self.assertGreater(after["consistency_score"], before["consistency_score"])
 
     def test_daily_completion_series_counts_unlogged_today_as_zero(self):
         today = date(2026, 1, 2)
@@ -394,11 +994,11 @@ class ConsistencyScoreTests(TestCase):
             start + timedelta(days=3),
         )
 
-        # Perfect performance earns full momentum regardless of schedule cadence.
+        # Stable performance receives neutral momentum regardless of cadence.
         # The daily habit has no logged completions, so its score is 0.
         high_weight = 1.3 * sqrt(1)
         low_weight = 0.8 * sqrt(4)
-        weekly_score = 100.0
+        weekly_score = 87.5
         expected_score = round(
             (weekly_score * high_weight + 0 * low_weight)
             / (high_weight + low_weight),
@@ -419,7 +1019,8 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["completed_total"], 1)
         self.assertEqual(metrics["completion_rate"], 50.0)
         self.assertEqual(metrics["current_streak"], 0)
-        self.assertEqual(metrics["consistency_score"], 42.2)
+        self.assertEqual(metrics["recent_momentum"], 0.0)
+        self.assertEqual(metrics["consistency_score"], 41.5)
         unlogged_metrics = metrics
 
         self.log_completion(habit, today, 0)
@@ -449,13 +1050,13 @@ class ConsistencyScoreTests(TestCase):
         components = {item["key"]: item for item in breakdown["components"]}
 
         self.assertTrue(breakdown["has_previous"])
-        self.assertEqual(breakdown["current_score"], 97.0)
-        self.assertEqual(breakdown["previous_score"], 45.0)
-        self.assertEqual(breakdown["score_delta"], 52.0)
+        self.assertEqual(breakdown["current_score"], 92.5)
+        self.assertEqual(breakdown["previous_score"], 30.0)
+        self.assertEqual(breakdown["score_delta"], 62.5)
         self.assertEqual(components["completion_quality"]["points_delta"], 22.5)
         self.assertEqual(components["full_completion"]["points_delta"], 25.0)
-        self.assertEqual(components["rhythm_stability"]["points_delta"], 0.0)
-        self.assertEqual(components["recent_momentum"]["points_delta"], 4.5)
+        self.assertEqual(components["rhythm_stability"]["points_delta"], 15.0)
+        self.assertEqual(components["recent_momentum"]["points_delta"], 0.0)
 
     def test_habit_score_drivers_identify_booster_drag_and_movement(self):
         start = date(2026, 1, 1)
@@ -496,9 +1097,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(drivers["booster"]["habit"], booster)
         self.assertEqual(drivers["drag"]["habit"], drag)
         self.assertEqual(drivers["improved"]["habit"], improved)
-        self.assertEqual(drivers["improved"]["score_delta"], 93.9)
+        self.assertEqual(drivers["improved"]["score_delta"], 92.5)
         self.assertEqual(drivers["declined"]["habit"], declined)
-        self.assertEqual(drivers["declined"]["score_delta"], -93.9)
+        self.assertEqual(drivers["declined"]["score_delta"], -92.5)
 
     def test_category_analytics_marks_best_and_weakest_categories(self):
         start = date(2026, 1, 1)

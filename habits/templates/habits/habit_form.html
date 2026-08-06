@@ -166,7 +166,8 @@
         <div class="form-side-divider"></div>
         <p class="help">
             {% if form.instance.pk %}
-                Editing this habit updates future tracking behavior immediately.
+                Schedule, priority, and category changes take effect tomorrow.
+                Earlier reports keep the plan that was active on each date.
             {% else %}
                 This habit will appear in your Today list based on the selected schedule.
             {% endif %}

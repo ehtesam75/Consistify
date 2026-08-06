@@ -1,10 +1,26 @@
 from django.contrib import admin
 
-from .models import FriendRequest, Habit, HabitCompletion, HabitPause
+from .models import (
+    FriendRequest,
+    Habit,
+    HabitCompletion,
+    HabitPause,
+    HabitPlanVersion,
+)
+from .plan_versions import ensure_initial_plan_version
 
 
 @admin.register(Habit)
 class HabitAdmin(admin.ModelAdmin):
+    versioned_fields = (
+        "schedule_type",
+        "categories",
+        "priority",
+        "start_date",
+        "interval_days",
+        "weekly_interval",
+        "days_of_week",
+    )
     list_display = (
         "name",
         "user",
@@ -21,10 +37,59 @@ class HabitAdmin(admin.ModelAdmin):
     search_fields = ("name", "description", "tags", "user__username")
     filter_horizontal = ("categories",)
 
+    def get_readonly_fields(self, request, obj=None):
+        readonly_fields = tuple(super().get_readonly_fields(request, obj))
+        if obj is not None:
+            return readonly_fields + self.versioned_fields
+        return readonly_fields
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        ensure_initial_plan_version(form.instance)
+
     def category_list(self, obj):
         return ", ".join(category.label for category in obj.categories.all())
 
     category_list.short_description = "Categories"
+
+
+@admin.register(HabitPlanVersion)
+class HabitPlanVersionAdmin(admin.ModelAdmin):
+    list_display = (
+        "habit",
+        "effective_from",
+        "schedule_type",
+        "schedule_anchor",
+        "priority",
+        "category_list",
+    )
+    list_filter = ("effective_from", "schedule_type", "priority", "categories")
+    search_fields = ("habit__name", "habit__user__username")
+    fields = (
+        "habit",
+        "effective_from",
+        "schedule_type",
+        "schedule_anchor",
+        "interval_days",
+        "weekly_interval",
+        "days_of_week",
+        "priority",
+        "category_list",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = fields
+
+    def category_list(self, obj):
+        return ", ".join(category.label for category in obj.categories.all())
+
+    category_list.short_description = "Categories"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(HabitCompletion)

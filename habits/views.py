@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model, login
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
-from django.db import IntegrityError, transaction
+from django.db import DEFAULT_DB_ALIAS, IntegrityError, transaction
 from django.db.models import Max, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -23,7 +23,14 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .forms import HabitForm
-from .models import FriendRequest, Habit, HabitCompletion, HabitPause
+from .models import (
+    FriendRequest,
+    Habit,
+    HabitCategory,
+    HabitCompletion,
+    HabitPause,
+)
+from .plan_versions import ensure_initial_plan_version, schedule_habit_plan_edit
 from .services import (
     build_category_analytics,
     build_habit_score_drivers,
@@ -41,14 +48,61 @@ from .services import (
     get_pending_habits_for_date,
     get_completion_maps,
     get_next_scheduled_date,
+    habit_tracking_start,
     habit_performance_metrics,
+    iter_scheduled_occurrences,
+    resolve_habit_plan_on,
     should_prompt_daily_recap,
     iter_scheduled_dates,
-    weighted_completion_rate,
+    weighted_completion_rate_from_totals,
 )
 
 
 logger = logging.getLogger(__name__)
+
+
+def _attach_active_plan_display(habits, target_date):
+    """Attach date-specific plan fields used by habit summary templates."""
+    resolved = []
+    category_ids = set()
+    for habit in habits:
+        config = resolve_habit_plan_on(habit, target_date)
+        resolved.append((habit, config))
+        if config is not None:
+            category_ids.update(config.category_ids)
+
+    categories = HabitCategory.objects.in_bulk(category_ids)
+    for habit, config in resolved:
+        if config is None:
+            habit.active_schedule_summary = habit.schedule_summary
+            habit.active_priority = habit.priority
+            habit.active_priority_label = habit.get_priority_display()
+            habit.active_categories = list(habit.categories.all())
+        else:
+            habit.active_schedule_summary = config.schedule_summary
+            habit.active_priority = config.priority
+            habit.active_priority_label = config.priority_label
+            habit.active_categories = sorted(
+                (
+                    categories[category_id]
+                    for category_id in config.category_ids
+                    if category_id in categories
+                ),
+                key=lambda category: (category.sort_order, category.label),
+            )
+
+        prefetched = getattr(habit, "_prefetched_objects_cache", None) or {}
+        versions = prefetched.get("plan_versions")
+        if versions is None:
+            versions = habit.plan_versions.filter(
+                effective_from__gt=target_date
+            ).only("effective_from")
+        future_dates = [
+            version.effective_from
+            for version in versions
+            if version.effective_from > target_date
+        ]
+        habit.pending_plan_date = min(future_dates) if future_dates else None
 
 
 def health(request):
@@ -95,9 +149,10 @@ def _build_today_habit_context(request):
     target_date = _get_date_from_request(request)
     habits = list(
         Habit.objects.filter(user=request.user)
-        .prefetch_related("categories", "pauses")
+        .prefetch_related("categories", "pauses", "plan_versions__categories")
         .order_by("sort_order", "name")
     )
+    _attach_active_plan_display(habits, today)
     active_habits = [habit for habit in habits if not habit.is_paused_on(target_date)]
 
     today_metrics = compute_today_metrics(request.user, target_date)
@@ -174,7 +229,7 @@ def dashboard(request):
     )
     habits = list(
         Habit.objects.filter(user=request.user)
-        .prefetch_related("categories", "pauses")
+        .prefetch_related("categories", "pauses", "plan_versions__categories")
         .order_by("sort_order", "name")
     )
     total_habits = sum(1 for habit in habits if not habit.is_paused)
@@ -242,12 +297,17 @@ def dashboard(request):
 @login_required
 def habit_detail(request, habit_id):
     habit = get_object_or_404(
-        Habit.objects.prefetch_related("categories", "pauses"),
+        Habit.objects.prefetch_related(
+            "categories",
+            "pauses",
+            "plan_versions__categories",
+        ),
         id=habit_id,
         user=request.user,
     )
     today = timezone.localdate()
-    all_time_start = habit.start_date
+    _attach_active_plan_display([habit], today)
+    all_time_start = habit_tracking_start(habit)
     history_dates = list(iter_scheduled_dates(habit, all_time_start, today))
     history_limit = 15
     recent_history_dates = history_dates[-history_limit:]
@@ -365,6 +425,7 @@ def habit_create(request):
             habit.sort_order = max_order + 1
             habit.save()
             form.save_m2m()
+            ensure_initial_plan_version(habit)
             messages.success(request, "Habit created.")
             return redirect("habits:habit_detail", habit_id=habit.id)
     else:
@@ -392,8 +453,52 @@ def habit_edit(request, habit_id):
     if request.method == "POST":
         form = HabitForm(request.POST, instance=habit)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Habit updated.")
+            versioned_fields = {
+                "schedule_type",
+                "categories",
+                "priority",
+                "start_date",
+                "interval_days",
+                "weekly_interval",
+                "days_of_week",
+            }
+            plan_changed = bool(versioned_fields.intersection(form.changed_data))
+            if plan_changed:
+                non_plan_values = {
+                    field: getattr(form.instance, field)
+                    for field in (
+                        "name",
+                        "description",
+                        "habit_type",
+                        "target_value",
+                        "unit",
+                        "tags",
+                    )
+                }
+                database = habit._state.db or DEFAULT_DB_ALIAS
+                with transaction.atomic(using=database):
+                    schedule_habit_plan_edit(
+                        habit,
+                        schedule_type=form.cleaned_data["schedule_type"],
+                        start_date=form.cleaned_data["start_date"],
+                        interval_days=form.cleaned_data["interval_days"] or 1,
+                        weekly_interval=form.cleaned_data["weekly_interval"] or 1,
+                        days_of_week=form.cleaned_data["days_of_week"],
+                        priority=form.cleaned_data["priority"],
+                        categories=form.cleaned_data["categories"],
+                        today=today,
+                    )
+                    for field, value in non_plan_values.items():
+                        setattr(habit, field, value)
+                    habit.save(update_fields=[*non_plan_values, "updated_at"])
+                messages.success(
+                    request,
+                    "Habit updated. Plan changes take effect tomorrow.",
+                )
+            else:
+                form.save()
+                ensure_initial_plan_version(habit)
+                messages.success(request, "Habit updated.")
             return redirect("habits:habit_detail", habit_id=habit.id)
     else:
         form = HabitForm(instance=habit)
@@ -649,7 +754,7 @@ def reports(request):
     today = timezone.localdate()
     habits = list(
         Habit.objects.filter(user=request.user)
-        .prefetch_related("categories", "pauses")
+        .prefetch_related("categories", "pauses", "plan_versions__categories")
         .order_by("sort_order", "name")
     )
 
@@ -704,7 +809,7 @@ def reports(request):
 def habit_compare(request):
     habits = list(
         Habit.objects.filter(user=request.user)
-        .prefetch_related("categories", "pauses")
+        .prefetch_related("categories", "pauses", "plan_versions__categories")
         .order_by("sort_order", "name")
     )
     today = timezone.localdate()
@@ -731,7 +836,7 @@ def habit_compare(request):
         for habit in selected_habits:
             metrics_90 = habit_performance_metrics(habit, window_start, today)
             metrics_30 = habit_performance_metrics(habit, last30_start, today)
-            all_time_start = habit.start_date
+            all_time_start = habit_tracking_start(habit)
             metrics_all = habit_performance_metrics(habit, all_time_start, today)
             comparison_rows.append(
                 {
@@ -768,22 +873,35 @@ def _build_compare_chart_payload(selected_habits, today):
         datasets = []
         for habit in selected_habits:
             completion_map, _ = get_completion_maps(habit, start_date, today)
-            running_total = 0.0
-            scheduled_count = 0
+            occurrences = {
+                occurrence.date: occurrence
+                for occurrence in iter_scheduled_occurrences(
+                    habit,
+                    start_date,
+                    today,
+                )
+            }
+            tracking_start = habit_tracking_start(habit)
+            weighted_completion_total = 0.0
+            priority_weight_total = 0.0
             points = []
             for day in _build_range(start_date):
-                if day < habit.start_date:
+                if day < tracking_start:
                     points.append(None)
                     continue
-                is_scheduled = habit.is_scheduled_on(day)
-                if is_scheduled:
-                    running_total += completion_map.get(day, 0.0)
-                    scheduled_count += 1
-                average_value = (
-                    weighted_completion_rate(
-                        [(habit, running_total, scheduled_count)]
+                occurrence = occurrences.get(day)
+                if occurrence is not None:
+                    priority_weight = occurrence.priority_weight
+                    weighted_completion_total += (
+                        completion_map.get(day, 0.0) * priority_weight
                     )
-                    if scheduled_count
+                    priority_weight_total += priority_weight
+                average_value = (
+                    weighted_completion_rate_from_totals(
+                        weighted_completion_total,
+                        priority_weight_total,
+                    )
+                    if priority_weight_total
                     else None
                 )
                 points.append(average_value)
@@ -791,7 +909,10 @@ def _build_compare_chart_payload(selected_habits, today):
         return {"labels": labels, "datasets": datasets}
 
     last30_start = today - timedelta(days=29)
-    all_time_start = min(habit.start_date for habit in selected_habits)
+    all_time_start = min(
+        habit_tracking_start(habit)
+        for habit in selected_habits
+    )
     return {
         "last30": _build_timeframe_series(last30_start),
         "all": _build_timeframe_series(all_time_start),
@@ -954,12 +1075,12 @@ def _build_profile_context(profile_user, current_user):
 def _build_user_metrics(user, today, start_date=None):
     habits = list(
         Habit.objects.filter(user=user)
-        .prefetch_related("categories", "pauses")
+        .prefetch_related("categories", "pauses", "plan_versions__categories")
         .order_by("sort_order", "name")
     )
 
     if start_date is None and habits:
-        start_date = min(habit.start_date for habit in habits)
+        start_date = min(habit_tracking_start(habit) for habit in habits)
     elif start_date is None:
         start_date = today
 
