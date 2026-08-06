@@ -110,11 +110,9 @@
                     <div class="field">
                         <label for="{{ form.start_date.id_for_label }}">Start date</label>
                         {{ form.start_date }}
-                        {% if form.instance.pk %}
-                            <p class="help">🔒 Start date is locked after creation to keep your history, reports, and Consistify Scores accurate.</p>
-                        {% endif %}
                         {{ form.start_date.errors }}
                     </div>
+
                 </div>
 
 
@@ -178,74 +176,73 @@
         </p>
 
         {% if form.instance.pk %}
-            <div class="pause-actions">
-                {% with active_pause=form.instance.active_pause %}
-                    {% if active_pause %}
-                        <form method="post" action="{% url 'habits:resume_habit' form.instance.pk %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <button class="btn primary" type="submit">
-                                {% if active_pause.start_date > today %}
-                                    Cancel pause
-                                {% else %}
-                                    Resume habit
-                                {% endif %}
-                            </button>
-                        </form>
-                        {% if active_pause.start_date > today %}
-                            <p class="help">Pause starts tomorrow and skips scheduled days.</p>
-                        {% endif %}
-                    {% else %}
-                        <form method="post" action="{% url 'habits:pause_habit' form.instance.pk %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <button class="btn ghost" type="submit">Pause habit</button>
-                        </form>
-                        <p class="help">Pausing starts tomorrow and skips scheduled days.</p>
-                    {% endif %}
-                {% endwith %}
-            </div>
             <div class="form-side-divider"></div>
-            <div class="stop-tracking-zone">
-                <h3>Stop tracking</h3>
-                {% if form.instance.is_archived %}
-                    <p class="help">
-                        This habit is archived{% if form.instance.archive_effective_date %} (effective {{ form.instance.archive_effective_date|date:"M d, Y" }}){% endif %}.
-                        Its history, reports, analytics, and Consistify Scores are preserved, and it no longer appears in your active tracking.
-                    </p>
-                    <form method="post" action="{% url 'habits:unarchive_habit' form.instance.pk %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <button class="btn primary" type="submit">Restore habit</button>
-                    </form>
-                    <p class="help">Restoring resumes future tracking from today onward.</p>
-                {% else %}
-                    <p class="help">
-                        <strong>Archive</strong> is the recommended way to stop a habit.
-                        It keeps all history and analytics and stops future tracking starting tomorrow.
-                    </p>
-                    <form method="post" action="{% url 'habits:archive_habit' form.instance.pk %}" onsubmit="return window.confirm('Archive this habit starting tomorrow? All history and reports are kept, and future tracking stops.')">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <button class="btn primary" type="submit">Archive habit</button>
-                    </form>
-                {% endif %}
+            <div class="habit-management-section">
+                <h3>Habit management</h3>
+                
+                <div class="management-action temporary-action">
+                    <h4>Pause tracking</h4>
+                    <p class="help">Temporarily skip scheduled days. Pausing starts tomorrow and can be resumed anytime.</p>
+                    {% with active_pause=form.instance.active_pause %}
+                        {% if active_pause %}
+                            <form method="post" action="{% url 'habits:resume_habit' form.instance.pk %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button class="btn primary small" type="submit">
+                                    {% if active_pause.start_date > today %}
+                                        Cancel pause
+                                    {% else %}
+                                        Resume habit
+                                    {% endif %}
+                                </button>
+                            </form>
+                        {% else %}
+                            <form method="post" action="{% url 'habits:pause_habit' form.instance.pk %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button class="btn ghost small" type="submit">Pause habit</button>
+                            </form>
+                        {% endif %}
+                    {% endwith %}
+                </div>
 
-                <ul class="stop-tracking-list">
-                    <li><strong>Archive:</strong> Keep all history and stop future tracking.</li>
-                    <li><strong>Delete:</strong> Permanently remove the habit and all associated history and data.</li>
-                </ul>
-            </div>
-            <div class="danger-zone">
-                <h3>Delete habit</h3>
-                <p class="help">Deleting permanently removes this habit and all associated history, reports, and analytics. This cannot be undone.</p>
-                <form method="post" action="{% url 'habits:habit_delete' form.instance.pk %}" data-confirm-delete data-confirm-message="Permanently delete this habit and all its history? This cannot be undone. Consider archiving instead to keep your data." onsubmit="return window.confirm('Permanently delete this habit and all its history? This cannot be undone. Consider archiving instead to keep your data.')">
-                    {% csrf_token %}
-                    <input type="hidden" name="next" value="{% url 'habits:today' %}">
-                    <button class="btn danger" type="submit">Delete habit</button>
-                </form>
+                <div class="management-action safe-action">
+                    <h4>Archive habit</h4>
+                    {% if form.instance.is_archived %}
+                        <p class="help">
+                            This habit is archived{% if form.instance.archive_effective_date %} (effective {{ form.instance.archive_effective_date|date:"M d, Y" }}){% endif %}.
+                            All history is preserved. Click restore to resume tracking.
+                        </p>
+                        <form method="post" action="{% url 'habits:unarchive_habit' form.instance.pk %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="btn primary small" type="submit">Restore habit</button>
+                        </form>
+                    {% else %}
+                        <p class="help">
+                            The recommended way to stop tracking. Takes effect starting tomorrow and keeps all history, reports, analytics, and Consistify Scores while stopping future tracking. You can restore it anytime.
+                        </p>
+
+                        <form method="post" action="{% url 'habits:archive_habit' form.instance.pk %}" onsubmit="return window.confirm('Archive this habit starting tomorrow? All history and reports are kept, and future tracking stops.')">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="btn ghost small" type="submit">Archive habit</button>
+                        </form>
+                    {% endif %}
+                </div>
+
+                <div class="management-action destructive-action">
+                    <h4>Delete habit</h4>
+                    <p class="help">Permanently remove this habit and all associated history. This cannot be undone.</p>
+                    <form method="post" action="{% url 'habits:habit_delete' form.instance.pk %}" data-confirm-delete data-confirm-message="Permanently delete this habit and all its history? This cannot be undone. Consider archiving instead to keep your data." onsubmit="return window.confirm('Permanently delete this habit and all its history? This cannot be undone. Consider archiving instead to keep your data.')">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{% url 'habits:today' %}">
+                        <button class="btn danger small" type="submit">Delete habit</button>
+                    </form>
+                </div>
             </div>
         {% endif %}
+
 
     </aside>
 </section>

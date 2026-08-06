@@ -250,7 +250,8 @@
                                     {% else %}
                                         <label class="daily-recap-field">
                                             <span class="sr-only">Progress value</span>
-                                            <input class="input" type="number" min="0" step="1" name="value_{{ item.habit.id }}" value="{{ item.raw_value|default_if_none:0|floatformat:0 }}" required>
+                                            <input class="input" type="number" min="0" step="any" name="value_{{ item.habit.id }}" value="{{ item.raw_value|default_if_none:0|floatformat:'-2' }}" required>
+
                                         </label>
                                         <span class="daily-recap-unit">{{ item.unit }}</span>
                                     {% endif %}

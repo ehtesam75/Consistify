@@ -38,11 +38,13 @@ class HabitForm(forms.ModelForm):
     target_value = forms.DecimalField(
         required=False,
         min_value=0,
+        decimal_places=2,
         widget=forms.NumberInput(
-            attrs={"class": "input", "min": 0, "step": "1"}
+            attrs={"class": "input", "min": 0, "step": "any"}
         ),
         help_text="Only used for quantitative habits.",
     )
+
     unit = forms.CharField(
         required=False,
         widget=forms.TextInput(
@@ -142,8 +144,18 @@ class HabitForm(forms.ModelForm):
             if not unit:
                 self.add_error("unit", "Unit is required for quantitative habits.")
             if target_value:
-                target_value = target_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+                # Preserve the user's precision: whole numbers stay whole
+                # (10), decimals keep up to two places (10.5), and trailing
+                # zeros are dropped so 10.00 is stored as 10.
+                target_value = target_value.quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                ).normalize()
+                # normalize() can yield scientific notation for whole numbers
+                # (e.g. 1E+1); expand it back to a plain integer value.
+                if target_value == target_value.to_integral_value():
+                    target_value = target_value.quantize(Decimal("1"))
         else:
+
             target_value = None
             unit = ""
 

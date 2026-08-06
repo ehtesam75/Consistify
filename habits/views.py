@@ -401,8 +401,7 @@ def habit_detail(request, habit_id):
     today_raw_value = None
     if today_completion and today_completion.raw_value is not None:
         today_raw_value = float(today_completion.raw_value)
-        if habit.habit_type == Habit.HABIT_QUANTITATIVE:
-            today_raw_value = int(today_raw_value)
+
     today_completed = today_completion_percentage >= 100
     is_scheduled_today = habit.is_scheduled_on(today)
     next_due = get_next_scheduled_date(habit, today)
@@ -759,10 +758,12 @@ def update_progress(request, habit_id):
                 "Add a target value before logging progress.",
             )
         target_value = effective_target_value.quantize(
-            Decimal("1"), rounding=ROUND_HALF_UP
+            Decimal("0.01"), rounding=ROUND_HALF_UP
         )
         raw_value = _parse_decimal(request.POST.get("current_value")) or Decimal("0")
-        raw_value = raw_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        raw_value = raw_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
         if raw_value < 0:
             raw_value = Decimal("0")
         if raw_value > target_value:
@@ -1415,10 +1416,11 @@ def daily_recap(request):
                 errors.append(habit.name)
                 continue
             target_value = effective_target_value.quantize(
-                Decimal("1"), rounding=ROUND_HALF_UP
+                Decimal("0.01"), rounding=ROUND_HALF_UP
             )
             raw_value = _parse_decimal(raw_value) or Decimal("0")
-            raw_value = raw_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            raw_value = raw_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
             if raw_value < 0:
                 raw_value = Decimal("0")
             if raw_value > target_value:

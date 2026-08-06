@@ -284,8 +284,10 @@ window.ConsistifyUI = (() => {
         if (precision === 0 || Number.isInteger(value)) {
             return String(Math.round(value));
         }
-        return value.toFixed(precision);
+        // Trim trailing zeros so 10.50 shows as 10.5 and 10.00 as 10.
+        return value.toFixed(precision).replace(/\.?0+$/, "");
     }
+
 
     function submitForm(form) {
         if (!form) {
@@ -367,10 +369,11 @@ window.ConsistifyUI = (() => {
                     percentLabel.textContent = Math.round(safePercent) + "%";
                 }
                 if (caption && habitType === "quantitative") {
-                    const valueText = formatNumber(rawValue, 0);
-                    const targetText = formatNumber(targetValue, 0);
+                    const valueText = formatNumber(rawValue, 2);
+                    const targetText = formatNumber(targetValue, 2);
                     caption.textContent = `${valueText} / ${targetText} ${unit}`.trim();
                 }
+
             };
 
             if (habitType === "partial") {
@@ -482,14 +485,20 @@ window.ConsistifyUI = (() => {
                 );
 
                 const sync = (value) => {
-                    const current = Math.round(
-                        clampNumber(parseNumber(value, 0), minValue, maxValue)
+                    // Round to at most two decimals so decimal targets
+                    // (e.g. 10.5) are supported without float noise.
+                    const clamped = clampNumber(
+                        parseNumber(value, 0),
+                        minValue,
+                        maxValue
                     );
-                    input.value = current;
+                    const current = Math.round(clamped * 100) / 100;
+                    input.value = formatNumber(current, 2);
                     const percent = targetValue > 0 ? (current / targetValue) * 100 : 0;
                     updateVisual(percent, current);
                     return current;
                 };
+
                 let committedValue = sync(input.value);
                 const commitValue = (value) => {
                     const nextValue = sync(value);

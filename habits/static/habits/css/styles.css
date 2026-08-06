@@ -1315,9 +1315,97 @@ main > section + section {
     font-size: 1rem;
 }
 
+.habit-management-section {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.habit-management-section > h3 {
+    margin: 0 0 0.1rem;
+    font-size: 1rem;
+}
+
+.management-action {
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.85rem 0.9rem;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    background: var(--surface-alt);
+}
+
+.management-action h4 {
+    margin: 0;
+    font-family: "Source Sans 3", sans-serif;
+    font-size: 0.94rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.management-action .help {
+    margin: 0;
+}
+
+.management-action form {
+    margin: 0;
+}
+
+.management-action .btn {
+    justify-self: start;
+}
+
+/* Temporary, reversible action (pause) — neutral/informational accent */
+.management-action.temporary-action {
+    border-left-color: var(--teal);
+    background: rgba(47, 111, 109, 0.07);
+}
+
+.management-action.temporary-action h4 {
+    color: var(--teal);
+}
+
+/* Non-destructive action (archive) — warm/safe accent */
+.management-action.safe-action {
+    border-left-color: var(--accent);
+    background: rgba(176, 122, 55, 0.08);
+}
+
+.management-action.safe-action h4 {
+    color: var(--accent-strong);
+}
+
+/* Destructive action (delete) — danger accent */
+.management-action.destructive-action {
+    border-left-color: #b33a3a;
+    background: rgba(209, 72, 72, 0.08);
+}
+
+.management-action.destructive-action h4 {
+    color: #b33a3a;
+}
+
+:root[data-theme="dark"] .management-action.temporary-action {
+    background: rgba(98, 183, 176, 0.12);
+}
+
+:root[data-theme="dark"] .management-action.safe-action {
+    background: rgba(208, 155, 79, 0.12);
+}
+
+:root[data-theme="dark"] .management-action.destructive-action {
+    border-left-color: #d96060;
+    background: rgba(217, 96, 96, 0.14);
+}
+
+:root[data-theme="dark"] .management-action.destructive-action h4 {
+    color: #ffbebe;
+}
+
 .compare-form-grid {
     gap: 0.9rem;
 }
+
 
 .compare-multiselect {
     min-height: 220px;
