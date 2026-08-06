@@ -24,6 +24,7 @@ from .services import (
     build_overall_score_breakdown,
     build_weekly_reports,
     calculate_overall_consistency,
+    compute_user_metrics,
     daily_average_completion_series,
     habit_performance_metrics,
 )
@@ -236,6 +237,48 @@ class ConsistencyScoreTests(TestCase):
 
         self.assertIsNone(series[0]["value"])
         self.assertEqual(series[1]["value"], 50.0)
+
+    def test_historical_rate_weights_every_scheduled_session_by_priority(self):
+        start = date(2026, 1, 5)
+        end = start + timedelta(days=3)
+        high_weekly = self.make_habit(
+            "High weekly partial",
+            start,
+            schedule_type=Habit.SCHEDULE_WEEKLY,
+            priority=Habit.PRIORITY_HIGH,
+        )
+        low_daily = self.make_habit(
+            "Low daily complete",
+            start,
+            priority=Habit.PRIORITY_LOW,
+        )
+        self.log_completion(high_weekly, start, 50)
+        for offset in range(4):
+            self.log_completion(low_daily, start + timedelta(days=offset), 100)
+
+        # (1.3 * 50 + 0.8 * 400) / (1.3 * 1 + 0.8 * 4)
+        expected_rate = 85.6
+        aggregate = compute_user_metrics([high_weekly, low_daily], start, end)
+        weekly_report = build_weekly_reports(
+            [high_weekly, low_daily],
+            weeks=1,
+            today=end,
+        )[0]
+        category_summaries = {
+            item["key"]: item
+            for item in build_category_analytics(
+                [high_weekly, low_daily],
+                start,
+                end,
+            )["summaries"]
+        }
+
+        self.assertEqual(aggregate["aggregate"]["completion_rate"], expected_rate)
+        self.assertEqual(weekly_report["completion_rate"], expected_rate)
+        self.assertEqual(
+            category_summaries["spiritual"]["completion_rate"],
+            expected_rate,
+        )
 
     def test_overall_consistency_uses_priority_and_sqrt_frequency_weighting(self):
         start = date(2026, 1, 1)
@@ -694,6 +737,88 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["completion_rate"], 41.9)
         self.assertContains(response, "41.9% completed")
+
+    def test_weighted_partial_rate_is_consistent_across_site_features(self):
+        today = date(2026, 5, 24)
+        low = self.make_habit(
+            "Low complete",
+            today,
+            priority=Habit.PRIORITY_LOW,
+        )
+        medium = self.make_habit(
+            "Medium partial",
+            today,
+            priority=Habit.PRIORITY_MEDIUM,
+        )
+        high = self.make_habit(
+            "High pending",
+            today,
+            priority=Habit.PRIORITY_HIGH,
+        )
+        self.log_completion(low, today, 100)
+        self.log_completion(medium, today, 50)
+
+        # (0.8 * 100 + 1.0 * 50 + 1.3 * 0) / (0.8 + 1.0 + 1.3)
+        expected_rate = 41.9
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today), patch(
+            "habits.services.timezone.localdate",
+            return_value=today,
+        ):
+            today_response = self.client.get(reverse("habits:today"))
+            dashboard_response = self.client.get(reverse("habits:dashboard"))
+            profile_response = self.client.get(
+                reverse("habits:user_profile", args=[self.user.username])
+            )
+            reports_response = self.client.get(reverse("habits:reports"))
+            leaderboard_response = self.client.get(reverse("habits:leaderboard"))
+            compare_response = self.client.get(
+                reverse("habits:habit_compare"),
+                {"habit_ids": [low.id, medium.id, high.id]},
+            )
+
+        category_summaries = {
+            item["key"]: item
+            for item in dashboard_response.context["category_analytics"]["summaries"]
+        }
+        leaderboard_entry = leaderboard_response.context["leaderboard_entries"][0]
+        comparison_rates = {
+            row["habit"].id: row["metrics_90"]["completion_rate"]
+            for row in compare_response.context["comparison_rows"]
+        }
+
+        self.assertEqual(today_response.context["completion_rate"], expected_rate)
+        self.assertEqual(dashboard_response.context["overall_rate"], expected_rate)
+        self.assertEqual(
+            json.loads(dashboard_response.context["chart_rates"])[-1],
+            expected_rate,
+        )
+        self.assertEqual(
+            category_summaries["spiritual"]["completion_rate"],
+            expected_rate,
+        )
+        self.assertEqual(profile_response.context["overall_completion"], expected_rate)
+        self.assertEqual(
+            json.loads(profile_response.context["daily_rates"])[-1],
+            expected_rate,
+        )
+        self.assertEqual(
+            profile_response.context["monthly_reports"][-1]["completion_rate"],
+            expected_rate,
+        )
+        self.assertEqual(
+            reports_response.context["weekly_reports"][-1]["completion_rate"],
+            expected_rate,
+        )
+        self.assertEqual(
+            reports_response.context["monthly_reports"][-1]["completion_rate"],
+            expected_rate,
+        )
+        self.assertEqual(leaderboard_entry["overall_completion"], expected_rate)
+        self.assertEqual(comparison_rates[low.id], 100.0)
+        self.assertEqual(comparison_rates[medium.id], 50.0)
+        self.assertEqual(comparison_rates[high.id], 0.0)
 
     def test_today_and_dashboard_both_count_unlogged_current_sessions(self):
         today = date(2026, 5, 24)

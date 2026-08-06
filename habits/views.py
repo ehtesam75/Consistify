@@ -778,7 +778,13 @@ def _build_compare_chart_payload(selected_habits, today):
                 if is_scheduled:
                     running_total += completion_map.get(day, 0.0)
                     scheduled_count += 1
-                average_value = round(running_total / scheduled_count, 1) if scheduled_count else None
+                average_value = (
+                    weighted_completion_rate(
+                        [(habit, running_total, scheduled_count)]
+                    )
+                    if scheduled_count
+                    else None
+                )
                 points.append(average_value)
             datasets.append({"label": habit.name, "data": points})
         return {"labels": labels, "datasets": datasets}

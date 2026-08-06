@@ -58,9 +58,11 @@ Users can create multiple habits with different tracking types:
 ## 📈 Analytics & Insights
 
 #### 📊 Average Scheduled-Session Progress
-- Historical completion is the average percentage across **every scheduled session**
+- Every completion rate uses one shared priority-weighted average across
+  **every scheduled session**
+- Each session contributes its partial completion percentage, weighted by
+  High `1.3`, Medium `1.0`, or Low `0.8`
 - Missing scheduled sessions count as 0%, including sessions due today
-- The Today summary is priority-adjusted using Low `0.8`, Medium `1.0`, and High `1.3`
 - Used for:
   - Habit progress evaluation
   - Performance reports

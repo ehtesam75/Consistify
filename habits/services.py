@@ -11,7 +11,7 @@ CONSISTENCY_FULL_COMPLETION_WEIGHT = 0.25
 CONSISTENCY_STREAK_STABILITY_WEIGHT = 0.15
 CONSISTENCY_RECENT_MOMENTUM_WEIGHT = 0.15
 RECENT_MOMENTUM_WINDOW = 14
-PRIORITY_SCORE_WEIGHTS = {
+PRIORITY_WEIGHTS = {
     Habit.PRIORITY_HIGH: 1.3,
     Habit.PRIORITY_MEDIUM: 1.0,
     Habit.PRIORITY_LOW: 0.8,
@@ -190,45 +190,62 @@ def _is_completed(percentage_value):
     return percentage_value >= 100
 
 
-def _priority_weight(habit):
-    """Difficulty weight derived from a habit's priority level."""
-    return PRIORITY_SCORE_WEIGHTS.get(getattr(habit, "priority", ""), 1.0)
-
-
-def weighted_completion_rate(scheduled_habits, completion_lookup=None):
-    """Compute a priority-weighted, partial-aware completion rate (0.0-100.0).
-
-    Each scheduled habit contributes its per-habit ``completion_percentage``
-    (already 0-100 across binary/partial/quantitative types) scaled by the
-    habit's priority weight so harder habits count proportionally more.
-
-    Returns a ``float`` rounded to one decimal place so callers can compare
-    it against other rate-style metrics that share the same scale.
-    """
-    from math import isfinite
-
-    completion_lookup = completion_lookup or {}
-    weighted_total = 0.0
-    weight_sum = 0.0
-    for habit in scheduled_habits:
-        weight = _priority_weight(habit)
-        weight_sum += weight
-        percent = completion_lookup.get(habit.id, 0.0) or 0.0
-        try:
-            percent = float(percent)
-        except (TypeError, ValueError):
-            percent = 0.0
-        # NaN / Inf must not poison the aggregate; treat as zero.
-        if not isfinite(percent):
-            percent = 0.0
-        weighted_total += weight * max(0.0, min(100.0, percent))
-    if weight_sum <= 0:
-        return 0.0
-    return round((weighted_total / (weight_sum * 100)) * 100, 1)
-
-
 def _clamped_percentage(percentage_value):
-    return max(0.0, min(100.0, float(percentage_value or 0)))
+    try:
+        percentage = float(percentage_value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if not isfinite(percentage):
+        return 0.0
+    return max(0.0, min(100.0, percentage))
+
+
+def _priority_weight(habit):
+    """Return the shared completion/consistency weight for a habit."""
+    return PRIORITY_WEIGHTS.get(getattr(habit, "priority", ""), 1.0)
+
+
+def weighted_completion_rate(progress_entries):
+    """Return the one canonical completion rate used throughout the site.
+
+    Each entry is ``(habit, completion_total, scheduled_count)``. The
+    ``completion_total`` is the sum of the 0-100 completion percentages for
+    those scheduled occurrences. Passing one occurrence therefore uses a
+    count of ``1`` and its individual completion percentage as the total.
+
+    Every occurrence is weighted by habit priority (High 1.3, Medium 1.0,
+    Low 0.8), partial percentages contribute proportionally, and missing
+    occurrences are represented by zero completion in the supplied total.
+    """
+    weighted_completion_total = 0.0
+    weighted_scheduled_total = 0.0
+
+    for habit, completion_total, scheduled_count in progress_entries:
+        try:
+            scheduled_count = float(scheduled_count)
+        except (TypeError, ValueError):
+            continue
+        if not isfinite(scheduled_count) or scheduled_count <= 0:
+            continue
+
+        try:
+            completion_total = float(completion_total or 0)
+        except (TypeError, ValueError):
+            completion_total = 0.0
+        if not isfinite(completion_total):
+            completion_total = 0.0
+        completion_total = max(
+            0.0,
+            min(100.0 * scheduled_count, completion_total),
+        )
+
+        weight = _priority_weight(habit)
+        weighted_completion_total += weight * completion_total
+        weighted_scheduled_total += weight * scheduled_count
+
+    if weighted_scheduled_total <= 0:
+        return 0.0
+    return round(weighted_completion_total / weighted_scheduled_total, 1)
 
 
 def _has_meaningful_progress(percentage_value):
@@ -345,8 +362,7 @@ def _consistency_score(
 def _habit_consistency_weight(habit, scheduled_total):
     if scheduled_total <= 0:
         return 0.0
-    priority_weight = PRIORITY_SCORE_WEIGHTS.get(habit.priority, 1.0)
-    return priority_weight * sqrt(scheduled_total)
+    return _priority_weight(habit) * sqrt(scheduled_total)
 
 
 def _empty_component_snapshot():
@@ -644,7 +660,7 @@ def build_category_analytics(habits, start_date, end_date):
         ]
         total_scheduled = 0
         total_completed = 0
-        total_completion = 0.0
+        completion_entries = []
         weighted_score = 0.0
         total_weight = 0.0
 
@@ -655,15 +671,15 @@ def build_category_analytics(habits, start_date, end_date):
 
             total_scheduled += metrics["scheduled_total"]
             total_completed += metrics["completed_total"]
-            total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
+            completion_entries.append(
+                (habit, metrics["completion_total"], metrics["scheduled_total"])
+            )
 
             weight = _habit_consistency_weight(habit, metrics["scheduled_total"])
             total_weight += weight
             weighted_score += metrics["consistency_score"] * weight
 
-        completion_rate = (
-            round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
-        )
+        completion_rate = weighted_completion_rate(completion_entries)
         consistency_score = (
             round(weighted_score / total_weight, 1) if total_weight else 0.0
         )
@@ -731,6 +747,7 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
             "scheduled_total": 0,
             "completed_total": 0,
             "missed_total": 0,
+            "completion_total": 0.0,
             "completion_rate": 0.0,
             "current_streak": 0,
             "max_streak": 0,
@@ -751,8 +768,10 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
     for scheduled_date in scheduled_dates:
         total_completion += _clamped_percentage(completion_map.get(scheduled_date, 0))
         total_value += value_map.get(scheduled_date, 0) or 0
-    average_completion = round(total_completion / scheduled_total, 1)
-    completion_rate = average_completion
+    completion_rate = weighted_completion_rate(
+        [(habit, total_completion, scheduled_total)]
+    )
+    average_completion = completion_rate
     if habit.habit_type == Habit.HABIT_QUANTITATIVE:
         average_value = round(total_value / scheduled_total)
     else:
@@ -780,6 +799,7 @@ def habit_performance_metrics(habit, start_date, end_date, completion_map=None, 
         "scheduled_total": scheduled_total,
         "completed_total": completed_total,
         "missed_total": missed_total,
+        "completion_total": total_completion,
         "completion_rate": completion_rate,
         "current_streak": streaks["current_streak"],
         "max_streak": streaks["max_streak"],
@@ -858,7 +878,7 @@ def compare_habits(habit_a, habit_b, start_date, end_date):
 def _build_period_snapshot(habits, start_date, end_date, label):
     total_scheduled = 0
     total_completed = 0
-    total_completion = 0.0
+    completion_entries = []
     tracked_habits = 0
     sum_current_streak = 0
     sum_max_streak = 0
@@ -872,14 +892,16 @@ def _build_period_snapshot(habits, start_date, end_date, label):
         tracked_habits += 1
         total_scheduled += metrics["scheduled_total"]
         total_completed += metrics["completed_total"]
-        total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
+        completion_entries.append(
+            (habit, metrics["completion_total"], metrics["scheduled_total"])
+        )
         sum_current_streak += metrics["current_streak"]
         sum_max_streak += metrics["max_streak"]
         consistency_weight = _habit_consistency_weight(habit, metrics["scheduled_total"])
         consistency_weighted_score += metrics["consistency_score"] * consistency_weight
         consistency_total_weight += consistency_weight
 
-    completion_rate = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
+    completion_rate = weighted_completion_rate(completion_entries)
     average_current_streak = (
         round(sum_current_streak / tracked_habits, 1) if tracked_habits else 0.0
     )
@@ -1034,7 +1056,7 @@ def compute_user_metrics(habits, start_date, end_date):
     """
     per_habit = []
     total_scheduled = 0
-    total_completion = 0.0
+    completion_entries = []
     total_completed = 0
     weighted_score = 0.0
     total_weight = 0.0
@@ -1059,7 +1081,9 @@ def compute_user_metrics(habits, start_date, end_date):
         if metrics["scheduled_total"] == 0:
             continue
         total_scheduled += metrics["scheduled_total"]
-        total_completion += metrics["completion_rate"] * metrics["scheduled_total"]
+        completion_entries.append(
+            (habit, metrics["completion_total"], metrics["scheduled_total"])
+        )
         total_completed += metrics["completed_total"]
         if metrics["max_streak"] > best_streak:
             best_streak = metrics["max_streak"]
@@ -1067,7 +1091,7 @@ def compute_user_metrics(habits, start_date, end_date):
         total_weight += weight
         weighted_score += metrics["consistency_score"] * weight
 
-    overall_rate = round(total_completion / total_scheduled, 1) if total_scheduled else 0.0
+    overall_rate = weighted_completion_rate(completion_entries)
     consistency_score = (
         round(weighted_score / total_weight, 1) if total_weight else 0.0
     )
@@ -1102,6 +1126,7 @@ def compute_today_metrics(user, target_date):
 
     scheduled_habits = []
     completion_lookup = {}
+    completion_entries = []
     completed_count = 0
     for habit in habits:
         if not habit.is_scheduled_on(target_date):
@@ -1114,8 +1139,9 @@ def compute_today_metrics(user, target_date):
             completed_count += 1
         scheduled_habits.append(habit)
         completion_lookup[habit.id] = completion_percentage
+        completion_entries.append((habit, completion_percentage, 1))
 
-    completion_rate = weighted_completion_rate(scheduled_habits, completion_lookup)
+    completion_rate = weighted_completion_rate(completion_entries)
 
     rows = []
     for habit in scheduled_habits:
@@ -1145,11 +1171,11 @@ def compute_today_metrics(user, target_date):
 
 
 def daily_average_completion_series(habits, start_date, end_date):
-    """Return a per-day average completion series across the supplied habits.
+    """Return the canonical per-day completion series for the supplied habits.
 
-    Each value is the unweighted mean of ``completion_percentage`` across every
-    habit scheduled on that day. Missing completion rows contribute 0% on every
-    scored date, including today, matching the headline analytics policy.
+    Each value uses the same priority-weighted, partial-aware calculation as
+    every headline rate. Missing completion rows contribute 0% on every scored
+    date, including today.
 
     Returns a list of dicts ``{"date", "label", "value"}`` so callers can pick
     either the raw date or formatted label and either float or ``None``.
@@ -1167,13 +1193,15 @@ def daily_average_completion_series(habits, start_date, end_date):
     span = (end_date - start_date).days
     for offset in range(span + 1):
         current_day = start_date + timedelta(days=offset)
-        daily_values = []
+        daily_entries = []
         for habit in habits:
             if not habit.is_scheduled_on(current_day):
                 continue
             completion_key = (habit.id, current_day)
-            daily_values.append(completion_map.get(completion_key, 0.0))
-        rate = round(sum(daily_values) / len(daily_values), 1) if daily_values else None
+            daily_entries.append(
+                (habit, completion_map.get(completion_key, 0.0), 1)
+            )
+        rate = weighted_completion_rate(daily_entries) if daily_entries else None
         series.append(
             {
                 "date": current_day,
