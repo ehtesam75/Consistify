@@ -1076,7 +1076,7 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["stats"]["average_completion"], 0.0)
         self.assertEqual(response.context["all_time_stats"]["average_completion"], 36.2)
-        self.assertEqual(len(response.context["history"]), 20)
+        self.assertEqual(len(response.context["history"]), 15)
         self.assertContains(response, "All time")
 
     def test_paused_dates_are_excluded_from_metrics(self):

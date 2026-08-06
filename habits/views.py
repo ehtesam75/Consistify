@@ -249,8 +249,9 @@ def habit_detail(request, habit_id):
     today = timezone.localdate()
     all_time_start = habit.start_date
     history_dates = list(iter_scheduled_dates(habit, all_time_start, today))
-    recent_history_dates = history_dates[-20:]
-    chart_dates = history_dates[-20:]
+    history_limit = 15
+    recent_history_dates = history_dates[-history_limit:]
+    chart_dates = history_dates[-history_limit:]
 
     completion_map, value_map = get_completion_maps(habit, all_time_start, today)
     history = []
