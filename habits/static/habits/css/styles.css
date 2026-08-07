@@ -4205,9 +4205,13 @@ body.auth-page main {
         gap: 0.25rem;
     }
 
+    .dashboard-page .stats-grid.wide .stat-card .score-driver-help {
+        position: relative;
+    }
+
     .dashboard-page .stats-grid.wide .stat-card .score-driver-tooltip {
         top: calc(100% + 0.35rem);
-        right: max(0.5rem, calc(100% - min(15rem, calc(100vw - 2rem))));
+        right: 0;
         left: auto;
         width: min(15rem, calc(100vw - 2rem));
         max-width: calc(100vw - 2rem);
