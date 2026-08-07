@@ -59,20 +59,24 @@
                 <span class="stat-note">{{ detail_window_note }}</span>
             </div>
             <div class="stat">
-                <span class="stat-label">Avg completion</span>
-                <span class="stat-value">{{ all_time_stats.average_completion|floatformat:1 }}%</span>
+                <span class="stat-label">All time completion</span>
+                <span class="stat-value">{{ all_time_stats.completion_rate|floatformat:1 }}%</span>
                 <span class="stat-note">All time · {{ all_time_label }}</span>
             </div>
             <div class="stat">
                 <span class="stat-label">Avg daily value</span>
                 <span class="stat-value">
-                    {% if habit.habit_type == "quantitative" %}
-                        {{ all_time_stats.average_value|floatformat:0 }} {{ habit.unit }}
+                    {% if all_time_stats.average_value_is_quantitative %}
+                        {{ all_time_stats.average_value|floatformat:0 }} {{ all_time_stats.average_value_unit }}
                     {% else %}
                         {{ all_time_stats.average_value|floatformat:1 }}%
                     {% endif %}
                 </span>
-                <span class="stat-note">All time · {{ all_time_label }}</span>
+                {% if all_time_stats.average_value_spans_mixed_plans %}
+                    <span class="stat-note">Latest plan only · {{ all_time_label }}</span>
+                {% else %}
+                    <span class="stat-note">All time · {{ all_time_label }}</span>
+                {% endif %}
             </div>
             <div class="stat">
                 <span class="stat-label">Consistency score</span>

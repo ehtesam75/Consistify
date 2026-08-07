@@ -24,6 +24,9 @@ MOMENTUM_FULL_SIGNAL_CHANGE = 50.0
 RHYTHM_COVERAGE_WEIGHT = 0.8
 RHYTHM_CONTINUITY_WEIGHT = 0.2
 RECENT_METRIC_CONFIDENCE_SESSIONS = 3
+# Scheduled sessions required before a leaderboard score is trusted in full.
+LEADERBOARD_CONFIDENCE_SESSIONS = 30
+LEADERBOARD_NEUTRAL_SCORE = 50.0
 PRIORITY_WEIGHTS = {
     Habit.PRIORITY_HIGH: 1.3,
     Habit.PRIORITY_MEDIUM: 1.0,
@@ -459,10 +462,12 @@ def get_completion_maps(habit, start_date, end_date):
     for completion in completions:
         completion_map[completion.date] = float(completion.completion_percentage or 0)
         if completion.raw_value is not None:
-            if habit.habit_type == Habit.HABIT_QUANTITATIVE:
-                value_map[completion.date] = int(completion.raw_value)
-            else:
-                value_map[completion.date] = float(completion.raw_value)
+            # Raw values stay untyped here on purpose. The habit's *current*
+            # habit_type must never decide how a historical value is read, or
+            # editing the type would silently reinterpret history logged under
+            # the previous plan. Formatting is resolved later from the plan
+            # version that was actually in effect on each date.
+            value_map[completion.date] = float(completion.raw_value)
     return completion_map, value_map
 
 
@@ -1185,8 +1190,10 @@ def _performance_metrics_for_occurrences(
             "max_streak": 0,
             "streak_stability": 0.0,
             "consistency_score": 0.0,
-            "average_completion": 0.0,
             "average_value": 0.0,
+            "average_value_unit": "",
+            "average_value_is_quantitative": False,
+            "average_value_spans_mixed_plans": False,
             "completion_quality": 0.0,
             "full_completion_reliability": 0.0,
             "recent_momentum": 0.0,
@@ -1198,23 +1205,55 @@ def _performance_metrics_for_occurrences(
     total_completion = 0.0
     weighted_completion_total = 0.0
     priority_weight_total = 0.0
-    total_value = 0.0
+    # Raw values are grouped by the plan version in effect when they were
+    # logged. The habit's *current* habit_type must never decide how a
+    # historical value is read, and values recorded under different units are
+    # never averaged together, because "30 minutes" and "1 hour" are not
+    # comparable numbers.
+    value_groups = {}
+
     for occurrence in occurrences:
         completion = _clamped_percentage(completion_map.get(occurrence.date, 0))
         total_completion += completion
         weighted_completion_total += completion * occurrence.priority_weight
         priority_weight_total += occurrence.priority_weight
-        total_value += value_map.get(occurrence.date, 0) or 0
+
+        config = occurrence.config
+        group = value_groups.setdefault(
+            (config.habit_type, config.unit or ""),
+            {"total": 0.0, "count": 0, "effective_from": config.effective_from},
+        )
+        group["total"] += value_map.get(occurrence.date, 0) or 0
+        group["count"] += 1
+        if config.effective_from > group["effective_from"]:
+            group["effective_from"] = config.effective_from
 
     completion_rate = weighted_completion_rate_from_totals(
         weighted_completion_total,
         priority_weight_total,
     )
-    average_completion = completion_rate
-    if habit.habit_type == Habit.HABIT_QUANTITATIVE:
-        average_value = round(total_value / scheduled_total)
-    else:
-        average_value = round(total_value / scheduled_total, 2)
+
+    # Report the average for the most recently effective plan in this window so
+    # the number always matches the unit it is labelled with.
+    average_value = 0.0
+    average_value_unit = ""
+    average_value_is_quantitative = False
+    average_value_spans_mixed_plans = len(value_groups) > 1
+    if value_groups:
+        (latest_habit_type, latest_unit), latest_group = max(
+            value_groups.items(),
+            key=lambda item: item[1]["effective_from"],
+        )
+        average_value_is_quantitative = (
+            latest_habit_type == Habit.HABIT_QUANTITATIVE
+        )
+        average_value_unit = latest_unit
+        raw_average = latest_group["total"] / latest_group["count"]
+        average_value = (
+            round(raw_average)
+            if average_value_is_quantitative
+            else round(raw_average, 2)
+        )
 
     completion_quality = (total_completion / scheduled_total) / 100
     full_completion_ratio = completed_total / scheduled_total
@@ -1239,8 +1278,10 @@ def _performance_metrics_for_occurrences(
         "max_streak": streaks["max_streak"],
         "streak_stability": round(consistency_rhythm * 100, 1),
         "consistency_score": consistency_score,
-        "average_completion": average_completion,
         "average_value": average_value,
+        "average_value_unit": average_value_unit,
+        "average_value_is_quantitative": average_value_is_quantitative,
+        "average_value_spans_mixed_plans": average_value_spans_mixed_plans,
         "completion_quality": round(completion_quality * 100, 1),
         "full_completion_reliability": round(full_completion_ratio * 100, 1),
         "recent_momentum": round(recent_momentum * 100, 1),
@@ -1301,9 +1342,17 @@ def completion_stats(habit, start_date, end_date, completion_map=None, value_map
     return {
         "scheduled_total": metrics["scheduled_total"],
         "completed_total": metrics["completed_total"],
+        # ``completion_rate`` is the single canonical priority-weighted average
+        # progress figure. There is deliberately no ``average_completion``
+        # alias, because two names for one calculation read as two different
+        # metrics in the UI.
         "completion_rate": metrics["completion_rate"],
-        "average_completion": metrics["average_completion"],
         "average_value": metrics["average_value"],
+        "average_value_unit": metrics["average_value_unit"],
+        "average_value_is_quantitative": metrics["average_value_is_quantitative"],
+        "average_value_spans_mixed_plans": metrics[
+            "average_value_spans_mixed_plans"
+        ],
         "full_completion_reliability": metrics["full_completion_reliability"],
     }
 
@@ -1539,6 +1588,40 @@ def get_next_scheduled_date(habit, from_date=None):
             search_from = containing_pause[1]
 
     return None
+
+
+def leaderboard_ranking_score(
+    consistency_score,
+    scheduled_total,
+    confidence_sessions=LEADERBOARD_CONFIDENCE_SESSIONS,
+):
+    """Return an evidence-adjusted Consistify Score for ranking users.
+
+    A raw Consistify Score says nothing about how much evidence produced it.
+    Three perfect days and two perfect years both read as 100, so ranking on
+    the raw score lets a brand new account outrank sustained long-term
+    consistency.
+
+    This applies the same confidence shrink the score already uses for its
+    rhythm and momentum components: with ``k`` scheduled sessions, confidence
+    is ``min(1, k / 30)`` and the score is pulled toward a neutral 50 by
+    whatever confidence is missing. A full window of evidence is therefore
+    reported unchanged, while a thin record cannot claim either an extreme high
+    or an extreme low until it has been earned.
+
+    The displayed Consistify Score is deliberately left untouched; this value
+    only decides ranking order.
+    """
+    if scheduled_total <= 0:
+        return 0.0
+    try:
+        confidence = min(1.0, float(scheduled_total) / float(confidence_sessions))
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 0.0
+    shrunk = LEADERBOARD_NEUTRAL_SCORE + confidence * (
+        consistency_score - LEADERBOARD_NEUTRAL_SCORE
+    )
+    return round(shrunk, 1)
 
 
 def compute_user_metrics(habits, start_date, end_date):

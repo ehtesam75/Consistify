@@ -34,7 +34,321 @@ from .services import (
     habit_tracking_start,
     habit_performance_metrics,
     iter_scheduled_dates,
+    leaderboard_ranking_score,
+    completion_stats,
+    get_completion_maps,
+    LEADERBOARD_CONFIDENCE_SESSIONS,
 )
+
+
+class ConsistifyScoreAuditRegressionTests(TestCase):
+    """Regression cover for the three high-priority audit fixes."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="audit-regression-user",
+            password="not-used",
+        )
+        self.today = date(2026, 3, 31)
+        self.category, _ = HabitCategory.objects.get_or_create(
+            key=DEFAULT_CATEGORIES[0][0],
+            defaults={"label": DEFAULT_CATEGORIES[0][1], "sort_order": 1},
+        )
+
+    def _make_habit(self, **overrides):
+        defaults = {
+            "user": self.user,
+            "name": "Audit habit",
+            "schedule_type": Habit.SCHEDULE_DAILY,
+            "start_date": self.today - timedelta(days=9),
+            "priority": Habit.PRIORITY_MEDIUM,
+        }
+        defaults.update(overrides)
+        habit = Habit.objects.create(**defaults)
+        ensure_initial_plan_version(habit)
+        return habit
+
+    # ---- H1: no duplicate average_completion metric --------------------
+
+    def test_metrics_expose_single_canonical_completion_rate(self):
+        """``average_completion`` was a literal alias of ``completion_rate``.
+
+        Two keys for one calculation were rendered as two separate metrics in
+        the UI. Only the canonical key may survive.
+        """
+        habit = self._make_habit()
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=self.today,
+            completion_percentage=Decimal("40"),
+        )
+
+        metrics = habit_performance_metrics(
+            habit,
+            habit_tracking_start(habit),
+            self.today,
+        )
+        stats = completion_stats(habit, habit_tracking_start(habit), self.today)
+
+        self.assertNotIn("average_completion", metrics)
+        self.assertNotIn("average_completion", stats)
+        self.assertIn("completion_rate", metrics)
+        self.assertEqual(stats["completion_rate"], metrics["completion_rate"])
+
+    def test_habit_detail_reports_completion_rate_for_both_windows(self):
+        habit = self._make_habit()
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=self.today,
+            completion_percentage=Decimal("100"),
+        )
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=self.today):
+            response = self.client.get(
+                reverse("habits:habit_detail", args=[habit.id])
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("average_completion", response.context["stats"])
+        self.assertNotIn("average_completion", response.context["all_time_stats"])
+        self.assertIn("completion_rate", response.context["all_time_stats"])
+        # The page must no longer label one number as a second, distinct metric.
+        self.assertNotContains(response, "Avg completion")
+
+    # ---- H2/H3: historical values keep their own plan's typing ---------
+
+    def test_get_completion_maps_does_not_type_by_current_habit_type(self):
+        """Editing habit_type must not reinterpret already-logged raw values."""
+        habit = self._make_habit(
+            habit_type=Habit.HABIT_QUANTITATIVE,
+            target_value=Decimal("60"),
+            unit="minutes",
+        )
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=self.today,
+            completion_percentage=Decimal("75"),
+            raw_value=Decimal("45.50"),
+        )
+
+        _, value_map = get_completion_maps(habit, self.today, self.today)
+        self.assertEqual(value_map[self.today], 45.5)
+
+        # Flip the mutable current type; stored history must read identically.
+        habit.habit_type = Habit.HABIT_PARTIAL
+        habit.save(update_fields=["habit_type"])
+
+        _, value_map_after = get_completion_maps(habit, self.today, self.today)
+        self.assertEqual(value_map_after, value_map)
+
+    def test_average_value_uses_effective_dated_plan_not_current_type(self):
+        """History logged under a quantitative plan stays quantitative.
+
+        Previously ``average_value`` read ``habit.habit_type``, so changing the
+        type today silently rewrote how every past value was reported.
+        """
+        habit = self._make_habit(
+            habit_type=Habit.HABIT_QUANTITATIVE,
+            target_value=Decimal("60"),
+            unit="minutes",
+        )
+        for offset in range(3):
+            HabitCompletion.objects.create(
+                habit=habit,
+                date=self.today - timedelta(days=offset),
+                completion_percentage=Decimal("50"),
+                raw_value=Decimal("30"),
+            )
+
+        start = habit_tracking_start(habit)
+        before = habit_performance_metrics(habit, start, self.today)
+        self.assertTrue(before["average_value_is_quantitative"])
+        self.assertEqual(before["average_value_unit"], "minutes")
+
+        habit.habit_type = Habit.HABIT_PARTIAL
+        habit.unit = ""
+        habit.save(update_fields=["habit_type", "unit"])
+
+        after = habit_performance_metrics(
+            Habit.objects.prefetch_related("plan_versions__categories").get(
+                pk=habit.pk
+            ),
+            start,
+            self.today,
+        )
+        self.assertTrue(after["average_value_is_quantitative"])
+        self.assertEqual(after["average_value_unit"], "minutes")
+        self.assertEqual(after["average_value"], before["average_value"])
+
+    def test_average_value_reports_latest_plan_when_units_change(self):
+        """Values under incompatible units are never averaged together."""
+        habit = self._make_habit(
+            habit_type=Habit.HABIT_QUANTITATIVE,
+            target_value=Decimal("60"),
+            unit="minutes",
+            start_date=self.today - timedelta(days=5),
+        )
+        for offset in range(3, 6):
+            HabitCompletion.objects.create(
+                habit=habit,
+                date=self.today - timedelta(days=offset),
+                completion_percentage=Decimal("100"),
+                raw_value=Decimal("60"),
+            )
+
+        schedule_habit_plan_edit(
+            habit,
+            habit_type=Habit.HABIT_QUANTITATIVE,
+            target_value=Decimal("5"),
+            unit="km",
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=habit.start_date,
+            interval_days=1,
+            weekly_interval=1,
+            days_of_week="",
+            priority=Habit.PRIORITY_MEDIUM,
+            categories=[self.category],
+            today=self.today - timedelta(days=3),
+        )
+        # Log every date the new plan schedules, so the average is decided
+        # purely by which plan owns the value rather than by missed sessions.
+        for offset in range(0, 3):
+            HabitCompletion.objects.create(
+                habit=habit,
+                date=self.today - timedelta(days=offset),
+                completion_percentage=Decimal("100"),
+                raw_value=Decimal("5"),
+            )
+
+        habit = Habit.objects.prefetch_related("plan_versions__categories").get(
+            pk=habit.pk
+        )
+        metrics = habit_performance_metrics(
+            habit,
+            habit_tracking_start(habit),
+            self.today,
+        )
+
+        self.assertTrue(metrics["average_value_spans_mixed_plans"])
+        self.assertEqual(metrics["average_value_unit"], "km")
+        # 60-minute sessions must not be blended into a kilometre average.
+        self.assertEqual(metrics["average_value"], 5)
+
+    # ---- H4: leaderboard fairness --------------------------------------
+
+    def test_ranking_score_shrinks_thin_history_toward_neutral(self):
+        thin = leaderboard_ranking_score(100.0, 3)
+        full = leaderboard_ranking_score(95.0, 400)
+
+        self.assertEqual(thin, 55.0)
+        self.assertEqual(full, 95.0)
+        self.assertLess(
+            thin,
+            full,
+            "A few perfect days must not outrank sustained consistency.",
+        )
+
+    def test_ranking_score_is_unchanged_once_evidence_threshold_is_met(self):
+        for score in (0.0, 42.5, 88.0, 100.0):
+            self.assertEqual(
+                leaderboard_ranking_score(
+                    score, LEADERBOARD_CONFIDENCE_SESSIONS
+                ),
+                score,
+            )
+
+    def test_ranking_score_returns_zero_without_scheduled_sessions(self):
+        self.assertEqual(leaderboard_ranking_score(100.0, 0), 0.0)
+
+    def test_all_time_leaderboard_uses_one_shared_window(self):
+        """Every participant must be scored over identical calendar dates."""
+        veteran = self.user
+        veteran_habit = self._make_habit(
+            name="Veteran habit",
+            start_date=self.today - timedelta(days=120),
+        )
+        for offset in range(120):
+            HabitCompletion.objects.create(
+                habit=veteran_habit,
+                date=self.today - timedelta(days=offset),
+                completion_percentage=Decimal("95"),
+            )
+
+        newcomer = get_user_model().objects.create_user(
+            username="audit-newcomer",
+            password="not-used",
+        )
+        newcomer_habit = Habit.objects.create(
+            user=newcomer,
+            name="Newcomer habit",
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=self.today - timedelta(days=2),
+            priority=Habit.PRIORITY_MEDIUM,
+        )
+        ensure_initial_plan_version(newcomer_habit)
+        for offset in range(3):
+            HabitCompletion.objects.create(
+                habit=newcomer_habit,
+                date=self.today - timedelta(days=offset),
+                completion_percentage=Decimal("100"),
+            )
+
+        FriendRequest.objects.create(
+            from_user=veteran,
+            to_user=newcomer,
+            status=FriendRequest.STATUS_ACCEPTED,
+        )
+
+        self.client.force_login(veteran)
+        with patch("habits.views.timezone.localdate", return_value=self.today):
+            response = self.client.get(
+                reverse("habits:leaderboard"), {"window": "all"}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        entries = response.context["leaderboard_entries"]
+        self.assertEqual(
+            response.context["leaderboard_window_start"],
+            self.today - timedelta(days=120),
+        )
+
+        by_name = {entry["user"].username: entry for entry in entries}
+        veteran_entry = by_name[veteran.username]
+        newcomer_entry = by_name[newcomer.username]
+
+        self.assertEqual(
+            veteran_entry["rank"],
+            1,
+            "Sustained 95% over 120 days must outrank 3 perfect days.",
+        )
+        self.assertEqual(newcomer_entry["rank"], 2)
+        self.assertTrue(veteran_entry["has_full_evidence"])
+        self.assertFalse(newcomer_entry["has_full_evidence"])
+        # The displayed Consistify Score stays the untouched raw value. Three
+        # flat perfect sessions score 92.5, not 100, because an unchanging line
+        # earns neutral momentum rather than an improvement bonus.
+        self.assertEqual(newcomer_entry["consistency_score"], 92.5)
+        # Ranking shrinks that thin record toward neutral; display does not.
+        self.assertEqual(newcomer_entry["ranking_score"], 54.2)
+        self.assertLess(
+            newcomer_entry["ranking_score"],
+            newcomer_entry["consistency_score"],
+        )
+
+    def test_current_window_leaderboard_still_uses_last_30_days(self):
+        self._make_habit()
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=self.today):
+            response = self.client.get(reverse("habits:leaderboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["leaderboard_window"], "current")
+        self.assertEqual(
+            response.context["leaderboard_window_start"],
+            self.today - timedelta(days=29),
+        )
 
 
 class PwaAssetDeliveryTests(TestCase):
@@ -817,7 +1131,6 @@ class ConsistencyScoreTests(TestCase):
 
         self.assertEqual(metrics["completion_quality"], 50.0)
         self.assertEqual(metrics["completion_rate"], 43.5)
-        self.assertEqual(metrics["average_completion"], 43.5)
 
     def test_repeated_same_day_plan_edits_share_one_pending_version(self):
         today = date(2026, 1, 3)
@@ -1725,8 +2038,8 @@ class ConsistencyScoreTests(TestCase):
             response = self.client.get(reverse("habits:habit_detail", args=[habit.id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["stats"]["average_completion"], 0.0)
-        self.assertEqual(response.context["all_time_stats"]["average_completion"], 36.2)
+        self.assertEqual(response.context["stats"]["completion_rate"], 0.0)
+        self.assertEqual(response.context["all_time_stats"]["completion_rate"], 36.2)
         self.assertEqual(len(response.context["history"]), 15)
         self.assertContains(response, "All time")
         self.assertContains(response, "Habit focus")

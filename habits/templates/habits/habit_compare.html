@@ -36,7 +36,7 @@
             <span class="stat-label">{{ row.habit.name }}</span>
             <span class="stat-value">{{ row.metrics_90.completion_rate|floatformat:1 }}%</span>
             <span class="stat-note">Completion (last 90 days)</span>
-            <span class="stat-note">Avg completion: {{ row.avg_daily_30|floatformat:1 }}% (30d), {{ row.avg_daily_all|floatformat:1 }}% (all time)</span>
+            <span class="stat-note">Completion: {{ row.avg_daily_30|floatformat:1 }}% (30d), {{ row.avg_daily_all|floatformat:1 }}% (all time)</span>
         </div>
     {% endfor %}
 </section>
@@ -68,7 +68,7 @@
 
 <section class="card" style="--i: 2;">
     <div class="card-header">
-        <h2>Average completion rate</h2>
+        <h2>Cumulative completion rate</h2>
         <div class="compare-timeframe">
             <button type="button" class="btn ghost small compare-time-btn active" data-timeframe="last30">Last 30 days</button>
             <button type="button" class="btn ghost small compare-time-btn" data-timeframe="all">All time</button>

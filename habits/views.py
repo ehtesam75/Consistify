@@ -51,6 +51,8 @@ from .services import (
     habit_tracking_start,
     habit_performance_metrics,
     iter_scheduled_occurrences,
+    leaderboard_ranking_score,
+    LEADERBOARD_CONFIDENCE_SESSIONS,
     mark_daily_recap_completed,
     resolve_habit_plan_on,
     should_show_daily_recap,
@@ -931,8 +933,8 @@ def habit_compare(request):
                     "habit": habit,
                     "metrics_90": metrics_90,
                     "metrics_all": metrics_all,
-                    "avg_daily_30": round(metrics_30["average_completion"], 1),
-                    "avg_daily_all": round(metrics_all["average_completion"], 1),
+                    "avg_daily_30": round(metrics_30["completion_rate"], 1),
+                    "avg_daily_all": round(metrics_all["completion_rate"], 1),
                 }
             )
 
@@ -1191,27 +1193,50 @@ def _build_user_metrics(user, today, start_date=None):
     }
 
 
+def _user_tracking_start(user, today):
+    """Return the first date a user ever had a habit scheduled."""
+    starts = [
+        habit_tracking_start(habit)
+        for habit in Habit.objects.filter(user=user).prefetch_related(
+            "plan_versions__categories"
+        )
+    ]
+    return min(starts) if starts else today
+
+
 @login_required
 def leaderboard(request):
     today = timezone.localdate()
     requested_window = request.GET.get("window")
     leaderboard_window = "all" if requested_window == "all" else "current"
+
+    participants = [request.user] + _accepted_friends_for(request.user)
+
     if leaderboard_window == "current":
         window_start = today - timedelta(days=29)
         window_label = "Last 30 days"
         window_range = f"{window_start.strftime('%b %d')} - {today.strftime('%b %d')}"
         window_title = "Current window"
     else:
-        window_start = None
+        # Every participant is measured over one identical calendar window.
+        # Previously each user was scored from their own first tracked date, so
+        # the column compared a 3-day record against a 2-year record and called
+        # it the same metric. The shared window starts at the earliest date any
+        # participant began tracking; users who joined later simply have fewer
+        # scheduled sessions inside it, which the evidence adjustment handles.
+        participant_starts = [
+            _user_tracking_start(user, today) for user in participants
+        ]
+        window_start = min(participant_starts) if participant_starts else today
         window_label = "All tracked history"
-        window_range = None
+        window_range = f"{window_start.strftime('%b %d, %Y')} - {today.strftime('%b %d, %Y')}"
         window_title = "All time"
 
-    participants = [request.user] + _accepted_friends_for(request.user)
     entries = []
 
     for user in participants:
         metrics = _build_user_metrics(user, today, start_date=window_start)
+        total_scheduled = metrics["total_scheduled"]
         entries.append(
             {
                 "user": user,
@@ -1220,13 +1245,23 @@ def leaderboard(request):
                 "overall_completion": metrics["overall_completion"],
                 "best_streak": metrics["best_streak"],
                 "consistency_score": metrics["consistency_score"],
-                "total_scheduled": metrics["total_scheduled"],
+                "total_scheduled": total_scheduled,
                 "total_completed": metrics["total_completed"],
+                # Ranking uses an evidence-adjusted score so a handful of
+                # perfect sessions cannot outrank sustained consistency. The
+                # displayed consistency_score stays untouched.
+                "ranking_score": leaderboard_ranking_score(
+                    metrics["consistency_score"],
+                    total_scheduled,
+                ),
+                "has_full_evidence": total_scheduled
+                >= LEADERBOARD_CONFIDENCE_SESSIONS,
             }
         )
 
     entries.sort(
         key=lambda entry: (
+            -entry["ranking_score"],
             -entry["consistency_score"],
             -entry["overall_completion"],
             -entry["total_completed"],
@@ -1255,6 +1290,8 @@ def leaderboard(request):
             "leaderboard_window_label": window_label,
             "leaderboard_window_range": window_range,
             "leaderboard_window_title": window_title,
+            "leaderboard_window_start": window_start,
+            "leaderboard_min_sessions": LEADERBOARD_CONFIDENCE_SESSIONS,
         },
     )
 
