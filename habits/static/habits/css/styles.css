@@ -4283,6 +4283,11 @@ body.auth-page main {
         font-size: 0.74rem;
     }
 
+    .dashboard-page .score-driver-help-button,
+    .dashboard-page .score-driver-tooltip {
+        display: none;
+    }
+
     .date-nav {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
