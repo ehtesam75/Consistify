@@ -4626,6 +4626,11 @@ body.auth-page main {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr);
         align-items: center;
+        /* Base rule uses `gap: 1rem` for the desktop flex row. In this grid
+           layout that would become a row gap between the label and the score,
+           so keep the horizontal spacing only. */
+        row-gap: 0;
+        column-gap: 1rem;
     }
 
     .score-change-summary > div {
@@ -4651,6 +4656,7 @@ body.auth-page main {
     .score-change-summary > .stat-note {
         grid-column: 1 / -1;
         grid-row: 3;
+        margin-top: 0.5rem;
     }
 
     .score-component-metrics {
