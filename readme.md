@@ -74,32 +74,48 @@ Users can create multiple habits with different tracking types:
   - Global statistics
 
 #### 🧠 Consistency Score
-- Blends completion quality (45%), full completion ratio (25%), consistency rhythm
-  (15%), and recent momentum (15%):
-  `Score = 0.45Q + 0.25F + 0.15R + 0.15M`.
-- Completion quality is `Q = sum(clamped progress) / scheduled sessions`.
-  Missing scheduled sessions contribute 0%, and partial progress contributes
-  proportionally.
-- Full completion is
+- Blends completion quality (35%), full completion (20%), consistency rhythm
+  (30%), and recent momentum (15%):
+  `Score = 0.35Q + 0.20F + 0.30R + 0.15M`.
+- **Completion quality (Q)** measures how much of the scheduled work was
+  actually completed across every scheduled session, including partial
+  progress. `Q = sum(clamped progress) / scheduled sessions`. Missing
+  scheduled sessions contribute 0%, and partial progress contributes
+  proportionally. Q is the longest-window signal and anchors the overall
+  completion level.
+- **Full completion (F)** is a finishing-quality signal:
   `F = 100 × sessions at exactly 100% / scheduled sessions`. A 99% session
-  contributes to Q but not F.
-- Consistency rhythm uses the last seven scheduled sessions in the selected
-  report period: 80% comes from success coverage above **50%** and 20% from
-  consecutive successful sessions. With `k` observations, confidence is
-  `min(1, k / 3)`; one or two observations are shrunk toward a neutral 50% until
-  three observations exist. More precisely, `R = 100 × (0.5 + c × (rawR - 0.5))`,
-  where `rawR = 0.8 × coverage + 0.2 × continuity` and `c = min(1, k / 3)`.
-  A history with no successful sessions remains 0%.
-- Recent momentum uses up to six scheduled sessions and five changes. Changes
-  within ±5 points count as stable; larger changes are recency-weighted,
-  cadence-neutral, and confidence-adjusted with the same `min(1, k / 3)` rule.
-  It is also scaled by evidence `min(1, latest progress / 50)`, so stable 5%
-  and 10% histories score only 5% and 10% Momentum instead of receiving 50%.
-  Each change signal is 0 inside the ±5-point band; outside it, the signal is
+  contributes to Q but not F. F exists to prevent partial-credit gaming
+  without duplicating Q.
+- **Consistency rhythm (R)** measures reliability and continuity — how
+  consistently the user keeps showing up for recent scheduled sessions and
+  avoids interruptions. It is a *level* signal, not a *trend* signal;
+  improvement and decline are reported separately by Recent Momentum. R uses
+  the last seven scheduled sessions in the selected report period: 80% comes
+  from success coverage above **50%** and 20% from consecutive successful
+  sessions. With `k` observations, confidence is `min(1, k / 3)`; one or two
+  observations are shrunk toward a neutral 50% until three observations exist.
+  More precisely, `R = 100 × (0.5 + c × (rawR - 0.5))`, where
+  `rawR = 0.8 × coverage + 0.2 × continuity` and `c = min(1, k / 3)`. With
+  one observation there are no transitions, so `continuity = coverage` and
+  `rawR = coverage`. An all-zero-success history produces 0% R at full
+  confidence.
+- **Recent momentum (M)** measures trajectory — whether recent performance
+  is improving, declining, or remaining stable compared with the user's
+  recent baseline. It is a *trend* signal, not a *reliability* signal;
+  regularity and missed-session avoidance are reported separately by
+  Consistency Rhythm. M is centred at 50 (neutral), so a flat user does not
+  gain or lose ground from momentum alone. It uses up to six scheduled
+  sessions and five changes. Changes within ±5 points count as stable; larger
+  changes are recency-weighted, cadence-neutral, and confidence-adjusted with
+  the same `min(1, k / 3)` rule. It is also scaled by evidence
+  `min(1, latest progress / 50)`, so stable 5% and 10% histories score only
+  5% and 10% Momentum instead of receiving 50%. Each change signal is 0
+  inside the ±5-point band; outside it, the signal is
   `sign(change) × min(1, (abs(change) - 5) / 45)`. Newer transitions receive
-  ordinal weights `1, 2, ...`.
-  More precisely, `M = 100 × evidence × (0.5 + 0.5 × c × trend)`, clamped to
-  0–100, where `trend` is that recency-weighted average.
+  ordinal weights `1, 2, ...`. More precisely,
+  `M = 100 × evidence × (0.5 + 0.5 × c × trend)`, clamped to 0–100, where
+  `trend` is that recency-weighted average.
 - Rhythm and Momentum use only scheduled sessions inside the selected report
   period; history outside that period cannot change its score.
 - Cross-habit scores use a weighted mean. Habit `h` receives aggregation weight

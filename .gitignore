@@ -8,3 +8,4 @@ runserver.out.log
 .puku/puku-embeddings.db
 .puku/puku-embeddings.db-shm
 .puku/puku-embeddings.db-wal
+AUDIT_REPORT.md

@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from math import sqrt
@@ -516,10 +517,13 @@ class DashboardPresentationTests(TestCase):
         self.assertContains(response, "Average progress across scheduled sessions")
         self.assertContains(response, "Total habit sessions scheduled")
         self.assertContains(response, "reached 100% completion")
-        self.assertContains(response, "completion quality, full completion")
         self.assertContains(
             response,
-            "The share of scheduled sessions you finished completely",
+            "Consistify Score = 35% Completion Quality + 20% Full Completion + 30% Consistency Rhythm + 15% Recent Momentum",
+        )
+        self.assertContains(
+            response,
+            "The percentage of scheduled sessions you finished at 100%",
         )
         self.assertContains(response, "helping your overall Consistency Score")
         self.assertContains(response, "holding your overall Consistency Score back")
@@ -677,7 +681,8 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["full_completion_reliability"], 0.0)
         self.assertEqual(metrics["streak_stability"], 100.0)
         self.assertEqual(metrics["recent_momentum"], 50.0)
-        self.assertEqual(metrics["consistency_score"], 63.0)
+        # Consistify Score = 0.35*90 + 0.20*0 + 0.30*100 + 0.15*50 = 69.0
+        self.assertEqual(metrics["consistency_score"], 69.0)
 
     def test_quality_is_proportional_and_full_completion_remains_exact(self):
         start = date(2026, 1, 1)
@@ -980,8 +985,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(weekly_metrics["recent_momentum"], 83.3)
         self.assertEqual(daily_metrics["streak_stability"], 43.3)
         self.assertEqual(weekly_metrics["streak_stability"], 43.3)
-        self.assertEqual(daily_metrics["consistency_score"], 43.8)
-        self.assertEqual(weekly_metrics["consistency_score"], 43.8)
+        # Q=55, F=0, R=43.33..., M=83.33...  =>  score 44.75 rounded to 44.8.
+        self.assertEqual(daily_metrics["consistency_score"], 44.8)
+        self.assertEqual(weekly_metrics["consistency_score"], 44.8)
 
     def test_momentum_uses_only_the_six_most_recent_scheduled_sessions(self):
         start = date(2026, 1, 1)
@@ -1049,8 +1055,69 @@ class ConsistencyScoreTests(TestCase):
 
         self.assertEqual(daily_metrics["recent_momentum"], 50.0)
         self.assertEqual(weekly_metrics["recent_momentum"], 50.0)
+        # Daily: 0.35*100 + 0.20*100 + 0.30*100 + 0.15*50 = 92.5
         self.assertEqual(daily_metrics["consistency_score"], 92.5)
-        self.assertEqual(weekly_metrics["consistency_score"], 90.0)
+        # Weekly: 0.35*100 + 0.20*100 + 0.30*83.3 + 0.15*50 = 87.5
+        self.assertEqual(weekly_metrics["consistency_score"], 87.5)
+
+    def test_rhythm_high_and_momentum_low_are_independent(self):
+        """High rhythm (flat reliability) must not be inflated by momentum.
+
+        A long, flat-perfect streak keeps ``recent_momentum`` at the neutral
+        50 because there is no upward or downward trajectory. ``consistency_
+        rhythm`` should report a high value because every session crosses
+        the threshold and every transition is successful.
+        """
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Flat perfect streak", start)
+        for offset in range(7):
+            self.log_completion(habit, start + timedelta(days=offset), 100)
+
+        metrics = habit_performance_metrics(
+            habit, start, start + timedelta(days=6),
+        )
+
+        # Rhythm covers the whole 7-session window with full reliability.
+        self.assertEqual(metrics["streak_stability"], 100.0)
+        # No transitions means no trajectory — momentum is neutral at 50.
+        self.assertEqual(metrics["recent_momentum"], 50.0)
+        # R is high, M is neutral: the score is anchored by Q, R, and F
+        # without an artificial boost from momentum.
+        # 0.35*100 + 0.20*100 + 0.30*100 + 0.15*50 = 92.5
+        self.assertEqual(metrics["consistency_score"], 92.5)
+
+    def test_momentum_high_and_rhythm_low_are_independent(self):
+        """High momentum (sharp recent improvement) must not inflate rhythm.
+
+        A sudden lift at the tail end of an otherwise low session history
+        gives a strong trajectory signal but the rhythm (coverage/continuity
+        over the last 7 sessions) is dragged down by the missed earlier
+        sessions. The two signals must not bleed into each other.
+        """
+        start = date(2026, 1, 1)
+        habit = self.make_habit("Late sprint", start)
+        # Five sessions well below threshold, then a sharp upward spike.
+        for offset in range(5):
+            self.log_completion(habit, start + timedelta(days=offset), 20)
+        self.log_completion(habit, start + timedelta(days=5), 100)
+
+        metrics = habit_performance_metrics(
+            habit, start, start + timedelta(days=5),
+        )
+
+        # Rhythm is low: 1/6 coverage with full confidence; raw coverage
+        # is 1/6, so even with continuity=0 the raw is small and gets shrunk
+        # toward 50. The reported streak_stability must stay modest.
+        self.assertLess(metrics["streak_stability"], 30.0)
+        # Momentum is positive because the only meaningful change is a +80
+        # lift, which yields a strong signal. The damped result remains
+        # clearly above the deadband neutral.
+        self.assertGreater(metrics["recent_momentum"], 50.0)
+        # The score is dominated by low Q and low R; even with a positive
+        # M the overall score stays modest. If rhythm and momentum are
+        # independent (the desired property), no special case inflates the
+        # result above what the components justify.
+        self.assertLess(metrics["consistency_score"], 55.0)
 
     def test_recent_momentum_excludes_paused_dates_from_its_denominator(self):
         start = date(2026, 1, 1)
@@ -1136,7 +1203,8 @@ class ConsistencyScoreTests(TestCase):
             "full_completion_reliability": 0.0,
             "streak_stability": 43.3,
             "recent_momentum": 83.3,
-            "consistency_score": 43.8,
+            # Q=55, F=0, R=43.33..., M=83.33...  =>  score=44.75, rounded 44.8.
+            "consistency_score": 44.8,
         }
         for key, value in expected.items():
             self.assertEqual(strong_metrics[key], value)
@@ -1469,9 +1537,11 @@ class ConsistencyScoreTests(TestCase):
 
         # Stable performance receives neutral momentum regardless of cadence.
         # The daily habit has no logged completions, so its score is 0.
+        # The weekly habit has Q=100, F=100, R=66.7 (1-session shrunk),
+        # M=50  =>  0.35*100 + 0.20*100 + 0.30*66.7 + 0.15*50 = 82.5.
         high_weight = 1.3 * sqrt(1)
         low_weight = 0.8 * sqrt(4)
-        weekly_score = 87.5
+        weekly_score = 82.5
         expected_score = round(
             (weekly_score * high_weight + 0 * low_weight)
             / (high_weight + low_weight),
@@ -1493,7 +1563,8 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["completion_rate"], 50.0)
         self.assertEqual(metrics["current_streak"], 0)
         self.assertEqual(metrics["recent_momentum"], 0.0)
-        self.assertEqual(metrics["consistency_score"], 41.5)
+        # Q=50, F=50, R=43.3, M=0  =>  0.35*50 + 0.20*50 + 0.30*43.3 + 0.15*0 = 40.5
+        self.assertEqual(metrics["consistency_score"], 40.5)
         unlogged_metrics = metrics
 
         self.log_completion(habit, today, 0)
@@ -1523,12 +1594,18 @@ class ConsistencyScoreTests(TestCase):
         components = {item["key"]: item for item in breakdown["components"]}
 
         self.assertTrue(breakdown["has_previous"])
+        # current = 0.35*100 + 0.20*100 + 0.30*100 + 0.15*50 = 92.5
         self.assertEqual(breakdown["current_score"], 92.5)
-        self.assertEqual(breakdown["previous_score"], 30.0)
-        self.assertEqual(breakdown["score_delta"], 62.5)
-        self.assertEqual(components["completion_quality"]["points_delta"], 22.5)
-        self.assertEqual(components["full_completion"]["points_delta"], 25.0)
-        self.assertEqual(components["rhythm_stability"]["points_delta"], 15.0)
+        # previous = 0.35*50 + 0.20*0 + 0.30*0 + 0.15*50 = 25.0
+        self.assertEqual(breakdown["previous_score"], 25.0)
+        self.assertEqual(breakdown["score_delta"], 67.5)
+        # Q delta = (100-50) * 0.35 = 17.5
+        self.assertEqual(components["completion_quality"]["points_delta"], 17.5)
+        # F delta = (100-0) * 0.20 = 20.0
+        self.assertEqual(components["full_completion"]["points_delta"], 20.0)
+        # R delta = (100-0) * 0.30 = 30.0 (was 0 before — full rhythm swing)
+        self.assertEqual(components["rhythm_stability"]["points_delta"], 30.0)
+        # M delta = 0 (weight unchanged; both windows are flat 100)
         self.assertEqual(components["recent_momentum"]["points_delta"], 0.0)
 
     def test_habit_score_drivers_identify_booster_drag_and_movement(self):

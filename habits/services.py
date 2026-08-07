@@ -12,9 +12,20 @@ from .models import (
     HabitCategory,
     HabitCompletion,
 )
-CONSISTENCY_COMPLETION_QUALITY_WEIGHT = 0.45
-CONSISTENCY_FULL_COMPLETION_WEIGHT = 0.25
-CONSISTENCY_RHYTHM_WEIGHT = 0.15
+# Consistify Score weights. The formula is
+#     score = 0.35*Q + 0.20*F + 0.30*R + 0.15*M
+# where Q measures how much of the scheduled work was actually completed
+# (including partial progress), F measures how often scheduled sessions
+# reached exactly 100%, R measures reliability and continuity (recent
+# cadence, missed-session avoidance) over the last seven scheduled
+# sessions, and M measures trajectory (improvement / decline / stable)
+# over the last six scheduled sessions. Q and F together act as the
+# "how much work did you do" anchor; R is the reliability term; M is a
+# directional modifier that cannot dominate reliability. The total
+# weight is 1.0 so the score remains a 0–100 percentage.
+CONSISTENCY_COMPLETION_QUALITY_WEIGHT = 0.35
+CONSISTENCY_FULL_COMPLETION_WEIGHT = 0.20
+CONSISTENCY_RHYTHM_WEIGHT = 0.30
 CONSISTENCY_RECENT_MOMENTUM_WEIGHT = 0.15
 RHYTHM_SESSION_WINDOW = 7
 MOMENTUM_SESSION_WINDOW = 6
@@ -39,11 +50,16 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "label": "Completion quality",
         "metric_key": "completion_quality",
         "weight": CONSISTENCY_COMPLETION_QUALITY_WEIGHT,
-        "description": "Average progress across every scheduled session.",
+        "description": (
+            "Average progress across every scheduled session, including "
+            "partial completion."
+        ),
         "help_text": (
-            "The average progress you log across every scheduled session, so "
-            "partial and measurable wins still count. Finishing at 60% counts "
-            "more than a miss, but less than a full 100%."
+            "How much of the scheduled work you actually completed across "
+            "every scheduled session. Partial progress (for example a 60% "
+            "session) counts more than a miss, but less than a full 100%. "
+            "This is the longest-window signal in the score, so it anchors "
+            "the overall completion level."
         ),
     },
     {
@@ -51,11 +67,16 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "label": "Full completion",
         "metric_key": "full_completion_reliability",
         "weight": CONSISTENCY_FULL_COMPLETION_WEIGHT,
-        "description": "How often scheduled sessions reached 100%.",
+        "description": (
+            "Share of scheduled sessions completed at exactly 100%; acts as a "
+            "finishing-quality signal."
+        ),
         "help_text": (
-            "The share of scheduled sessions you finished completely (100%). "
+            "The percentage of scheduled sessions you finished at 100%. "
             "Partial progress does not count here, so this rewards fully "
-            "closing out what you planned."
+            "closing out what you planned. It is a finishing-quality signal "
+            "rather than a duplicate of completion quality, because it only "
+            "responds to clean closes."
         ),
     },
     {
@@ -63,11 +84,17 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "label": "Consistency rhythm",
         "metric_key": "streak_stability",
         "weight": CONSISTENCY_RHYTHM_WEIGHT,
-        "description": "Recent success coverage and consecutive successful sessions.",
+        "description": (
+            "Reliability and continuity across the last seven scheduled "
+            "sessions; rewards meaningful participation and avoids "
+            "interruptions."
+        ),
         "help_text": (
-            "How steady your recent cadence is. It rewards both a high share of "
-            "recent sessions above 50% and consecutive successful sessions that "
-            "keep a reliable rhythm going."
+            "Reliability and continuity over the last seven scheduled "
+            "sessions. It rewards regularly maintaining meaningful "
+            "participation (logged above 50%) and avoiding interruptions. "
+            "It does not measure improvement or decline — that is a "
+            "separate signal called Recent Momentum."
         ),
     },
     {
@@ -75,11 +102,19 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "label": "Recent momentum",
         "metric_key": "recent_momentum",
         "weight": CONSISTENCY_RECENT_MOMENTUM_WEIGHT,
-        "description": "Confidence-adjusted direction across recent scheduled sessions.",
+        "description": (
+            "Trajectory across the last six scheduled sessions: whether "
+            "recent performance is improving, declining, or remaining "
+            "stable."
+        ),
         "help_text": (
-            "The direction of your latest sessions, rewarding meaningful "
-            "improvement while filtering out small fluctuations and sparse "
-            "data. Trending upward lifts it; slipping recently lowers it."
+            "Trajectory over the last six scheduled sessions. It compares "
+            "recent performance with your recent baseline and rewards "
+            "meaningful improvement while filtering out small fluctuations "
+            "and sparse data. It does not measure reliability or continuity "
+            "— that is a separate signal called Consistency Rhythm. The "
+            "value is centred at 50 (neutral), so flat users do not gain or "
+            "lose ground from momentum alone."
         ),
     },
 
@@ -624,13 +659,30 @@ def _streak_metrics(scheduled_dates, completion_map):
 
 
 def _consistency_rhythm(scheduled_dates, completion_map):
-    """Return confidence-adjusted coverage and continuity for recent sessions.
+    """Return a reliability/continuity score for the most recent scheduled sessions.
 
-    Progress above 50% is successful; 50% or less, including an unlogged
-    session, is a failure. Coverage supplies 80% of the factor and consecutive
-    successful-session transitions supply 20%. For ``k`` observations,
-    confidence is ``min(1, k / 3)``. With fewer than three observations, the
-    result is shrunk toward 50% so one success cannot claim a perfect rhythm.
+    Consistency rhythm measures **reliability and continuity** — how
+    consistently the user keeps showing up for recent scheduled sessions and
+    avoids interruptions. It is a *level* signal, not a *trend* signal:
+    improvement and decline are reported separately by ``_recent_momentum``.
+
+    Definition:
+        * Look at the last ``RHYTHM_SESSION_WINDOW`` scheduled sessions.
+        * A session above ``RHYTHM_CONTINUATION_THRESHOLD`` (50%) is a
+          success; 50% or less, including an unlogged session, is a failure.
+        * ``coverage`` is the share of recent sessions that succeeded.
+        * ``continuity`` is the share of consecutive successful-session
+          transitions. With one session there are no transitions, so
+          ``continuity`` is defined as ``coverage`` (a single observation
+          cannot make a continuity claim beyond its own coverage).
+        * ``raw_rhythm = 0.8 * coverage + 0.2 * continuity`` (so a single
+          session has ``raw_rhythm = coverage``).
+        * ``confidence = min(1, session_count / 3)`` and the result is
+          shrunk toward 50% by ``confidence`` so one or two sessions cannot
+          claim a perfect rhythm or a total failure.
+        * The all-zero-success path is routed through the same shrink
+          pipeline (no early return) so the function is symmetric in the
+          number of successes — the only asymmetry is the threshold itself.
     """
     recent_dates = scheduled_dates[-RHYTHM_SESSION_WINDOW:]
     if not recent_dates:
@@ -640,13 +692,11 @@ def _consistency_rhythm(scheduled_dates, completion_map):
         _is_successful_continuation(completion_map.get(scheduled_date, 0))
         for scheduled_date in recent_dates
     ]
-    successful_sessions = sum(success_flags)
-    if successful_sessions == 0:
-        return 0.0
-
     session_count = len(success_flags)
-    coverage = successful_sessions / session_count
+    coverage = sum(success_flags) / session_count
     if session_count == 1:
+        # With one session there are no transitions; continuity is defined
+        # as equal to coverage so ``raw_rhythm`` reduces to ``coverage``.
         continuity = coverage
     else:
         successful_pairs = sum(
@@ -683,16 +733,35 @@ def _momentum_change_signal(previous_value, current_value):
 
 
 def _recent_momentum(scheduled_dates, completion_map):
-    """Return a cadence-fair trend factor across six scheduled sessions.
+    """Return a trajectory score for the most recent scheduled sessions.
 
-    Momentum is neutral at 50%. Changes of five percentage points or less are
-    treated as stable noise. Larger changes are normalized so a 50-point
-    improvement or decline produces a full positive or negative signal. Newer
-    transitions receive larger ordinal weights, keeping different habit cadences
-    comparable and preventing calendar gaps from affecting the result. Fewer
-    than three observations shrink the trend toward neutral. The latest
-    session's progress supplies the evidence factor, preventing an old high
-    result from propping up sustained low recent performance.
+    Recent momentum measures **trajectory** — whether recent performance is
+    improving, declining, or remaining stable compared with the user's
+    recent baseline. It is a *trend* signal, not a *reliability* signal:
+    regularity and missed-session avoidance are reported separately by
+    ``_consistency_rhythm``. Trajectory is centred at 50 (neutral) and
+    symmetric for improvement vs. decline, so a flat user does not gain or
+    lose ground from momentum alone.
+
+    Definition:
+        * Look at the last ``MOMENTUM_SESSION_WINDOW`` scheduled sessions.
+        * Each pairwise change is mapped through ``_momentum_change_signal``
+          with a ``MOMENTUM_STABLE_BAND`` (5pp) deadband: changes inside
+          the deadband are noise (signal = 0).
+        * Larger changes are normalised so a ``MOMENTUM_FULL_SIGNAL_CHANGE``
+          (50pp) change produces a full ±1 signal.
+        * Newer transitions receive larger ordinal weights, so the trend is
+          dominated by the most recent comparison — this keeps daily and
+          weekly cadences comparable and prevents calendar gaps from
+          affecting the result.
+        * ``confidence = min(1, len / 3)`` shrinks the trend toward 50%
+          when fewer than three observations are available.
+        * The latest session's progress supplies an *evidence* multiplier
+          (``min(1, latest / 50)``) that prevents an old high result from
+          propping up sustained low recent performance. This damping is
+          applied only to the trajectory signal — the *level* itself is
+          reported separately by completion quality and consistency
+          rhythm, so evidence is not a reliability measurement.
     """
     recent_dates = scheduled_dates[-MOMENTUM_SESSION_WINDOW:]
     if not recent_dates:

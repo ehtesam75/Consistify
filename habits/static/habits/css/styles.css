@@ -1166,6 +1166,7 @@ main > section + section {
     gap: 1rem;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     margin-top: 1.5rem;
+    isolation: isolate;
 }
 
 .stats-grid.wide {
@@ -2063,6 +2064,8 @@ html {
 }
 
 .score-component {
+    position: relative;
+    isolation: isolate;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.7rem 1rem;
@@ -2070,6 +2073,16 @@ html {
     border-radius: 16px;
     background: var(--surface-alt);
     border: 1px solid rgba(228, 222, 212, 0.7);
+}
+
+.score-component:hover,
+.score-component:focus-within {
+    z-index: 10;
+}
+
+.score-component:hover .score-driver-tooltip,
+.score-component:focus-within .score-driver-tooltip {
+    z-index: 11;
 }
 
 .score-component-title-row {
@@ -2154,6 +2167,7 @@ html {
 
 .score-driver-card {
     position: relative;
+    isolation: isolate;
     display: grid;
     align-content: start;
     gap: 0.45rem;
@@ -2163,7 +2177,14 @@ html {
 .score-driver-card:focus-within,
 .stats-grid .stat-card:hover,
 .stats-grid .stat-card:focus-within {
-    z-index: 9;
+    z-index: 10;
+}
+
+.score-driver-card:hover .score-driver-tooltip,
+.score-driver-card:focus-within .score-driver-tooltip,
+.stats-grid .stat-card:hover .score-driver-tooltip,
+.stats-grid .stat-card:focus-within .score-driver-tooltip {
+    z-index: 11;
 }
 
 .score-driver-heading {
@@ -4215,6 +4236,23 @@ body.auth-page main {
         gap: 0.25rem;
     }
 
+    .dashboard-page .stats-grid.wide .stat-card .score-driver-tooltip {
+        top: calc(100% + 0.35rem);
+        right: max(0.5rem, calc(100% - min(15rem, calc(100vw - 2rem))));
+        left: auto;
+        width: min(15rem, calc(100vw - 2rem));
+        max-width: calc(100vw - 2rem);
+    }
+
+    .dashboard-page .stats-grid.wide .stat-card:nth-child(odd) .score-driver-tooltip {
+        right: auto;
+        left: 0;
+    }
+
+    .dashboard-page .stats-grid.wide .stat-card.consistency-score-card .stat-value {
+        margin-top: 0.1rem;
+    }
+
     .dashboard-page .stats-grid.wide .score-driver-help-button {
         width: 1.25rem;
         height: 1.25rem;
@@ -4570,6 +4608,18 @@ body.auth-page main {
 
     .score-component {
         grid-template-columns: 1fr;
+    }
+
+    .score-component .score-driver-tooltip {
+        top: calc(100% + 0.35rem);
+        right: auto;
+        left: 0;
+        width: min(15.5rem, calc(100vw - 2rem));
+        max-width: calc(100% - 0rem);
+    }
+
+    .score-component-bar {
+        height: 6px;
     }
 
     .score-change-summary {
