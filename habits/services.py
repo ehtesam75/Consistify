@@ -780,7 +780,27 @@ def _empty_component_snapshot():
     }
 
 
-def _aggregate_consistency_snapshot(habits, start_date, end_date):
+def _habit_consistency_metrics(habit, start_date, end_date, precomputed):
+    """Return the per-habit metrics dict for a single habit.
+
+    Callers that already iterated ``habits`` to build other aggregates can pass
+    the previously-computed ``per_habit`` list (in the same shape
+    ``compute_user_metrics`` returns) so this window's metrics reuse the same
+    database reads instead of recomputing the completion maps.
+    """
+    if precomputed is not None:
+        for row in precomputed:
+            if row["habit"].pk == habit.pk:
+                return row["metrics"]
+    return habit_performance_metrics(habit, start_date, end_date)
+
+
+def _aggregate_consistency_snapshot(
+    habits,
+    start_date,
+    end_date,
+    precomputed_metrics=None,
+):
     weighted_score = 0.0
     total_weight = 0.0
     scheduled_total = 0
@@ -788,7 +808,9 @@ def _aggregate_consistency_snapshot(habits, start_date, end_date):
     component_totals = {component["key"]: 0.0 for component in CONSISTENCY_SCORE_COMPONENTS}
 
     for habit in habits:
-        metrics = habit_performance_metrics(habit, start_date, end_date)
+        metrics = _habit_consistency_metrics(
+            habit, start_date, end_date, precomputed_metrics
+        )
         if metrics["scheduled_total"] == 0:
             continue
 
@@ -882,8 +904,14 @@ def build_overall_score_breakdown(
     end_date,
     previous_start_date=None,
     previous_end_date=None,
+    precomputed_metrics=None,
 ):
-    current = _aggregate_consistency_snapshot(habits, start_date, end_date)
+    # ``precomputed_metrics`` describes the current window only. The previous
+    # window may cover a different date range, so its metrics must always be
+    # recomputed from scratch.
+    current = _aggregate_consistency_snapshot(
+        habits, start_date, end_date, precomputed_metrics
+    )
     previous = None
     has_previous = False
 
@@ -990,12 +1018,15 @@ def build_habit_score_drivers(
     end_date,
     previous_start_date=None,
     previous_end_date=None,
+    precomputed_metrics=None,
 ):
     current_rows = []
     total_weight = 0.0
 
     for habit in habits:
-        metrics = habit_performance_metrics(habit, start_date, end_date)
+        metrics = _habit_consistency_metrics(
+            habit, start_date, end_date, precomputed_metrics
+        )
         if metrics["scheduled_total"] == 0:
             continue
         weight = _habit_consistency_weight(

@@ -38,7 +38,6 @@ from .services import (
     build_overall_score_breakdown,
     build_weekly_reports,
     can_update_progress_on,
-    calculate_overall_consistency,
     calculate_streaks,
     completion_stats,
     compute_today_metrics,
@@ -273,12 +272,16 @@ def dashboard(request):
     total_scheduled = aggregate["total_scheduled"]
     total_completed = aggregate["total_completed"]
     overall_rate = aggregate["completion_rate"]
+    # Reuse the per-habit metrics already computed by ``compute_user_metrics``
+    # so the breakdown and drivers do not re-iterate the habits and re-query
+    # the completion maps for the same window.
     score_breakdown = build_overall_score_breakdown(
         habits,
         window_start,
         today,
         previous_window_start,
         previous_window_end,
+        precomputed_metrics=habit_cards,
     )
     score_breakdown["current_period_label"] = _format_period_label(window_start, today)
     score_breakdown["previous_period_label"] = (
@@ -293,6 +296,7 @@ def dashboard(request):
         today,
         previous_window_start,
         previous_window_end,
+        precomputed_metrics=habit_cards,
     )
     category_analytics = build_category_analytics(habits, window_start, today)
 

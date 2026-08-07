@@ -350,6 +350,125 @@ class ConsistifyScoreAuditRegressionTests(TestCase):
             self.today - timedelta(days=29),
         )
 
+    # ---- M3: score breakdown and drivers reuse precomputed metrics -----
+
+    def test_breakdown_and_drivers_match_when_metrics_are_reused(self):
+        """``build_overall_score_breakdown`` and ``build_habit_score_drivers``
+        must produce identical output whether they recompute per-habit metrics
+        themselves or reuse the ones already computed by ``compute_user_metrics``.
+
+        The dashboard calls all three for the same window, so the latter path
+        eliminates the duplicate habit iteration without changing the numbers.
+        """
+        start = self.today - timedelta(days=9)
+        end = self.today
+        habit_a = self._make_habit(name="Reuse A", start_date=start)
+        ensure_initial_plan_version(habit_a)
+        habit_b = self._make_habit(
+            name="Reuse B",
+            start_date=start,
+            priority=Habit.PRIORITY_HIGH,
+        )
+        ensure_initial_plan_version(habit_b)
+        for offset in range(10):
+            HabitCompletion.objects.create(
+                habit=habit_a,
+                date=start + timedelta(days=offset),
+                completion_percentage=Decimal("80"),
+            )
+            if offset % 2 == 0:
+                HabitCompletion.objects.create(
+                    habit=habit_b,
+                    date=start + timedelta(days=offset),
+                    completion_percentage=Decimal("100"),
+                )
+
+        habits = [habit_a, habit_b]
+
+        # Path the dashboard actually takes.
+        aggregated = compute_user_metrics(habits, start, end)
+        breakdown_with_reuse = build_overall_score_breakdown(
+            habits,
+            start,
+            end,
+            start - timedelta(days=10),
+            start - timedelta(days=1),
+            precomputed_metrics=aggregated["per_habit"],
+        )
+        drivers_with_reuse = build_habit_score_drivers(
+            habits,
+            start,
+            end,
+            start - timedelta(days=10),
+            start - timedelta(days=1),
+            precomputed_metrics=aggregated["per_habit"],
+        )
+
+        # Path that recomputes everything from scratch (sanity check).
+        breakdown_from_scratch = build_overall_score_breakdown(
+            habits,
+            start,
+            end,
+            start - timedelta(days=10),
+            start - timedelta(days=1),
+        )
+        drivers_from_scratch = build_habit_score_drivers(
+            habits,
+            start,
+            end,
+            start - timedelta(days=10),
+            start - timedelta(days=1),
+        )
+
+        self.assertEqual(
+            breakdown_with_reuse["current_score"],
+            breakdown_from_scratch["current_score"],
+        )
+        self.assertEqual(
+            breakdown_with_reuse["scheduled_total"],
+            breakdown_from_scratch["scheduled_total"],
+        )
+        self.assertEqual(
+            breakdown_with_reuse["completed_total"],
+            breakdown_from_scratch["completed_total"],
+        )
+        self.assertEqual(
+            breakdown_with_reuse["score_delta"],
+            breakdown_from_scratch["score_delta"],
+        )
+        for reused, fresh in zip(
+            breakdown_with_reuse["components"],
+            breakdown_from_scratch["components"],
+        ):
+            self.assertEqual(reused["key"], fresh["key"])
+            self.assertEqual(reused["current_value"], fresh["current_value"])
+            self.assertEqual(reused["current_points"], fresh["current_points"])
+            self.assertEqual(reused["value_delta"], fresh["value_delta"])
+            self.assertEqual(reused["points_delta"], fresh["points_delta"])
+
+        for reused_driver, fresh_driver in zip(
+            drivers_with_reuse.values(), drivers_from_scratch.values()
+        ):
+            self.assertEqual(
+                (reused_driver["habit"].pk if reused_driver else None),
+                (fresh_driver["habit"].pk if fresh_driver else None),
+            )
+            if reused_driver is None:
+                self.assertIsNone(fresh_driver)
+                continue
+            self.assertEqual(
+                reused_driver["score"], fresh_driver["score"]
+            )
+            self.assertEqual(
+                reused_driver["impact_points"], fresh_driver["impact_points"]
+            )
+            self.assertEqual(
+                reused_driver["drag_points"], fresh_driver["drag_points"]
+            )
+            self.assertEqual(
+                reused_driver["score_delta"], fresh_driver["score_delta"]
+            )
+
 
 class PwaAssetDeliveryTests(TestCase):
     def test_service_worker_forces_updates_and_revalidates_unversioned_assets(self):
