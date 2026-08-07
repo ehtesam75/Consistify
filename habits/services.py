@@ -111,9 +111,8 @@ CONSISTENCY_SCORE_COMPONENTS = (
             "Trajectory over the last six scheduled sessions. It compares "
             "recent performance with your recent baseline and rewards "
             "meaningful improvement while filtering out small fluctuations "
-            "and sparse data. It does not measure reliability or continuity "
-            "— that is a separate signal called Consistency Rhythm. The "
-            "value is centred at 50 (neutral), so flat users do not gain or "
+            "and sparse data."
+            "The value is centred at 50 (neutral), so flat users do not gain or "
             "lose ground from momentum alone."
         ),
     },
