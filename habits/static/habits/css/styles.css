@@ -4593,6 +4593,7 @@ body.auth-page main {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr);
         align-items: center;
+        row-gap: 0.15rem;
     }
 
     .score-change-summary > div {
@@ -4607,6 +4608,7 @@ body.auth-page main {
     .score-change-summary .score-change-value {
         grid-column: 1;
         grid-row: 2;
+        margin-top: 0;
     }
 
     .score-change-summary .delta-pill {
