@@ -1166,7 +1166,6 @@ main > section + section {
     gap: 1rem;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     margin-top: 1.5rem;
-    isolation: isolate;
 }
 
 .stats-grid.wide {
@@ -2064,8 +2063,6 @@ html {
 }
 
 .score-component {
-    position: relative;
-    isolation: isolate;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.7rem 1rem;
@@ -2073,16 +2070,6 @@ html {
     border-radius: 16px;
     background: var(--surface-alt);
     border: 1px solid rgba(228, 222, 212, 0.7);
-}
-
-.score-component:hover,
-.score-component:focus-within {
-    z-index: 10;
-}
-
-.score-component:hover .score-driver-tooltip,
-.score-component:focus-within .score-driver-tooltip {
-    z-index: 11;
 }
 
 .score-component-title-row {
@@ -2166,25 +2153,9 @@ html {
 }
 
 .score-driver-card {
-    position: relative;
-    isolation: isolate;
     display: grid;
     align-content: start;
     gap: 0.45rem;
-}
-
-.score-driver-card:hover,
-.score-driver-card:focus-within,
-.stats-grid .stat-card:hover,
-.stats-grid .stat-card:focus-within {
-    z-index: 10;
-}
-
-.score-driver-card:hover .score-driver-tooltip,
-.score-driver-card:focus-within .score-driver-tooltip,
-.stats-grid .stat-card:hover .score-driver-tooltip,
-.stats-grid .stat-card:focus-within .score-driver-tooltip {
-    z-index: 11;
 }
 
 .score-driver-heading {
@@ -2243,7 +2214,7 @@ html {
 
 .score-driver-tooltip {
     position: absolute;
-    z-index: 8;
+    z-index: 50;
     top: calc(100% + 0.55rem);
     right: 0;
     display: block;
@@ -3274,11 +3245,9 @@ body.auth-page main {
 
 @keyframes rise {
     from {
-        transform: translateY(12px);
         opacity: 0;
     }
     to {
-        transform: translateY(0);
         opacity: 1;
     }
 }
@@ -4244,11 +4213,6 @@ body.auth-page main {
         max-width: calc(100vw - 2rem);
     }
 
-    .dashboard-page .stats-grid.wide .stat-card:nth-child(odd) .score-driver-tooltip {
-        right: auto;
-        left: 0;
-    }
-
     .dashboard-page .stats-grid.wide .stat-card.consistency-score-card .stat-value {
         margin-top: 0.1rem;
     }
@@ -4313,11 +4277,6 @@ body.auth-page main {
         padding: 0.6rem 0.7rem;
         border-radius: 10px;
         font-size: 0.74rem;
-    }
-
-    .dashboard-page .score-driver-card:nth-child(odd) .score-driver-tooltip {
-        right: auto;
-        left: 0;
     }
 
     .date-nav {
@@ -4612,10 +4571,9 @@ body.auth-page main {
 
     .score-component .score-driver-tooltip {
         top: calc(100% + 0.35rem);
-        right: auto;
         left: 0;
+        right: auto;
         width: min(15.5rem, calc(100vw - 2rem));
-        max-width: calc(100% - 0rem);
     }
 
     .score-component-bar {
@@ -4626,11 +4584,6 @@ body.auth-page main {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr);
         align-items: center;
-        /* Base rule uses `gap: 1rem` for the desktop flex row. In this grid
-           layout that would become a row gap between the label and the score,
-           so keep the horizontal spacing only. */
-        row-gap: 0;
-        column-gap: 1rem;
     }
 
     .score-change-summary > div {
@@ -4656,7 +4609,6 @@ body.auth-page main {
     .score-change-summary > .stat-note {
         grid-column: 1 / -1;
         grid-row: 3;
-        margin-top: 0.5rem;
     }
 
     .score-component-metrics {
