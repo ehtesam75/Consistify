@@ -104,6 +104,8 @@
             "Avg streak",
             { min: 0, max: {{ weekly_streak_max }}, stepSize: 1 }
         );
+        // Completion % and the consistency score are both 0-100, so they share
+        // one axis instead of being split across two independent scales.
         window.ConsistifyCharts.renderTrendLine(
             "monthlyReportChart",
             monthlyLabels,
@@ -111,7 +113,7 @@
             monthlyConsistency,
             "Completion %",
             "Consistency score",
-            { min: 0, max: 100, stepSize: 20, tickFormatter: (value) => value },
+            { shareAxis: true, stepSize: 20, tickFormatter: (value) => value },
             { formatMonthLabel: true }
         );
     }

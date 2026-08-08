@@ -335,6 +335,59 @@ window.ConsistifyCharts = (() => {
         const ctx = canvas.getContext("2d");
         const gradient = buildGradient(ctx, canvas.height || 240);
 
+        // Both series share a single axis when they already use the same scale
+        // (e.g. a completion percentage and a 0-100 consistency score). A second
+        // axis in that case is redundant and makes comparable lines look as if
+        // they were measured differently.
+        const shareAxis = secondaryAxisConfig.shareAxis === true;
+        const secondaryAxisId = shareAxis ? "y" : "y1";
+
+        const scales = {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: {
+                    stepSize: shareAxis ? secondaryAxisConfig.stepSize || 20 : 20,
+                    callback: shareAxis
+                        ? secondaryAxisConfig.tickFormatter || ((value) => value)
+                        : (value) => value + "%",
+                },
+                grid: {
+                    color: palette.grid,
+                },
+            },
+            x: {
+                ticks: {
+                    autoSkip: false,
+                    callback: createResponsiveTickCallback(canvas, labels, {
+                        ...chartOptions,
+                        trimRangeStart: chartOptions.trimRangeStart !== false,
+                    }),
+                    maxRotation: 0,
+                    minRotation: 0,
+                },
+                grid: {
+                    display: false,
+                },
+            },
+        };
+
+        if (!shareAxis) {
+            scales.y1 = {
+                beginAtZero: true,
+                min: secondaryAxisConfig.min,
+                max: secondaryAxisConfig.max,
+                position: "right",
+                ticks: {
+                    stepSize: secondaryAxisConfig.stepSize,
+                    callback: secondaryAxisConfig.tickFormatter,
+                },
+                grid: {
+                    drawOnChartArea: false,
+                },
+            };
+        }
+
         new window.Chart(ctx, {
             type: "line",
             data: {
@@ -343,6 +396,7 @@ window.ConsistifyCharts = (() => {
                     {
                         label: primaryLabel,
                         data: primaryValues,
+                        valueSuffix: "%",
                         borderColor: palette.teal,
                         backgroundColor: gradient,
                         borderWidth: 2,
@@ -362,58 +416,32 @@ window.ConsistifyCharts = (() => {
                         tension: 0.3,
                         pointRadius: 3,
                         pointBackgroundColor: palette.accent,
-                        yAxisID: "y1",
+                        yAxisID: secondaryAxisId,
+                        valueSuffix: secondaryAxisConfig.valueSuffix || "",
                     },
                 ],
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            stepSize: 20,
-                            callback: (value) => value + "%",
-                        },
-                        grid: {
-                            color: palette.grid,
-                        },
-                    },
-                    y1: {
-                        beginAtZero: true,
-                        min: secondaryAxisConfig.min,
-                        max: secondaryAxisConfig.max,
-                        position: "right",
-                        ticks: {
-                            stepSize: secondaryAxisConfig.stepSize,
-                            callback: secondaryAxisConfig.tickFormatter,
-                        },
-                        grid: {
-                            drawOnChartArea: false,
-                        },
-                    },
-                    x: {
-                        ticks: {
-                            autoSkip: false,
-                            callback: createResponsiveTickCallback(canvas, labels, {
-                                ...chartOptions,
-                                trimRangeStart: chartOptions.trimRangeStart !== false,
-                            }),
-                            maxRotation: 0,
-                            minRotation: 0,
-                        },
-                        grid: {
-                            display: false,
-                        },
-                    },
-                },
+                scales,
                 plugins: {
                     legend: {
                         display: true,
                         labels: {
                             usePointStyle: true,
+                        },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const value = context.parsed.y;
+                                if (value == null) {
+                                    return `${context.dataset.label}: no data`;
+                                }
+                                const suffix = context.dataset.valueSuffix || "";
+                                return `${context.dataset.label}: ${value}${suffix}`;
+                            },
                         },
                     },
                 },
