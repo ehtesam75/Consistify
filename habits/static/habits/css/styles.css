@@ -1207,6 +1207,16 @@ main > section + section {
     color: var(--ink-soft);
 }
 
+/* Ensure the `hidden` attribute wins over the `.stat-value` /
+   `.stat-note` / `.compare-cell-value` `display` rules so JS-driven
+   timeframe swaps on the Habit Compare page actually hide the
+   non-active completion values. */
+.stat-value[hidden],
+.stat-note[hidden],
+.compare-cell-value[hidden] {
+    display: none;
+}
+
 .description {
     margin-top: 0.6rem;
 }

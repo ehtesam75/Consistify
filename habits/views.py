@@ -936,9 +936,8 @@ def habit_compare(request):
                 {
                     "habit": habit,
                     "metrics_90": metrics_90,
+                    "metrics_30": metrics_30,
                     "metrics_all": metrics_all,
-                    "avg_daily_30": round(metrics_30["completion_rate"], 1),
-                    "avg_daily_all": round(metrics_all["completion_rate"], 1),
                 }
             )
 

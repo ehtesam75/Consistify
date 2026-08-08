@@ -32,11 +32,20 @@
 {% if comparison_rows %}
 <section class="stats-grid wide compare-stats-grid">
     {% for row in comparison_rows %}
-        <div class="stat-card">
+        <div class="stat-card" data-habit-id="{{ row.habit.id }}">
             <span class="stat-label">{{ row.habit.name }}</span>
-            <span class="stat-value">{{ row.metrics_90.completion_rate|floatformat:1 }}%</span>
-            <span class="stat-note">Completion (last 90 days)</span>
-            <span class="stat-note">Completion: {{ row.avg_daily_30|floatformat:1 }}% (30d), {{ row.avg_daily_all|floatformat:1 }}% (all time)</span>
+            <span class="stat-value compare-stat-value" data-timeframe="last30" hidden>
+                {{ row.metrics_30.completion_rate|floatformat:1 }}%
+            </span>
+            <span class="stat-value compare-stat-value" data-timeframe="all" hidden>
+                {{ row.metrics_all.completion_rate|floatformat:1 }}%
+            </span>
+            <span class="stat-value compare-stat-value" data-timeframe="default">
+                {{ row.metrics_90.completion_rate|floatformat:1 }}%
+            </span>
+            <span class="stat-note compare-stat-note" data-timeframe="last30" hidden>Completion (last 30 days)</span>
+            <span class="stat-note compare-stat-note" data-timeframe="all" hidden>Completion (all time)</span>
+            <span class="stat-note compare-stat-note" data-timeframe="default">Completion (last 90 days)</span>
         </div>
     {% endfor %}
 </section>
@@ -44,7 +53,7 @@
 <section class="card" style="--i: 1;">
     <div class="card-header">
         <h2>Side-by-side metrics</h2>
-        <span class="tag">90 day analytics</span>
+        <span class="tag compare-metrics-tag">90 day analytics</span>
     </div>
     <div class="table compare-metrics-table">
         <div class="table-row table-header five-cols">
@@ -55,12 +64,44 @@
             <span>Consistency</span>
         </div>
         {% for row in comparison_rows %}
-            <div class="table-row five-cols">
-                <span>{{ row.habit.name }}</span>
-                <span>{{ row.metrics_90.completion_rate|floatformat:1 }}%</span>
-                <span>{{ row.metrics_90.current_streak }}</span>
-                <span>{{ row.metrics_90.max_streak }}</span>
-                <span>{{ row.metrics_90.consistency_score|floatformat:1 }}</span>
+            <div class="table-row five-cols compare-metric-row" data-habit-id="{{ row.habit.id }}">
+                <span class="compare-habit-name">{{ row.habit.name }}</span>
+                <span class="compare-cell-value" data-timeframe="last30" hidden>
+                    {{ row.metrics_30.completion_rate|floatformat:1 }}%
+                </span>
+                <span class="compare-cell-value" data-timeframe="all" hidden>
+                    {{ row.metrics_all.completion_rate|floatformat:1 }}%
+                </span>
+                <span class="compare-cell-value" data-timeframe="default">
+                    {{ row.metrics_90.completion_rate|floatformat:1 }}%
+                </span>
+                <span class="compare-cell-value" data-timeframe="last30" hidden>
+                    {{ row.metrics_30.current_streak }}
+                </span>
+                <span class="compare-cell-value" data-timeframe="all" hidden>
+                    {{ row.metrics_all.current_streak }}
+                </span>
+                <span class="compare-cell-value" data-timeframe="default">
+                    {{ row.metrics_90.current_streak }}
+                </span>
+                <span class="compare-cell-value" data-timeframe="last30" hidden>
+                    {{ row.metrics_30.max_streak }}
+                </span>
+                <span class="compare-cell-value" data-timeframe="all" hidden>
+                    {{ row.metrics_all.max_streak }}
+                </span>
+                <span class="compare-cell-value" data-timeframe="default">
+                    {{ row.metrics_90.max_streak }}
+                </span>
+                <span class="compare-cell-value" data-timeframe="last30" hidden>
+                    {{ row.metrics_30.consistency_score|floatformat:1 }}
+                </span>
+                <span class="compare-cell-value" data-timeframe="all" hidden>
+                    {{ row.metrics_all.consistency_score|floatformat:1 }}
+                </span>
+                <span class="compare-cell-value" data-timeframe="default">
+                    {{ row.metrics_90.consistency_score|floatformat:1 }}
+                </span>
             </div>
         {% endfor %}
     </div>
@@ -159,14 +200,57 @@
         });
     }
 
+    const timeframeTags = {
+        last30: "30 day analytics",
+        all: "All time analytics",
+        default: "90 day analytics",
+    };
+
+    function applyTimeframe(timeframe) {
+        // Stat cards (large per-habit completion tiles)
+        document.querySelectorAll(".compare-stat-value, .compare-stat-note").forEach((el) => {
+            const matches = el.dataset.timeframe === timeframe;
+            el.hidden = !matches;
+        });
+
+        // Side-by-side table cells
+        document.querySelectorAll(".compare-cell-value").forEach((el) => {
+            el.hidden = el.dataset.timeframe !== timeframe;
+        });
+
+        // Side-by-side tag label
+        const tag = document.querySelector(".compare-metrics-tag");
+        if (tag) {
+            tag.textContent = timeframeTags[timeframe] || timeframeTags.default;
+        }
+    }
+
+    function setActiveTimeframe(timeframe) {
+        timeButtons.forEach((item) => item.classList.remove("active"));
+        const active = document.querySelector(
+            `.compare-time-btn[data-timeframe="${timeframe}"]`
+        );
+        if (active) {
+            active.classList.add("active");
+        } else {
+            // No matching button (e.g. the "default" 90-day view) -> leave all
+            // buttons inactive so the user can clearly see no chart timeframe
+            // is currently selected.
+        }
+        applyTimeframe(timeframe);
+        renderCompareChart(timeframe);
+    }
+
     timeButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
-            timeButtons.forEach((item) => item.classList.remove("active"));
-            btn.classList.add("active");
-            renderCompareChart(btn.dataset.timeframe);
+            setActiveTimeframe(btn.dataset.timeframe);
         });
     });
 
+    // Stat cards and table default to the 90-day view. The chart's default
+    // timeframe is still "last30" because the chart payload only carries
+    // 30-day and all-time series.
+    applyTimeframe("default");
     renderCompareChart("last30");
 </script>
 {% endblock %}
