@@ -300,6 +300,28 @@ window.ConsistifyUI = (() => {
         }
     }
 
+    const pendingProgressFlushers = new Set();
+    let progressFlushListenersBound = false;
+
+    function flushPendingProgressSaves() {
+        pendingProgressFlushers.forEach((flush) => flush());
+    }
+
+    function bindProgressFlushListeners() {
+        if (progressFlushListenersBound) {
+            return;
+        }
+        progressFlushListenersBound = true;
+        // A debounced save must not be dropped when the user leaves the page
+        // (or backgrounds the tab) before the timer fires.
+        window.addEventListener("pagehide", flushPendingProgressSaves);
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "hidden") {
+                flushPendingProgressSaves();
+            }
+        });
+    }
+
     function initDailyRecapQuantControls() {
         const form = document.querySelector(".daily-recap-form");
         if (!form) {
@@ -327,7 +349,10 @@ window.ConsistifyUI = (() => {
             const nextValue = clampNumber(currentValue + step, minValue, maxValue);
 
             input.value = formatNumber(Math.round(nextValue * 100) / 100, 2);
+            // Mirror a real user edit: "input" for live listeners and "change"
+            // for the listeners that commit/persist the value.
             input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
         });
     }
 
@@ -360,7 +385,7 @@ window.ConsistifyUI = (() => {
                 });
             };
 
-            const fetchSubmit = async () => {
+            const fetchSubmit = async ({ keepalive = false } = {}) => {
                 const formData = new FormData(form);
                 try {
                     const response = await fetch(form.action, {
@@ -370,6 +395,7 @@ window.ConsistifyUI = (() => {
                             "X-Requested-With": "XMLHttpRequest",
                         },
                         body: formData,
+                        keepalive,
                     });
                     if (response.ok) {
                         const data = await response.json();
@@ -390,6 +416,21 @@ window.ConsistifyUI = (() => {
                     fetchSubmit();
                 }, 400);
             };
+
+            const flushSubmit = () => {
+                if (!pendingSubmitId) {
+                    return;
+                }
+                window.clearTimeout(pendingSubmitId);
+                pendingSubmitId = null;
+                // keepalive lets the request outlive the page during navigation.
+                fetchSubmit({ keepalive: true });
+            };
+
+            if (usesBlurAutosave) {
+                pendingProgressFlushers.add(flushSubmit);
+                bindProgressFlushListeners();
+            }
 
             const updateVisual = (percent, rawValue) => {
                 const safePercent = clampNumber(parseNumber(percent, 0), 0, 100);
@@ -443,45 +484,9 @@ window.ConsistifyUI = (() => {
                     );
                 }
                 if (input) {
-                    let submitFromOutsideClick = false;
-                    const armSubmitOnOutsideClick = (event) => {
-                        if (document.activeElement !== input) {
-                            return;
-                        }
-                        if (event.target === input) {
-                            submitFromOutsideClick = false;
-                            return;
-                        }
-                        submitFromOutsideClick = true;
-                    };
-                    document.addEventListener(
-                        "mousedown",
-                        armSubmitOnOutsideClick,
-                        true
-                    );
-                    document.addEventListener(
-                        "touchstart",
-                        armSubmitOnOutsideClick,
-                        true
-                    );
-
-                    input.addEventListener("input", (event) =>
-                        sync(event.target.value)
-                    );
-                    input.addEventListener("keydown", (event) => {
-                        if (event.key === "Enter") {
-                            event.preventDefault();
-                        }
-                    });
-                    input.addEventListener("focus", () => {
-                        submitFromOutsideClick = false;
-                    });
-                    input.addEventListener("blur", () => {
-                        const shouldSubmit = submitFromOutsideClick;
-                        submitFromOutsideClick = false;
-                        if (!shouldSubmit) {
-                            return;
-                        }
+                    // Single commit path shared by typing, spinner buttons,
+                    // arrow keys and pastes.
+                    const commitFromInput = () => {
                         const rawValue = input.value.trim();
                         if (rawValue === "") {
                             sync(committedPercent);
@@ -492,12 +497,23 @@ window.ConsistifyUI = (() => {
                             sync(committedPercent);
                             return;
                         }
-                        const nextPercent = sync(enteredValue);
-                        if (nextPercent !== committedPercent) {
-                            committedPercent = nextPercent;
-                            queueSubmit();
+                        commitPercent(enteredValue);
+                    };
+
+                    input.addEventListener("input", (event) =>
+                        sync(event.target.value)
+                    );
+                    // The browser fires "change" immediately for the spinner
+                    // buttons and arrow keys, and on commit for typed values,
+                    // so every edit persists through the same logic.
+                    input.addEventListener("change", commitFromInput);
+                    input.addEventListener("keydown", (event) => {
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            commitFromInput();
                         }
                     });
+                    input.addEventListener("blur", commitFromInput);
                 }
                 return;
             }
@@ -548,43 +564,9 @@ window.ConsistifyUI = (() => {
                     });
                 });
 
-                let submitFromOutsideClick = false;
-                const armSubmitOnOutsideClick = (event) => {
-                    if (document.activeElement !== input) {
-                        return;
-                    }
-                    if (event.target === input) {
-                        submitFromOutsideClick = false;
-                        return;
-                    }
-                    submitFromOutsideClick = true;
-                };
-                document.addEventListener(
-                    "mousedown",
-                    armSubmitOnOutsideClick,
-                    true
-                );
-                document.addEventListener(
-                    "touchstart",
-                    armSubmitOnOutsideClick,
-                    true
-                );
-
-                input.addEventListener("input", () => sync(input.value));
-                input.addEventListener("keydown", (event) => {
-                    if (event.key === "Enter") {
-                        event.preventDefault();
-                    }
-                });
-                input.addEventListener("focus", () => {
-                    submitFromOutsideClick = false;
-                });
-                input.addEventListener("blur", () => {
-                    const shouldSubmit = submitFromOutsideClick;
-                    submitFromOutsideClick = false;
-                    if (!shouldSubmit) {
-                        return;
-                    }
+                // Single commit path shared by typing, the +/- step buttons,
+                // the native spinner buttons and arrow keys.
+                const commitFromInput = () => {
                     const rawValue = input.value.trim();
                     if (rawValue === "") {
                         sync(committedValue);
@@ -595,12 +577,21 @@ window.ConsistifyUI = (() => {
                         sync(committedValue);
                         return;
                     }
-                    const nextValue = sync(enteredValue);
-                    if (nextValue !== committedValue) {
-                        committedValue = nextValue;
-                        queueSubmit();
+                    commitValue(enteredValue);
+                };
+
+                input.addEventListener("input", () => sync(input.value));
+                // The browser fires "change" immediately for the spinner
+                // buttons and arrow keys, and on commit for typed values, so
+                // every edit persists through the same logic.
+                input.addEventListener("change", commitFromInput);
+                input.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        commitFromInput();
                     }
                 });
+                input.addEventListener("blur", commitFromInput);
                 return;
             }
 
