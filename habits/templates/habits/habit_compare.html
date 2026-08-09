@@ -59,47 +59,47 @@
         <div class="table-row table-header five-cols">
             <span>Habit</span>
             <span>Completion</span>
-            <span>Current streak</span>
-            <span>Best streak</span>
+            <span class="is-current-streak">Current streak</span>
+            <span class="is-max-streak">Best streak</span>
             <span>Consistency</span>
         </div>
         {% for row in comparison_rows %}
             <div class="table-row five-cols compare-metric-row" data-habit-id="{{ row.habit.id }}">
                 <span class="compare-habit-name">{{ row.habit.name }}</span>
-                <span class="compare-cell-value" data-timeframe="last30" hidden>
+                <span class="compare-cell-value is-completion" data-timeframe="last30" hidden>
                     {{ row.metrics_30.completion_rate|floatformat:1 }}%
                 </span>
-                <span class="compare-cell-value" data-timeframe="all" hidden>
+                <span class="compare-cell-value is-completion" data-timeframe="all" hidden>
                     {{ row.metrics_all.completion_rate|floatformat:1 }}%
                 </span>
-                <span class="compare-cell-value" data-timeframe="default">
+                <span class="compare-cell-value is-completion" data-timeframe="default">
                     {{ row.metrics_90.completion_rate|floatformat:1 }}%
                 </span>
-                <span class="compare-cell-value" data-timeframe="last30" hidden>
+                <span class="compare-cell-value is-current-streak" data-timeframe="last30" hidden>
                     {{ row.metrics_30.current_streak }}
                 </span>
-                <span class="compare-cell-value" data-timeframe="all" hidden>
+                <span class="compare-cell-value is-current-streak" data-timeframe="all" hidden>
                     {{ row.metrics_all.current_streak }}
                 </span>
-                <span class="compare-cell-value" data-timeframe="default">
+                <span class="compare-cell-value is-current-streak" data-timeframe="default">
                     {{ row.metrics_90.current_streak }}
                 </span>
-                <span class="compare-cell-value" data-timeframe="last30" hidden>
+                <span class="compare-cell-value is-max-streak" data-timeframe="last30" hidden>
                     {{ row.metrics_30.max_streak }}
                 </span>
-                <span class="compare-cell-value" data-timeframe="all" hidden>
+                <span class="compare-cell-value is-max-streak" data-timeframe="all" hidden>
                     {{ row.metrics_all.max_streak }}
                 </span>
-                <span class="compare-cell-value" data-timeframe="default">
+                <span class="compare-cell-value is-max-streak" data-timeframe="default">
                     {{ row.metrics_90.max_streak }}
                 </span>
-                <span class="compare-cell-value" data-timeframe="last30" hidden>
+                <span class="compare-cell-value is-consistency" data-timeframe="last30" hidden>
                     {{ row.metrics_30.consistency_score|floatformat:1 }}
                 </span>
-                <span class="compare-cell-value" data-timeframe="all" hidden>
+                <span class="compare-cell-value is-consistency" data-timeframe="all" hidden>
                     {{ row.metrics_all.consistency_score|floatformat:1 }}
                 </span>
-                <span class="compare-cell-value" data-timeframe="default">
+                <span class="compare-cell-value is-consistency" data-timeframe="default">
                     {{ row.metrics_90.consistency_score|floatformat:1 }}
                 </span>
             </div>
