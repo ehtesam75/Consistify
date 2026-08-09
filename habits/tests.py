@@ -36,10 +36,13 @@ from .services import (
     habit_performance_metrics,
     iter_scheduled_dates,
     leaderboard_ranking_score,
+    category_ranking_score,
     completion_stats,
     get_completion_maps,
+    CATEGORY_CONFIDENCE_SESSIONS,
     LEADERBOARD_CONFIDENCE_SESSIONS,
 )
+
 
 
 class ConsistifyScoreAuditRegressionTests(TestCase):
@@ -525,8 +528,15 @@ class DashboardPresentationTests(TestCase):
             response,
             "The percentage of scheduled sessions you finished at 100%",
         )
-        self.assertContains(response, "helping your overall Consistency Score")
-        self.assertContains(response, "holding your overall Consistency Score back")
+        self.assertContains(
+            response,
+            "contributes the most to overall Consistency Score",
+        )
+        self.assertContains(
+            response,
+            "drags your overall Consistency Score down the most",
+        )
+
         self.assertContains(response, "largest increase in Consistency Score")
         self.assertContains(response, "largest decrease in Consistency Score")
 
@@ -2554,8 +2564,9 @@ class DailyRecapPromptTests(TestCase):
         self.assertContains(response, "Unfinished daily")
         self.assertEqual(self.client.session["daily_recap_date"], yesterday.isoformat())
 
-    def test_daily_recap_shows_target_inside_quantitative_input(self):
-        """Quantitative rows mirror the desktop "value / max" combined field."""
+    def test_daily_recap_shows_target_for_quantitative_input(self):
+        """Quantitative recap rows show the target alongside the value field."""
+
         today = date(2026, 5, 23)
         yesterday = today - timedelta(days=1)
         habit = Habit.objects.create(
@@ -2594,12 +2605,13 @@ class DailyRecapPromptTests(TestCase):
         content = response.content.decode()
         recap = content.split('class="daily-recap-overlay"', 1)[1]
 
-        # The editable value and the max live in the same bordered field, and
-        # the input still clamps to the target.
+        # The recap uses a stepper around the value field and states the target
+        # on its own line, while the input still clamps to that target.
         self.assertIn('class="quant-field"', recap)
-        self.assertIn('<span class="quant-suffix">/ 10 glasses</span>', recap)
+        self.assertIn("Max: 10 glasses", recap)
         self.assertIn('max="10"', recap)
         self.assertIn('value="6"', recap)
+
 
     def test_daily_recap_rejects_direct_posts_without_server_session(self):
         today = date(2026, 5, 23)
@@ -3063,3 +3075,527 @@ class DailyRecapMultiDeviceTests(TestCase):
             ).count(),
             1,
         )
+
+
+class ZeroActivityRhythmRegressionTests(TestCase):
+    """Untouched scheduled sessions must contribute no rhythm points.
+
+    Confidence shrinkage pulled a thin record toward the neutral 50%, so a
+    completely untouched window still reported roughly a third of the rhythm
+    factor and about 10 Consistify points. Damping an unproven claim is fine;
+    crediting a record the user never earned is not.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="zero-rhythm-user",
+            password="not-used",
+        )
+        self.start = date(2026, 1, 1)
+
+    def _make_habit(self, name, priority=Habit.PRIORITY_MEDIUM):
+        return Habit.objects.create(
+            user=self.user,
+            name=name,
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            priority=priority,
+            start_date=self.start,
+        )
+
+    def test_untouched_sessions_score_zero_rhythm_for_every_window_size(self):
+        habit = self._make_habit("Never logged")
+
+        for session_count in (1, 2, 3, 5, 7, 14):
+            with self.subTest(session_count=session_count):
+                metrics = habit_performance_metrics(
+                    habit,
+                    self.start,
+                    self.start + timedelta(days=session_count - 1),
+                )
+                self.assertEqual(metrics["scheduled_total"], session_count)
+                self.assertEqual(metrics["streak_stability"], 0.0)
+                self.assertEqual(metrics["consistency_score"], 0.0)
+
+    def test_explicit_zero_progress_also_scores_zero_rhythm(self):
+        habit = self._make_habit("Logged as zero")
+        for offset in range(5):
+            HabitCompletion.objects.create(
+                habit=habit,
+                date=self.start + timedelta(days=offset),
+                completion_percentage=Decimal("0"),
+                raw_value=Decimal("0"),
+            )
+
+        metrics = habit_performance_metrics(
+            habit,
+            self.start,
+            self.start + timedelta(days=4),
+        )
+
+        self.assertEqual(metrics["streak_stability"], 0.0)
+        self.assertEqual(metrics["consistency_score"], 0.0)
+
+    def test_overall_user_score_awards_no_rhythm_points_for_zero_activity(self):
+        habits = [
+            self._make_habit("Untouched high", Habit.PRIORITY_HIGH),
+            self._make_habit("Untouched medium"),
+            self._make_habit("Untouched low", Habit.PRIORITY_LOW),
+        ]
+        end = self.start + timedelta(days=13)
+
+        aggregated = compute_user_metrics(habits, self.start, end)
+        breakdown = build_overall_score_breakdown(habits, self.start, end)
+        components = {item["key"]: item for item in breakdown["components"]}
+
+        self.assertEqual(aggregated["consistency_score"], 0.0)
+        self.assertEqual(breakdown["current_score"], 0.0)
+        self.assertEqual(components["rhythm_stability"]["current_value"], 0.0)
+        self.assertEqual(components["rhythm_stability"]["current_points"], 0.0)
+        self.assertEqual(
+            calculate_overall_consistency(habits, self.start, end),
+            0.0,
+        )
+
+    def test_a_single_kept_session_still_earns_rhythm(self):
+        """The floor applies only to a completely untouched window."""
+        habit = self._make_habit("One kept session")
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=self.start + timedelta(days=4),
+            completion_percentage=Decimal("80"),
+            raw_value=Decimal("80"),
+        )
+
+        metrics = habit_performance_metrics(
+            habit,
+            self.start,
+            self.start + timedelta(days=4),
+        )
+
+        self.assertGreater(metrics["streak_stability"], 0.0)
+        self.assertGreater(metrics["consistency_score"], 0.0)
+
+    def test_partial_progress_below_threshold_keeps_existing_rhythm(self):
+        """Real work is never floored, even below the 50% success threshold.
+
+        The zero-activity floor keys off untouched progress, *not* off the
+        success threshold. A user logging 10-50% has done genuine work, so the
+        normal coverage/continuity/confidence pipeline must still run and
+        produce exactly the values it produced before the floor existed.
+        """
+        # Pre-existing values: one session shrinks 0 coverage toward neutral by
+        # 1/3 confidence (33.3), two sessions by 2/3 confidence (16.7).
+        expected_by_session_count = {1: 33.3, 2: 16.7}
+
+        for percentage in (10, 30, 40, 50):
+            for session_count, expected in expected_by_session_count.items():
+                with self.subTest(percentage=percentage, sessions=session_count):
+                    habit = self._make_habit(f"Partial {percentage} x{session_count}")
+                    for offset in range(session_count):
+                        HabitCompletion.objects.create(
+                            habit=habit,
+                            date=self.start + timedelta(days=offset),
+                            completion_percentage=Decimal(str(percentage)),
+                            raw_value=Decimal(str(percentage)),
+                        )
+
+                    metrics = habit_performance_metrics(
+                        habit,
+                        self.start,
+                        self.start + timedelta(days=session_count - 1),
+                    )
+
+                    self.assertEqual(metrics["scheduled_total"], session_count)
+                    self.assertEqual(metrics["streak_stability"], expected)
+                    self.assertGreater(metrics["consistency_score"], 0.0)
+
+    def test_partial_progress_is_scored_above_an_untouched_record(self):
+        """Doing some of the work must beat doing none of it."""
+        untouched = self._make_habit("Untouched")
+        partial = self._make_habit("Partial")
+        for offset in range(2):
+            HabitCompletion.objects.create(
+                habit=partial,
+                date=self.start + timedelta(days=offset),
+                completion_percentage=Decimal("40"),
+                raw_value=Decimal("40"),
+            )
+
+        end = self.start + timedelta(days=1)
+        untouched_metrics = habit_performance_metrics(untouched, self.start, end)
+        partial_metrics = habit_performance_metrics(partial, self.start, end)
+
+        self.assertEqual(untouched_metrics["streak_stability"], 0.0)
+        self.assertEqual(untouched_metrics["consistency_score"], 0.0)
+        self.assertGreater(
+            partial_metrics["streak_stability"],
+            untouched_metrics["streak_stability"],
+        )
+        self.assertGreater(
+            partial_metrics["consistency_score"],
+            untouched_metrics["consistency_score"],
+        )
+
+    def test_one_partial_session_lifts_an_otherwise_untouched_window(self):
+        """The floor needs *every* relevant session to be untouched."""
+        habit = self._make_habit("Mostly untouched")
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=self.start + timedelta(days=1),
+            completion_percentage=Decimal("40"),
+            raw_value=Decimal("40"),
+        )
+
+        metrics = habit_performance_metrics(
+            habit,
+            self.start,
+            self.start + timedelta(days=1),
+        )
+
+        self.assertEqual(metrics["streak_stability"], 16.7)
+        self.assertGreater(metrics["consistency_score"], 0.0)
+
+
+
+class LeaderboardLowEvidenceRegressionTests(TestCase):
+    """Confidence must never inflate a poor low-evidence score.
+
+    The shrink was two-sided, so it pulled every thin record toward the
+    neutral 50 — including bad ones. A newcomer with a single untouched
+    session ranked around 48 and outranked established users sitting on a
+    genuine 40-45. Low evidence may dampen an unproven *high* score, but it
+    must never manufacture standing the user has not earned.
+    """
+
+    def test_untouched_newcomer_is_never_lifted_toward_neutral(self):
+        # One untouched session earns a 0.0 Consistify Score after the rhythm
+        # fix. The two-sided shrink would have reported ~48.3 here.
+        self.assertEqual(leaderboard_ranking_score(0.0, 1), 0.0)
+        self.assertEqual(leaderboard_ranking_score(10.0, 1), 10.0)
+
+    def test_untouched_newcomer_cannot_outrank_an_established_low_scorer(self):
+        newcomer = leaderboard_ranking_score(0.0, 1)
+        established_low = leaderboard_ranking_score(42.0, 120)
+
+        self.assertEqual(established_low, 42.0)
+        self.assertLess(
+            newcomer,
+            established_low,
+            "A genuine 42 must outrank an untouched newcomer.",
+        )
+
+    def test_perfect_newcomer_is_still_damped_for_thin_evidence(self):
+        perfect_newcomer = leaderboard_ranking_score(92.5, 3)
+        established_high = leaderboard_ranking_score(95.0, 400)
+
+        self.assertEqual(perfect_newcomer, 54.2)
+        self.assertEqual(established_high, 95.0)
+        self.assertLess(perfect_newcomer, established_high)
+
+    def test_established_scores_are_reported_unchanged(self):
+        for score in (0.0, 15.0, 42.0, 45.0, 88.0, 95.0, 100.0):
+            with self.subTest(score=score):
+                self.assertEqual(
+                    leaderboard_ranking_score(
+                        score, LEADERBOARD_CONFIDENCE_SESSIONS
+                    ),
+                    score,
+                )
+                self.assertEqual(leaderboard_ranking_score(score, 400), score)
+
+    def test_zero_scheduled_sessions_score_zero(self):
+        self.assertEqual(leaderboard_ranking_score(0.0, 0), 0.0)
+        self.assertEqual(leaderboard_ranking_score(100.0, 0), 0.0)
+
+    def test_adjustment_is_one_sided_across_the_whole_range(self):
+        """The ranking score may lower a score, but never raise it."""
+        for score in (0.0, 10.0, 25.0, 49.9, 50.0, 50.1, 75.0, 100.0):
+            for sessions in (1, 2, 5, 10, 29, 30, 100):
+                with self.subTest(score=score, sessions=sessions):
+                    self.assertLessEqual(
+                        leaderboard_ranking_score(score, sessions),
+                        score,
+                    )
+
+
+class CategoryLowEvidenceRegressionTests(TestCase):
+    """Best/Weakest must be evidence-aware, not decided by one lucky session.
+
+    Ranking used the raw category score, so a single perfect session beat a
+    long reliable history, and a single bad session was confidently branded
+    the weakest category. The displayed statistics are unchanged; only the
+    superlative selection consults the evidence-adjusted ranking score.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="category-evidence-user",
+            password="not-used",
+        )
+        self.start = date(2026, 1, 1)
+        self.categories = {}
+        for index, (key, label) in enumerate(DEFAULT_CATEGORIES, start=1):
+            category, _ = HabitCategory.objects.get_or_create(
+                key=key,
+                defaults={"label": label, "sort_order": index},
+            )
+            self.categories[key] = category
+
+    def _make_habit(self, name, category_key, start_date=None, days=1):
+        habit = Habit.objects.create(
+            user=self.user,
+            name=name,
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            priority=Habit.PRIORITY_MEDIUM,
+            start_date=start_date or self.start,
+        )
+        habit.categories.set([self.categories[category_key]])
+        return habit
+
+    def _log(self, habit, offset, percentage):
+        value = Decimal(str(percentage))
+        HabitCompletion.objects.create(
+            habit=habit,
+            date=habit.start_date + timedelta(days=offset),
+            completion_percentage=value,
+            raw_value=value,
+        )
+
+    # ---- the ranking helper itself -------------------------------------
+
+    def test_ranking_score_shrinks_thin_evidence_toward_neutral(self):
+        # One perfect session cannot claim the top spot outright.
+        self.assertEqual(category_ranking_score(82.5, 1), 53.2)
+        # One terrible session cannot claim the bottom spot outright.
+        self.assertEqual(category_ranking_score(0.0, 1), 45.0)
+
+    def test_ranking_score_is_unchanged_once_evidence_threshold_is_met(self):
+        for score in (0.0, 15.0, 50.0, 75.0, 100.0):
+            with self.subTest(score=score):
+                self.assertEqual(
+                    category_ranking_score(
+                        score, CATEGORY_CONFIDENCE_SESSIONS
+                    ),
+                    score,
+                )
+
+    def test_ranking_score_grows_smoothly_with_each_extra_session(self):
+        """Confidence must not jump at an arbitrary session cutoff."""
+        scores = [
+            category_ranking_score(100.0, sessions)
+            for sessions in range(1, CATEGORY_CONFIDENCE_SESSIONS + 1)
+        ]
+        differences = {
+            round(later - earlier, 1)
+            for earlier, later in zip(scores, scores[1:])
+        }
+
+        self.assertEqual(scores[0], 55.0)
+        self.assertEqual(scores[-1], 100.0)
+        # Every step is the same small increment — a smooth ramp, not a cliff.
+        self.assertEqual(differences, {5.0})
+
+    def test_ranking_score_is_none_without_scheduled_sessions(self):
+        self.assertIsNone(category_ranking_score(0.0, 0))
+        self.assertIsNone(category_ranking_score(100.0, 0))
+
+    # ---- selection behaviour through build_category_analytics ----------
+
+    def test_one_perfect_session_does_not_outrank_an_established_category(self):
+        established = self._make_habit("Established strong", "health")
+        newcomer = self._make_habit(
+            "Single perfect session",
+            "study",
+            start_date=self.start + timedelta(days=13),
+        )
+        for offset in range(14):
+            self._log(established, offset, 100)
+        self._log(newcomer, 0, 100)
+
+        analytics = build_category_analytics(
+            [established, newcomer],
+            self.start,
+            self.start + timedelta(days=13),
+        )
+        summaries = {item["key"]: item for item in analytics["summaries"]}
+
+        # Displayed statistics remain exactly as measured for both.
+        self.assertEqual(summaries["study"]["scheduled_total"], 1)
+        self.assertEqual(summaries["study"]["completion_rate"], 100.0)
+        self.assertEqual(summaries["health"]["completion_rate"], 100.0)
+        # But the crown goes to the category with real evidence behind it.
+        self.assertEqual(analytics["best"]["key"], "health")
+        self.assertNotEqual(analytics["weakest"]["key"], "health")
+
+    def test_one_poor_session_is_not_branded_the_weakest_category(self):
+        established_weak = self._make_habit("Established weak", "health")
+        newcomer = self._make_habit(
+            "Single poor session",
+            "study",
+            start_date=self.start + timedelta(days=13),
+        )
+        for offset in range(14):
+            self._log(established_weak, offset, 5)
+        self._log(newcomer, 0, 10)
+
+        analytics = build_category_analytics(
+            [established_weak, newcomer],
+            self.start,
+            self.start + timedelta(days=13),
+        )
+        summaries = {item["key"]: item for item in analytics["summaries"]}
+
+        self.assertEqual(summaries["study"]["scheduled_total"], 1)
+        self.assertEqual(summaries["health"]["scheduled_total"], 14)
+        self.assertEqual(
+            analytics["weakest"]["key"],
+            "health",
+            "A long, genuinely weak record must outrank one unlucky session.",
+        )
+
+    def test_multiple_categories_with_enough_history_rank_by_actual_score(self):
+        strong = self._make_habit("Strong", "health")
+        middle = self._make_habit("Middle", "study")
+        weak = self._make_habit("Weak", "spiritual")
+        for offset in range(14):
+            self._log(strong, offset, 100)
+            self._log(middle, offset, 60)
+            self._log(weak, offset, 10)
+
+        analytics = build_category_analytics(
+            [strong, middle, weak],
+            self.start,
+            self.start + timedelta(days=13),
+        )
+        summaries = {item["key"]: item for item in analytics["summaries"]}
+
+        # With full evidence, the ranking score equals the displayed score, so
+        # ordering is decided purely by performance.
+        for key in ("health", "study", "spiritual"):
+            self.assertEqual(
+                summaries[key]["ranking_score"],
+                summaries[key]["consistency_score"],
+            )
+        self.assertEqual(analytics["best"]["key"], "health")
+        self.assertEqual(analytics["weakest"]["key"], "spiritual")
+
+    def test_categories_without_scheduled_data_are_never_selected(self):
+        only_category = self._make_habit("Only tracked category", "health")
+        for offset in range(14):
+            self._log(only_category, offset, 80)
+
+        analytics = build_category_analytics(
+            [only_category],
+            self.start,
+            self.start + timedelta(days=13),
+        )
+        summaries = {item["key"]: item for item in analytics["summaries"]}
+
+        self.assertEqual(len(analytics["summaries"]), len(DEFAULT_CATEGORIES))
+        for key, summary in summaries.items():
+            if key == "health":
+                continue
+            self.assertEqual(summary["scheduled_total"], 0)
+            self.assertIsNone(summary["ranking_score"])
+            self.assertFalse(summary["is_best"])
+            self.assertFalse(summary["is_weakest"])
+
+        self.assertEqual(analytics["best"]["key"], "health")
+        self.assertEqual(analytics["weakest"]["key"], "health")
+
+    def test_uniformly_thin_categories_are_compared_fairly_not_confidently(self):
+        """When every category is thin, the comparison is still apples-to-apples.
+
+        Shrinking each category toward neutral by its own confidence is
+        monotonic, so equally-thin categories keep their relative order and the
+        labels stay useful. What changes is the *strength* of the claim: every
+        ranking score is squeezed into a narrow band around neutral, so no
+        category is confidently crowned on the back of a single session.
+        """
+        strong = self._make_habit("One perfect session", "health")
+        middling = self._make_habit("One half session", "study")
+        untouched = self._make_habit("One untouched session", "spiritual")
+        self._log(strong, 0, 100)
+        self._log(middling, 0, 50)
+
+        analytics = build_category_analytics(
+            [strong, middling, untouched],
+            self.start,
+            self.start,
+        )
+        summaries = {item["key"]: item for item in analytics["summaries"]}
+        tracked = ("health", "study", "spiritual")
+
+        # Each category has exactly one session, and the measured statistics
+        # are still reported verbatim.
+        for key in tracked:
+            self.assertEqual(summaries[key]["scheduled_total"], 1)
+        self.assertEqual(summaries["health"]["completion_rate"], 100.0)
+        self.assertEqual(summaries["study"]["completion_rate"], 50.0)
+        self.assertEqual(summaries["spiritual"]["completion_rate"], 0.0)
+
+        # Raw scores span a wide range; the ranking scores do not.
+        self.assertEqual(summaries["health"]["consistency_score"], 82.5)
+        self.assertEqual(summaries["spiritual"]["consistency_score"], 0.0)
+        for key in tracked:
+            with self.subTest(key=key):
+                self.assertGreaterEqual(summaries[key]["ranking_score"], 45.0)
+                self.assertLessEqual(summaries[key]["ranking_score"], 55.0)
+
+        # Order is still correct, so the labels remain meaningful.
+        self.assertEqual(analytics["best"]["key"], "health")
+        self.assertEqual(analytics["weakest"]["key"], "spiritual")
+
+    def test_more_evidence_wins_when_performance_is_equally_good(self):
+        """Between two thin categories, the better-evidenced one ranks higher."""
+        # The single-session habit starts on the second day, so the window
+        # schedules exactly one occurrence for it.
+        one_session = self._make_habit(
+            "One perfect session",
+            "health",
+            start_date=self.start + timedelta(days=1),
+        )
+        two_sessions = self._make_habit("Two perfect sessions", "study")
+        self._log(one_session, 0, 100)
+
+        self._log(two_sessions, 0, 100)
+        self._log(two_sessions, 1, 100)
+
+        analytics = build_category_analytics(
+            [one_session, two_sessions],
+            self.start,
+            self.start + timedelta(days=1),
+        )
+        summaries = {item["key"]: item for item in analytics["summaries"]}
+
+        # The single-session category is scheduled only on day one, so it keeps
+        # a perfect displayed record while carrying less evidence.
+        self.assertEqual(summaries["health"]["completion_rate"], 100.0)
+        self.assertEqual(summaries["study"]["completion_rate"], 100.0)
+        self.assertLess(
+            summaries["health"]["ranking_score"],
+            summaries["study"]["ranking_score"],
+        )
+        self.assertEqual(analytics["best"]["key"], "study")
+
+    def test_no_scheduled_data_at_all_selects_nothing(self):
+
+        analytics = build_category_analytics(
+            [],
+            self.start,
+            self.start + timedelta(days=13),
+        )
+
+        self.assertIsNone(analytics["best"])
+        self.assertIsNone(analytics["weakest"])
+        self.assertTrue(
+            all(
+                summary["ranking_score"] is None
+                for summary in analytics["summaries"]
+            )
+        )
+
+
+

@@ -38,6 +38,13 @@ RECENT_METRIC_CONFIDENCE_SESSIONS = 3
 # Scheduled sessions required before a leaderboard score is trusted in full.
 LEADERBOARD_CONFIDENCE_SESSIONS = 30
 LEADERBOARD_NEUTRAL_SCORE = 50.0
+# Scheduled sessions required before a category score is trusted in full when
+# picking the best/weakest category. Categories are scored inside a reporting
+# window (30 days by default), so this is deliberately smaller than the
+# leaderboard threshold.
+CATEGORY_CONFIDENCE_SESSIONS = 10
+CATEGORY_NEUTRAL_SCORE = 50.0
+
 PRIORITY_WEIGHTS = {
     Habit.PRIORITY_HIGH: 1.3,
     Habit.PRIORITY_MEDIUM: 1.0,
@@ -678,25 +685,44 @@ def _consistency_rhythm(scheduled_dates, completion_map):
           session has ``raw_rhythm = coverage``).
         * ``confidence = min(1, session_count / 3)`` and the result is
           shrunk toward 50% by ``confidence`` so one or two sessions cannot
-          claim a perfect rhythm or a total failure.
-        * The all-zero-success path is routed through the same shrink
-          pipeline (no early return) so the function is symmetric in the
-          number of successes — the only asymmetry is the threshold itself.
+          claim a perfect rhythm.
+        * A window in which every relevant session is **completely
+          untouched** (0% progress, logged or not) reports ``0`` directly,
+          whatever the session count. There is no rhythm to be confident or
+          unconfident about, and shrinking toward the neutral 50% would hand
+          out points for a record the user never earned. This zero-activity
+          floor is deliberately narrow: any real progress at all, including
+          partial progress below the success threshold, goes through the
+          normal coverage/continuity/confidence pipeline unchanged.
     """
     recent_dates = scheduled_dates[-RHYTHM_SESSION_WINDOW:]
     if not recent_dates:
         return 0.0
 
-    success_flags = [
-        _is_successful_continuation(completion_map.get(scheduled_date, 0))
+    completion_values = [
+        _clamped_percentage(completion_map.get(scheduled_date, 0))
         for scheduled_date in recent_dates
+    ]
+    if not any(completion_values):
+        # Zero activity. Every relevant session is untouched, so there is no
+        # evidence to be unconfident *about*: confidence may damp an unproven
+        # claim, but it must never *credit* an untouched record. Note this
+        # tests the raw progress values, not the success threshold — a user
+        # with genuine partial progress (10%, 40%, 50%) has done real work and
+        # must keep flowing through the normal calculation below.
+        return 0.0
+
+    success_flags = [
+        _is_successful_continuation(value) for value in completion_values
     ]
     session_count = len(success_flags)
     coverage = sum(success_flags) / session_count
+
     if session_count == 1:
         # With one session there are no transitions; continuity is defined
         # as equal to coverage so ``raw_rhythm`` reduces to ``coverage``.
         continuity = coverage
+
     else:
         successful_pairs = sum(
             1
@@ -1169,12 +1195,46 @@ def build_habit_score_drivers(
     }
 
 
+def category_ranking_score(
+    consistency_score,
+    scheduled_total,
+    confidence_sessions=CATEGORY_CONFIDENCE_SESSIONS,
+):
+    """Return an evidence-adjusted category score used only for ranking.
+
+    A category's displayed statistics stay exactly as measured. This value
+    decides which category is crowned *Best* or flagged *Weakest*, and it
+    exists because a single perfect session produces the same raw score as a
+    long, reliable history, and a single bad session produces the same raw
+    score as a genuinely neglected category.
+
+    With ``k`` scheduled sessions, confidence is ``min(1, k / 10)`` and the
+    score is pulled toward a neutral 50 by whatever confidence is missing.
+    The shrink is two-sided here on purpose — unlike the leaderboard, this
+    number never represents a user's standing against other people, and both
+    superlatives must be evidence-gated: a thin high score must not be crowned
+    best, and a thin low score must not be blamed as weakest. Confidence grows
+    continuously with each session, so nothing jumps at an arbitrary cutoff.
+    """
+    if scheduled_total <= 0:
+        return None
+    try:
+        confidence = min(1.0, float(scheduled_total) / float(confidence_sessions))
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+    shrunk = CATEGORY_NEUTRAL_SCORE + confidence * (
+        consistency_score - CATEGORY_NEUTRAL_SCORE
+    )
+    return round(shrunk, 1)
+
+
 def build_category_analytics(habits, start_date, end_date):
     summaries = []
     best_category = None
     weakest_category = None
 
     categories = list(HabitCategory.objects.all())
+
     category_metrics = {category.id: [] for category in categories}
 
     for habit in habits:
@@ -1243,6 +1303,10 @@ def build_category_analytics(habits, start_date, end_date):
             "completed_total": total_completed,
             "completion_rate": completion_rate,
             "consistency_score": consistency_score,
+            "ranking_score": category_ranking_score(
+                consistency_score,
+                total_scheduled,
+            ),
             "is_best": False,
             "is_weakest": False,
         }
@@ -1250,13 +1314,25 @@ def build_category_analytics(habits, start_date, end_date):
 
         if total_scheduled == 0:
             continue
-        if best_category is None or consistency_score > best_category["consistency_score"]:
+        # Superlatives are decided on the evidence-adjusted ranking score so a
+        # single lucky (or unlucky) session cannot outrank a longer, more
+        # reliable history. The displayed ``consistency_score`` and
+        # ``completion_rate`` above stay exactly as measured.
+        ranking_score = summary["ranking_score"]
+        if (
+            best_category is None
+            or ranking_score > best_category["ranking_score"]
+        ):
             best_category = summary
-        if weakest_category is None or consistency_score < weakest_category["consistency_score"]:
+        if (
+            weakest_category is None
+            or ranking_score < weakest_category["ranking_score"]
+        ):
             weakest_category = summary
 
     if best_category:
         best_category["is_best"] = True
+
     if weakest_category:
         weakest_category["is_weakest"] = True
 
@@ -1701,12 +1777,17 @@ def leaderboard_ranking_score(
     the raw score lets a brand new account outrank sustained long-term
     consistency.
 
-    This applies the same confidence shrink the score already uses for its
-    rhythm and momentum components: with ``k`` scheduled sessions, confidence
-    is ``min(1, k / 30)`` and the score is pulled toward a neutral 50 by
-    whatever confidence is missing. A full window of evidence is therefore
-    reported unchanged, while a thin record cannot claim either an extreme high
-    or an extreme low until it has been earned.
+    With ``k`` scheduled sessions, confidence is ``min(1, k / 30)`` and an
+    unproven score is pulled toward a neutral 50 by whatever confidence is
+    missing. A full window of evidence is therefore reported unchanged, while a
+    thin record cannot claim a high rank until it has been earned.
+
+    The adjustment is deliberately **one-sided**: it may only ever lower a
+    score, never raise it. A two-sided shrink toward 50 also lifts weak
+    low-evidence records upward, so an untouched newcomer who earned almost no
+    Consistify Score would rank near 50 and outrank established users with a
+    genuine 40-45. Ranking on ``min(score, shrunk)`` keeps the damping for
+    unproven highs while guaranteeing nobody is ranked above what they scored.
 
     The displayed Consistify Score is deliberately left untouched; this value
     only decides ranking order.
@@ -1720,7 +1801,8 @@ def leaderboard_ranking_score(
     shrunk = LEADERBOARD_NEUTRAL_SCORE + confidence * (
         consistency_score - LEADERBOARD_NEUTRAL_SCORE
     )
-    return round(shrunk, 1)
+    return round(min(consistency_score, shrunk), 1)
+
 
 
 def compute_user_metrics(habits, start_date, end_date):
