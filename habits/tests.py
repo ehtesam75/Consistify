@@ -40,7 +40,12 @@ from .services import (
     completion_stats,
     get_completion_maps,
     CATEGORY_CONFIDENCE_SESSIONS,
+    CONSISTENCY_COMPLETION_QUALITY_WEIGHT,
+    CONSISTENCY_FULL_COMPLETION_WEIGHT,
+    CONSISTENCY_RECENT_MOMENTUM_WEIGHT,
+    CONSISTENCY_RHYTHM_WEIGHT,
     LEADERBOARD_CONFIDENCE_SESSIONS,
+    _score_evidence,
 )
 
 
@@ -330,11 +335,12 @@ class ConsistifyScoreAuditRegressionTests(TestCase):
         self.assertTrue(veteran_entry["has_full_evidence"])
         self.assertFalse(newcomer_entry["has_full_evidence"])
         # The displayed Consistify Score stays the untouched raw value. Three
-        # flat perfect sessions score 92.5, not 100, because an unchanging line
-        # earns neutral momentum rather than an improvement bonus.
-        self.assertEqual(newcomer_entry["consistency_score"], 92.5)
+        # flat perfect sessions score 86.7, not 100: an unchanging line earns
+        # neutral momentum rather than an improvement bonus, and three sessions
+        # have only demonstrated ~85% of the rhythm/momentum evidence.
+        self.assertEqual(newcomer_entry["consistency_score"], 86.7)
         # Ranking shrinks that thin record toward neutral; display does not.
-        self.assertEqual(newcomer_entry["ranking_score"], 54.2)
+        self.assertEqual(newcomer_entry["ranking_score"], 53.7)
         self.assertLess(
             newcomer_entry["ranking_score"],
             newcomer_entry["consistency_score"],
@@ -691,8 +697,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["full_completion_reliability"], 0.0)
         self.assertEqual(metrics["streak_stability"], 100.0)
         self.assertEqual(metrics["recent_momentum"], 50.0)
-        # Consistify Score = 0.35*90 + 0.20*0 + 0.30*100 + 0.15*50 = 69.0
-        self.assertEqual(metrics["consistency_score"], 69.0)
+        # Consistify Score = 0.35*90 + 0.20*0 + E*(0.30*100 + 0.15*50).
+        # Four scheduled sessions earn E = 0.902, so 31.5 + 0.902*37.5 = 65.3.
+        self.assertEqual(metrics["consistency_score"], 65.3)
 
     def test_quality_is_proportional_and_full_completion_remains_exact(self):
         start = date(2026, 1, 1)
@@ -995,9 +1002,10 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(weekly_metrics["recent_momentum"], 83.3)
         self.assertEqual(daily_metrics["streak_stability"], 43.3)
         self.assertEqual(weekly_metrics["streak_stability"], 43.3)
-        # Q=55, F=0, R=43.33..., M=83.33...  =>  score 44.75 rounded to 44.8.
-        self.assertEqual(daily_metrics["consistency_score"], 44.8)
-        self.assertEqual(weekly_metrics["consistency_score"], 44.8)
+        # Q=55, F=0, R=43.33..., M=83.33..., and two sessions earn E=0.7488,
+        # so 19.25 + 0.7488*25.5 = 38.3 for both cadences.
+        self.assertEqual(daily_metrics["consistency_score"], 38.3)
+        self.assertEqual(weekly_metrics["consistency_score"], 38.3)
 
     def test_momentum_uses_only_the_six_most_recent_scheduled_sessions(self):
         start = date(2026, 1, 1)
@@ -1065,10 +1073,12 @@ class ConsistencyScoreTests(TestCase):
 
         self.assertEqual(daily_metrics["recent_momentum"], 50.0)
         self.assertEqual(weekly_metrics["recent_momentum"], 50.0)
-        # Daily: 0.35*100 + 0.20*100 + 0.30*100 + 0.15*50 = 92.5
-        self.assertEqual(daily_metrics["consistency_score"], 92.5)
-        # Weekly: 0.35*100 + 0.20*100 + 0.30*83.3 + 0.15*50 = 87.5
-        self.assertEqual(weekly_metrics["consistency_score"], 87.5)
+        # Daily: 14 sessions are fully evidenced (E=0.997), so this is the
+        # long-term 0.35*100 + 0.20*100 + 0.30*100 + 0.15*50 = 92.5 behaviour.
+        self.assertEqual(daily_metrics["consistency_score"], 92.4)
+        # Weekly: only two sessions exist in the same window, so R is 83.3 and
+        # E is 0.7488  =>  55 + 0.7488*(0.30*83.3 + 0.15*50) = 79.3.
+        self.assertEqual(weekly_metrics["consistency_score"], 79.3)
 
     def test_rhythm_high_and_momentum_low_are_independent(self):
         """High rhythm (flat reliability) must not be inflated by momentum.
@@ -1093,8 +1103,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["recent_momentum"], 50.0)
         # R is high, M is neutral: the score is anchored by Q, R, and F
         # without an artificial boost from momentum.
-        # 0.35*100 + 0.20*100 + 0.30*100 + 0.15*50 = 92.5
-        self.assertEqual(metrics["consistency_score"], 92.5)
+        # 0.35*100 + 0.20*100 + E*(0.30*100 + 0.15*50) with E=0.971 for the
+        # seven scheduled sessions  =>  91.4.
+        self.assertEqual(metrics["consistency_score"], 91.4)
 
     def test_momentum_high_and_rhythm_low_are_independent(self):
         """High momentum (sharp recent improvement) must not inflate rhythm.
@@ -1145,7 +1156,8 @@ class ConsistencyScoreTests(TestCase):
 
         self.assertEqual(metrics["scheduled_total"], 7)
         self.assertEqual(metrics["recent_momentum"], 50.0)
-        self.assertEqual(metrics["consistency_score"], 92.5)
+        # Seven scheduled sessions earn E=0.971 of the rhythm/momentum points.
+        self.assertEqual(metrics["consistency_score"], 91.4)
 
     def test_recent_momentum_does_not_decay_during_a_long_pause(self):
         start = date(2026, 1, 1)
@@ -1163,7 +1175,9 @@ class ConsistencyScoreTests(TestCase):
 
         self.assertEqual(metrics["scheduled_total"], 16)
         self.assertEqual(metrics["recent_momentum"], 50.0)
-        self.assertEqual(metrics["consistency_score"], 92.5)
+        # Sixteen sessions are effectively fully evidenced (E=0.999), so this
+        # matches the established-habit 92.5 to within a rounding step.
+        self.assertEqual(metrics["consistency_score"], 92.4)
 
     def test_recent_components_are_isolated_to_the_report_period(self):
         start = date(2026, 1, 1)
@@ -1213,8 +1227,9 @@ class ConsistencyScoreTests(TestCase):
             "full_completion_reliability": 0.0,
             "streak_stability": 43.3,
             "recent_momentum": 83.3,
-            # Q=55, F=0, R=43.33..., M=83.33...  =>  score=44.75, rounded 44.8.
-            "consistency_score": 44.8,
+            # Q=55, F=0, R=43.33..., M=83.33..., E=0.7488 for two sessions
+            # =>  19.25 + 0.7488*25.5 = 38.3.
+            "consistency_score": 38.3,
         }
         for key, value in expected.items():
             self.assertEqual(strong_metrics[key], value)
@@ -1547,11 +1562,12 @@ class ConsistencyScoreTests(TestCase):
 
         # Stable performance receives neutral momentum regardless of cadence.
         # The daily habit has no logged completions, so its score is 0.
-        # The weekly habit has Q=100, F=100, R=66.7 (1-session shrunk),
-        # M=50  =>  0.35*100 + 0.20*100 + 0.30*66.7 + 0.15*50 = 82.5.
+        # The weekly habit has Q=100, F=100, R=66.7 (1-session shrunk) and
+        # M=50, but a single scheduled session only earns E=0.5602 of the
+        # rhythm/momentum points  =>  55 + 0.5602*(20 + 7.5) = 70.4.
         high_weight = 1.3 * sqrt(1)
         low_weight = 0.8 * sqrt(4)
-        weekly_score = 82.5
+        weekly_score = 70.4
         expected_score = round(
             (weekly_score * high_weight + 0 * low_weight)
             / (high_weight + low_weight),
@@ -1573,8 +1589,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["completion_rate"], 50.0)
         self.assertEqual(metrics["current_streak"], 0)
         self.assertEqual(metrics["recent_momentum"], 0.0)
-        # Q=50, F=50, R=43.3, M=0  =>  0.35*50 + 0.20*50 + 0.30*43.3 + 0.15*0 = 40.5
-        self.assertEqual(metrics["consistency_score"], 40.5)
+        # Q=50, F=50, R=43.3, M=0, E=0.7488 for two scheduled sessions
+        # =>  27.5 + 0.7488*(0.30*43.3) = 37.2
+        self.assertEqual(metrics["consistency_score"], 37.2)
         unlogged_metrics = metrics
 
         self.log_completion(habit, today, 0)
@@ -1604,19 +1621,29 @@ class ConsistencyScoreTests(TestCase):
         components = {item["key"]: item for item in breakdown["components"]}
 
         self.assertTrue(breakdown["has_previous"])
-        # current = 0.35*100 + 0.20*100 + 0.30*100 + 0.15*50 = 92.5
-        self.assertEqual(breakdown["current_score"], 92.5)
-        # previous = 0.35*50 + 0.20*0 + 0.30*0 + 0.15*50 = 25.0
-        self.assertEqual(breakdown["previous_score"], 25.0)
-        self.assertEqual(breakdown["score_delta"], 67.5)
-        # Q delta = (100-50) * 0.35 = 17.5
+        # Both windows hold four scheduled sessions, so both carry E=0.902.
+        # current = 0.35*100 + 0.20*100 + 0.902*(0.30*100 + 0.15*50) = 88.8
+        self.assertEqual(breakdown["current_score"], 88.8)
+        # previous = 0.35*50 + 0.20*0 + 0.902*(0.30*0 + 0.15*50) = 24.3
+        self.assertEqual(breakdown["previous_score"], 24.3)
+        self.assertEqual(breakdown["score_delta"], 64.5)
+        # Q delta = (100-50) * 0.35 = 17.5 (completion is never evidence-damped)
         self.assertEqual(components["completion_quality"]["points_delta"], 17.5)
         # F delta = (100-0) * 0.20 = 20.0
         self.assertEqual(components["full_completion"]["points_delta"], 20.0)
-        # R delta = (100-0) * 0.30 = 30.0 (was 0 before — full rhythm swing)
-        self.assertEqual(components["rhythm_stability"]["points_delta"], 30.0)
-        # M delta = 0 (weight unchanged; both windows are flat 100)
+        # R delta = (100-0) * 0.30 * 0.902 = 27.1 (was 0 before — full swing).
+        # The reported R *value* still swings the full 0 -> 100.
+        self.assertEqual(components["rhythm_stability"]["value_delta"], 100.0)
+        self.assertEqual(components["rhythm_stability"]["points_delta"], 27.1)
+        # M delta = 0 (weight and evidence unchanged; both windows are flat)
         self.assertEqual(components["recent_momentum"]["points_delta"], 0.0)
+        # The breakdown still decomposes into the score it explains (each
+        # component is rounded independently, so allow one rounding step).
+        self.assertAlmostEqual(
+            sum(item["current_points"] for item in breakdown["components"]),
+            breakdown["current_score"],
+            delta=0.2,
+        )
 
     def test_habit_score_drivers_identify_booster_drag_and_movement(self):
         start = date(2026, 1, 1)
@@ -1657,9 +1684,9 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(drivers["booster"]["habit"], booster)
         self.assertEqual(drivers["drag"]["habit"], drag)
         self.assertEqual(drivers["improved"]["habit"], improved)
-        self.assertEqual(drivers["improved"]["score_delta"], 92.5)
+        self.assertEqual(drivers["improved"]["score_delta"], 88.8)
         self.assertEqual(drivers["declined"]["habit"], declined)
-        self.assertEqual(drivers["declined"]["score_delta"], -92.5)
+        self.assertEqual(drivers["declined"]["score_delta"], -88.8)
 
     def test_category_analytics_marks_best_and_weakest_categories(self):
         start = date(2026, 1, 1)
@@ -3537,7 +3564,7 @@ class CategoryLowEvidenceRegressionTests(TestCase):
         self.assertEqual(summaries["spiritual"]["completion_rate"], 0.0)
 
         # Raw scores span a wide range; the ranking scores do not.
-        self.assertEqual(summaries["health"]["consistency_score"], 82.5)
+        self.assertEqual(summaries["health"]["consistency_score"], 70.4)
         self.assertEqual(summaries["spiritual"]["consistency_score"], 0.0)
         for key in tracked:
             with self.subTest(key=key):
@@ -3596,6 +3623,341 @@ class CategoryLowEvidenceRegressionTests(TestCase):
                 for summary in analytics["summaries"]
             )
         )
+
+
+class ConsistencyEvidenceRegressionTests(TestCase):
+    """A brand-new habit must not look highly consistent after one session.
+
+    Rhythm and momentum both describe repeated behaviour, but they contributed
+    their full 45 points immediately, so a habit with a single scheduled
+    session completed once scored ~82.5 — indistinguishable from a long,
+    reliable record. Completion can be earned immediately; consistency has to
+    be demonstrated, so the rhythm/momentum *contribution* now grows with the
+    evidence curve while their measured values are untouched.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="evidence-curve-user",
+            password="not-used",
+        )
+        self.start = date(2026, 1, 1)
+
+    def _make_habit(self, name):
+        return Habit.objects.create(
+            user=self.user,
+            name=name,
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            priority=Habit.PRIORITY_MEDIUM,
+            start_date=self.start,
+        )
+
+    def _metrics_for(self, name, percentages):
+        """Log one daily session per entry and return the window's metrics."""
+        habit = self._make_habit(name)
+        for offset, percentage in enumerate(percentages):
+            if percentage is None:
+                continue
+            value = Decimal(str(percentage))
+            HabitCompletion.objects.create(
+                habit=habit,
+                date=self.start + timedelta(days=offset),
+                completion_percentage=value,
+                raw_value=value,
+            )
+        return habit_performance_metrics(
+            habit,
+            self.start,
+            self.start + timedelta(days=len(percentages) - 1),
+        )
+
+    def _expected_score(self, metrics, evidence):
+        """Recompute the documented formula from the reported components."""
+        return (
+            metrics["completion_quality"] * CONSISTENCY_COMPLETION_QUALITY_WEIGHT
+            + metrics["full_completion_reliability"]
+            * CONSISTENCY_FULL_COMPLETION_WEIGHT
+            + evidence
+            * (
+                metrics["streak_stability"] * CONSISTENCY_RHYTHM_WEIGHT
+                + metrics["recent_momentum"] * CONSISTENCY_RECENT_MOMENTUM_WEIGHT
+            )
+        )
+
+    # ---- the evidence curve itself -------------------------------------
+
+    def test_evidence_is_zero_without_sessions_and_saturates_at_one(self):
+        self.assertEqual(_score_evidence(0), 0.0)
+        self.assertEqual(_score_evidence(-5), 0.0)
+        self.assertEqual(_score_evidence(None), 0.0)
+        # The curve approaches 1 asymptotically rather than snapping to it, so
+        # there is no session count at which the last sliver of evidence
+        # suddenly appears. By 30 sessions the remainder is far below the
+        # 0.1-point resolution of a reported score.
+        self.assertGreater(_score_evidence(30), 0.9999)
+        self.assertGreater(_score_evidence(60), 0.9999)
+        self.assertLessEqual(_score_evidence(60), 1.0)
+        for sessions in range(1, 61):
+            with self.subTest(sessions=sessions):
+                self.assertGreater(_score_evidence(sessions), 0.0)
+                self.assertLessEqual(_score_evidence(sessions), 1.0)
+
+    def test_evidence_grows_smoothly_without_arbitrary_jumps(self):
+        """Every extra session helps a little; no session count is a cliff."""
+        values = [_score_evidence(sessions) for sessions in range(0, 41)]
+        steps = [
+            round(later - earlier, 6)
+            for earlier, later in zip(values, values[1:])
+        ]
+
+        for index, step in enumerate(steps, start=1):
+            with self.subTest(sessions=index):
+                self.assertGreater(step, 0.0, "evidence must be increasing")
+                self.assertLess(step, 0.6, "no single session may be a cliff")
+        # Front-loaded: the first repeats carry the most evidence and each
+        # later one carries strictly less, so nothing spikes mid-curve.
+        self.assertEqual(steps, sorted(steps, reverse=True))
+
+    def test_fractional_evidence_is_continuous_around_whole_sessions(self):
+        """A smooth curve, not a stepped cap: no discontinuity at integers."""
+        for sessions in (1, 2, 3, 5, 10):
+            with self.subTest(sessions=sessions):
+                just_below = _score_evidence(sessions - 0.001)
+                just_above = _score_evidence(sessions + 0.001)
+                self.assertAlmostEqual(
+                    _score_evidence(sessions),
+                    just_below,
+                    places=3,
+                )
+                self.assertAlmostEqual(
+                    _score_evidence(sessions),
+                    just_above,
+                    places=3,
+                )
+
+    # ---- perfect histories: 1, 2, 3, 5, 10+ ----------------------------
+
+    def test_perfect_history_scores_climb_with_repeated_sessions(self):
+        expected_scores = {
+            1: 70.4,
+            2: 79.3,
+            3: 86.7,
+            5: 90.1,
+            10: 92.1,
+        }
+
+        actual = {}
+        for sessions in expected_scores:
+            metrics = self._metrics_for(
+                f"Perfect x{sessions}",
+                [100] * sessions,
+            )
+            actual[sessions] = metrics["consistency_score"]
+            with self.subTest(sessions=sessions):
+                self.assertEqual(metrics["scheduled_total"], sessions)
+                self.assertEqual(metrics["completed_total"], sessions)
+                self.assertEqual(metrics["completion_quality"], 100.0)
+                self.assertEqual(metrics["full_completion_reliability"], 100.0)
+                self.assertEqual(
+                    metrics["consistency_score"],
+                    expected_scores[sessions],
+                )
+
+        ordered = [actual[sessions] for sessions in sorted(actual)]
+        self.assertEqual(ordered, sorted(ordered))
+
+    def test_perfect_history_lands_inside_the_intended_target_bands(self):
+        target_bands = {
+            1: (68.0, 72.0),
+            2: (78.0, 82.0),
+            3: (85.0, 87.0),
+            5: (89.0, 91.0),
+            10: (92.0, 95.0),
+            14: (92.0, 95.0),
+            30: (92.0, 95.0),
+        }
+
+        for sessions, (low, high) in target_bands.items():
+            metrics = self._metrics_for(f"Band x{sessions}", [100] * sessions)
+            with self.subTest(sessions=sessions):
+                self.assertGreaterEqual(metrics["consistency_score"], low)
+                self.assertLessEqual(metrics["consistency_score"], high)
+
+    def test_one_perfect_session_no_longer_reads_as_highly_consistent(self):
+        single = self._metrics_for("Single perfect", [100])
+        established = self._metrics_for("Established perfect", [100] * 30)
+
+        # The old behaviour reported 82.5 here, level with a long record.
+        self.assertLess(single["consistency_score"], 75.0)
+        self.assertLess(
+            single["consistency_score"],
+            established["consistency_score"] - 20.0,
+        )
+        # The measured components themselves are untouched by the change.
+        self.assertEqual(single["streak_stability"], 66.7)
+        self.assertEqual(single["recent_momentum"], 50.0)
+
+    def test_established_habits_keep_the_long_term_scoring_behaviour(self):
+        """With enough history the evidence factor is 1, so nothing moves."""
+        for sessions in (30, 45, 60):
+            metrics = self._metrics_for(f"Long run x{sessions}", [100] * sessions)
+            with self.subTest(sessions=sessions):
+                self.assertGreater(_score_evidence(sessions), 0.9999)
+                # Exactly the pre-change 0.35*100 + 0.20*100 + 0.30*100 + 0.15*50.
+                self.assertEqual(metrics["consistency_score"], 92.5)
+                self.assertAlmostEqual(
+                    metrics["consistency_score"],
+                    self._expected_score(metrics, 1.0),
+                    delta=0.1,
+                )
+
+    # ---- mixed partial and missed histories ----------------------------
+
+    def test_mixed_histories_follow_the_documented_evidence_formula(self):
+        histories = {
+            "one partial session": [40],
+            "one missed session": [None],
+            "partial then perfect": [50, 100],
+            "perfect then missed": [100, None],
+            "three mixed sessions": [100, 40, 80],
+            "five mixed sessions": [80, None, 60, 100, 30],
+            "ten mixed sessions": [
+                100,
+                60,
+                None,
+                90,
+                40,
+                100,
+                None,
+                70,
+                100,
+                55,
+            ],
+            "long mixed history": [100, 30, 80, None, 90, 45] * 5,
+        }
+
+        for label, history in histories.items():
+            metrics = self._metrics_for(label, history)
+            evidence = _score_evidence(metrics["scheduled_total"])
+            with self.subTest(history=label):
+                self.assertEqual(metrics["scheduled_total"], len(history))
+                self.assertAlmostEqual(
+                    metrics["consistency_score"],
+                    self._expected_score(metrics, evidence),
+                    delta=0.1,
+                )
+                self.assertGreaterEqual(metrics["consistency_score"], 0.0)
+                self.assertLessEqual(metrics["consistency_score"], 100.0)
+
+    def test_mixed_history_is_damped_less_as_the_same_pattern_repeats(self):
+        """The same mixed pattern scores higher the more it is repeated."""
+        pattern = [100, 40, 80]
+        scores = []
+        evidence_values = []
+        for repeats in (1, 2, 5):
+            metrics = self._metrics_for(f"Pattern x{repeats}", pattern * repeats)
+            scores.append(metrics["consistency_score"])
+            evidence_values.append(_score_evidence(metrics["scheduled_total"]))
+            # Completion quality is identical every time — the pattern is the
+            # same — so the climb comes from demonstrated repetition alone.
+            self.assertEqual(metrics["completion_quality"], 73.3)
+
+        self.assertEqual(scores, sorted(scores))
+        self.assertLess(scores[0], scores[-1])
+        self.assertEqual(evidence_values, sorted(evidence_values))
+
+    def test_completion_components_are_never_damped_by_low_evidence(self):
+        """Only rhythm and momentum are held back; Q and F are earned at once."""
+        for history in ([100], [40], [70, 100], [100] * 3):
+            metrics = self._metrics_for(f"Completion {history}", history)
+            evidence = _score_evidence(metrics["scheduled_total"])
+            completion_points = (
+                metrics["completion_quality"]
+                * CONSISTENCY_COMPLETION_QUALITY_WEIGHT
+                + metrics["full_completion_reliability"]
+                * CONSISTENCY_FULL_COMPLETION_WEIGHT
+            )
+            with self.subTest(history=history):
+                # The score always contains the undamped completion points.
+                self.assertGreaterEqual(
+                    metrics["consistency_score"] + 0.1,
+                    completion_points,
+                )
+                self.assertAlmostEqual(
+                    metrics["consistency_score"],
+                    self._expected_score(metrics, evidence),
+                    delta=0.1,
+                )
+
+    def test_zero_activity_still_contributes_no_rhythm_points(self):
+        """The evidence factor may only hold points back, never create them."""
+        for sessions in (1, 2, 3, 5, 10, 30):
+            metrics = self._metrics_for(
+                f"Untouched x{sessions}",
+                [None] * sessions,
+            )
+            with self.subTest(sessions=sessions):
+                self.assertEqual(metrics["streak_stability"], 0.0)
+                self.assertEqual(metrics["recent_momentum"], 0.0)
+                self.assertEqual(metrics["consistency_score"], 0.0)
+
+    def test_reported_rhythm_and_momentum_values_are_left_unchanged(self):
+        """Evidence changes the contribution, not the measurement."""
+        one_session = self._metrics_for("Value check x1", [100])
+        two_sessions = self._metrics_for("Value check x2", [100, 100])
+        three_sessions = self._metrics_for("Value check x3", [100] * 3)
+
+        # These are the same values the metric definitions produced before the
+        # evidence factor existed (1-session and 2-session confidence shrink).
+        self.assertEqual(one_session["streak_stability"], 66.7)
+        self.assertEqual(two_sessions["streak_stability"], 83.3)
+        self.assertEqual(three_sessions["streak_stability"], 100.0)
+        self.assertEqual(one_session["recent_momentum"], 50.0)
+        self.assertEqual(two_sessions["recent_momentum"], 50.0)
+        self.assertEqual(three_sessions["recent_momentum"], 50.0)
+
+    def test_score_breakdown_still_decomposes_into_the_reported_score(self):
+        """The dashboard breakdown must add up to the score it explains."""
+        for sessions in (1, 3, 10, 30):
+            habit = self._make_habit(f"Breakdown x{sessions}")
+            for offset in range(sessions):
+                HabitCompletion.objects.create(
+                    habit=habit,
+                    date=self.start + timedelta(days=offset),
+                    completion_percentage=Decimal("100"),
+                    raw_value=Decimal("100"),
+                )
+            end = self.start + timedelta(days=sessions - 1)
+
+            breakdown = build_overall_score_breakdown([habit], self.start, end)
+            components = {
+                item["key"]: item for item in breakdown["components"]
+            }
+
+            with self.subTest(sessions=sessions):
+                self.assertAlmostEqual(
+                    sum(
+                        item["current_points"]
+                        for item in breakdown["components"]
+                    ),
+                    breakdown["current_score"],
+                    delta=0.2,
+                )
+                # Reported component values stay as measured; only the points
+                # attached to rhythm and momentum carry the evidence factor.
+                self.assertEqual(
+                    components["completion_quality"]["current_points"],
+                    35.0,
+                )
+                self.assertEqual(
+                    components["full_completion"]["current_points"],
+                    20.0,
+                )
+                self.assertLessEqual(
+                    components["rhythm_stability"]["current_points"],
+                    30.0,
+                )
 
 
 

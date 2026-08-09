@@ -1,7 +1,7 @@
 from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, timedelta
-from math import isfinite, sqrt
+from math import exp, isfinite, sqrt
 
 from django.db.models import Q
 from django.utils import timezone
@@ -13,7 +13,7 @@ from .models import (
     HabitCompletion,
 )
 # Consistify Score weights. The formula is
-#     score = 0.35*Q + 0.20*F + 0.30*R + 0.15*M
+#     score = 0.35*Q + 0.20*F + E*(0.30*R + 0.15*M)
 # where Q measures how much of the scheduled work was actually completed
 # (including partial progress), F measures how often scheduled sessions
 # reached exactly 100%, R measures reliability and continuity (recent
@@ -21,8 +21,16 @@ from .models import (
 # sessions, and M measures trajectory (improvement / decline / stable)
 # over the last six scheduled sessions. Q and F together act as the
 # "how much work did you do" anchor; R is the reliability term; M is a
-# directional modifier that cannot dominate reliability. The total
-# weight is 1.0 so the score remains a 0–100 percentage.
+# directional modifier that cannot dominate reliability. The component
+# weights total 1.0 so the score remains a 0–100 percentage.
+#
+# ``E`` is the evidence factor (see ``_score_evidence``). Completion can be
+# earned immediately, but consistency has to be *demonstrated* through
+# repeated scheduled sessions, so R and M only earn their full 45 points
+# once the habit has actually repeated. E is a smooth, strictly increasing
+# curve of the number of scheduled sessions in the report window, it never
+# adds points (it can only hold them back), and it is effectively 1.0 for
+# any established habit, so long-term scoring is unchanged.
 CONSISTENCY_COMPLETION_QUALITY_WEIGHT = 0.35
 CONSISTENCY_FULL_COMPLETION_WEIGHT = 0.20
 CONSISTENCY_RHYTHM_WEIGHT = 0.30
@@ -35,6 +43,17 @@ MOMENTUM_FULL_SIGNAL_CHANGE = 50.0
 RHYTHM_COVERAGE_WEIGHT = 0.8
 RHYTHM_CONTINUITY_WEIGHT = 0.2
 RECENT_METRIC_CONFIDENCE_SESSIONS = 3
+# Evidence curve for the rhythm/momentum *contribution* to the Consistify
+# Score. ``evidence = 1 - exp(-(sessions / SCALE) ** SHAPE)`` is a stretched
+# exponential (a Weibull CDF): smooth and gap-free everywhere, strictly
+# increasing, and saturating at 1. ``SHAPE`` below 1 makes the first few
+# repeats worth the most evidence and later ones worth progressively less,
+# which mirrors the existing ``min(1, k / 3)`` confidence idea inside R and M
+# without its hard kink at exactly three sessions. With these constants a
+# perfectly kept habit earns roughly 55% of the R/M points at one session,
+# 75% at two, 85% at three, 94% at five, and 99%+ from ten sessions on.
+SCORE_EVIDENCE_SCALE_SESSIONS = 1.3
+SCORE_EVIDENCE_SHAPE = 0.75
 # Scheduled sessions required before a leaderboard score is trusted in full.
 LEADERBOARD_CONFIDENCE_SESSIONS = 30
 LEADERBOARD_NEUTRAL_SCORE = 50.0
@@ -57,6 +76,8 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "label": "Completion quality",
         "metric_key": "completion_quality",
         "weight": CONSISTENCY_COMPLETION_QUALITY_WEIGHT,
+        # Completion is earned immediately, so it is never evidence-damped.
+        "evidence_scaled": False,
         "description": (
             "Average progress across every scheduled session, including "
             "partial completion."
@@ -74,6 +95,7 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "label": "Full completion",
         "metric_key": "full_completion_reliability",
         "weight": CONSISTENCY_FULL_COMPLETION_WEIGHT,
+        "evidence_scaled": False,
         "description": (
             "Share of scheduled sessions completed at exactly 100%; acts as a "
             "finishing-quality signal."
@@ -91,6 +113,10 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "label": "Consistency rhythm",
         "metric_key": "streak_stability",
         "weight": CONSISTENCY_RHYTHM_WEIGHT,
+        # Consistency has to be demonstrated, so the *points* this component
+        # contributes grow with the evidence curve (the reported value does
+        # not change).
+        "evidence_scaled": True,
         "description": (
             "Reliability and continuity across the last seven scheduled "
             "sessions; rewards meaningful participation and avoids "
@@ -109,6 +135,7 @@ CONSISTENCY_SCORE_COMPONENTS = (
         "label": "Recent momentum",
         "metric_key": "recent_momentum",
         "weight": CONSISTENCY_RECENT_MOMENTUM_WEIGHT,
+        "evidence_scaled": True,
         "description": (
             "Trajectory across the last six scheduled sessions: whether "
             "recent performance is improving, declining, or remaining "
@@ -830,18 +857,71 @@ def _recent_momentum(scheduled_dates, completion_map):
     return raw_momentum * evidence
 
 
+def _score_evidence(session_count):
+    """Return how much of the rhythm/momentum points a record has earned.
+
+    Completion can be earned immediately: one kept session really is one
+    session's worth of work, so completion quality and full completion are
+    reported in full straight away. Consistency is a different claim. Rhythm
+    and momentum both describe *repeated* behaviour — cadence, continuity, and
+    trajectory — and a habit with a single scheduled session has not repeated
+    anything yet, so it cannot have demonstrated either one. Their measured
+    values stay exactly as ``_consistency_rhythm`` and ``_recent_momentum``
+    define them; only the number of *points* they contribute to the Consistify
+    Score is held back until the repetition exists.
+
+    The factor is a stretched exponential (Weibull CDF)::
+
+        evidence = 1 - exp(-(sessions / SCALE) ** SHAPE)
+
+    Properties that make it fit the existing design:
+        * ``evidence(0) = 0`` and it grows continuously and strictly with every
+          extra scheduled session, so there is no step at any session count and
+          no threshold to game. Adding one more session always helps a little.
+        * ``SHAPE < 1`` front-loads the curve: the first repeats are worth the
+          most evidence and later ones progressively less. That is the same
+          intuition as the ``min(1, k / 3)`` confidence already used inside R
+          and M, but smooth instead of kinked at exactly three sessions, and it
+          keeps working past three.
+        * It saturates at 1 (99%+ from ten sessions on, 1.0 for any longer
+          record), so established habits keep the long-term scoring behaviour.
+        * It is a multiplier in ``[0, 1]``, so it can only ever hold points
+          back, never create them. A completely untouched window still scores
+          ``0`` rhythm and ``0`` momentum, so the zero-activity floor is
+          untouched: ``0 * evidence`` is still ``0``.
+    """
+    try:
+        sessions = float(session_count)
+    except (TypeError, ValueError):
+        return 0.0
+    if not isfinite(sessions) or sessions <= 0:
+        return 0.0
+    growth = (sessions / SCORE_EVIDENCE_SCALE_SESSIONS) ** SCORE_EVIDENCE_SHAPE
+    return max(0.0, min(1.0, 1.0 - exp(-growth)))
+
+
 def _consistency_score(
     completion_quality,
     full_completion_ratio,
     consistency_rhythm,
     recent_momentum,
+    evidence=1.0,
 ):
-    score = (
+    """Return ``0.35*Q + 0.20*F + E*(0.30*R + 0.15*M)`` as a 0-100 score.
+
+    ``evidence`` scales only the rhythm and momentum *contribution*; see
+    ``_score_evidence``. It defaults to 1.0 so the formula reduces to the
+    plain weighted sum for a fully evidenced record.
+    """
+    earned_completion = (
         completion_quality * CONSISTENCY_COMPLETION_QUALITY_WEIGHT
         + full_completion_ratio * CONSISTENCY_FULL_COMPLETION_WEIGHT
-        + consistency_rhythm * CONSISTENCY_RHYTHM_WEIGHT
+    )
+    demonstrated_consistency = (
+        consistency_rhythm * CONSISTENCY_RHYTHM_WEIGHT
         + recent_momentum * CONSISTENCY_RECENT_MOMENTUM_WEIGHT
-    ) * 100
+    )
+    score = (earned_completion + evidence * demonstrated_consistency) * 100
     return round(score, 1)
 
 
@@ -900,6 +980,13 @@ def _aggregate_consistency_snapshot(
     scheduled_total = 0
     completed_total = 0
     component_totals = {component["key"]: 0.0 for component in CONSISTENCY_SCORE_COMPONENTS}
+    # Points are accumulated separately from values because the rhythm and
+    # momentum components contribute evidence-scaled points while still
+    # reporting their measured value. Tracking both keeps the breakdown an
+    # exact decomposition of the score it explains.
+    component_point_totals = {
+        component["key"]: 0.0 for component in CONSISTENCY_SCORE_COMPONENTS
+    }
 
     for habit in habits:
         metrics = _habit_consistency_metrics(
@@ -916,12 +1003,21 @@ def _aggregate_consistency_snapshot(
         if weight == 0:
             continue
 
+        evidence = metrics.get("score_evidence")
+        if evidence is None:
+            evidence = _score_evidence(metrics["scheduled_total"])
+
         total_weight += weight
         scheduled_total += metrics["scheduled_total"]
         completed_total += metrics["completed_total"]
         weighted_score += metrics["consistency_score"] * weight
         for component in CONSISTENCY_SCORE_COMPONENTS:
-            component_totals[component["key"]] += metrics[component["metric_key"]] * weight
+            value = metrics[component["metric_key"]]
+            component_totals[component["key"]] += value * weight
+            points = value * component["weight"]
+            if component.get("evidence_scaled"):
+                points *= evidence
+            component_point_totals[component["key"]] += points * weight
 
     if total_weight == 0:
         return {
@@ -934,9 +1030,10 @@ def _aggregate_consistency_snapshot(
     components = {}
     for component in CONSISTENCY_SCORE_COMPONENTS:
         value = component_totals[component["key"]] / total_weight
+        points = component_point_totals[component["key"]] / total_weight
         components[component["key"]] = {
             "value": round(value, 1),
-            "points": round(value * component["weight"], 1),
+            "points": round(points, 1),
         }
 
     return {
@@ -1372,6 +1469,7 @@ def _performance_metrics_for_occurrences(
             "completion_quality": 0.0,
             "full_completion_reliability": 0.0,
             "recent_momentum": 0.0,
+            "score_evidence": 0.0,
         }
 
     streaks = _streak_metrics(scheduled_dates, completion_map)
@@ -1434,11 +1532,16 @@ def _performance_metrics_for_occurrences(
     full_completion_ratio = completed_total / scheduled_total
     consistency_rhythm = _consistency_rhythm(scheduled_dates, completion_map)
     recent_momentum = _recent_momentum(scheduled_dates, completion_map)
+    # Rhythm and momentum are measured and reported in full; only how much of
+    # their points reach the Consistify Score depends on how many scheduled
+    # sessions this window actually contains.
+    evidence = _score_evidence(scheduled_total)
     consistency_score = _consistency_score(
         completion_quality=completion_quality,
         full_completion_ratio=full_completion_ratio,
         consistency_rhythm=consistency_rhythm,
         recent_momentum=recent_momentum,
+        evidence=evidence,
     )
 
     return {
@@ -1460,6 +1563,7 @@ def _performance_metrics_for_occurrences(
         "completion_quality": round(completion_quality * 100, 1),
         "full_completion_reliability": round(full_completion_ratio * 100, 1),
         "recent_momentum": round(recent_momentum * 100, 1),
+        "score_evidence": evidence,
     }
 
 

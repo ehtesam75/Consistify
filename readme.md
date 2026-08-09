@@ -76,7 +76,8 @@ Users can create multiple habits with different tracking types:
 #### 🧠 Consistency Score
 - Blends completion quality (35%), full completion (20%), consistency rhythm
   (30%), and recent momentum (15%):
-  `Score = 0.35Q + 0.20F + 0.30R + 0.15M`.
+  `Score = 0.35Q + 0.20F + E × (0.30R + 0.15M)`, where `E` is the evidence
+  factor described below.
 - **Completion quality (Q)** measures how much of the scheduled work was
   actually completed across every scheduled session, including partial
   progress. `Q = sum(clamped progress) / scheduled sessions`. Missing
@@ -116,6 +117,21 @@ Users can create multiple habits with different tracking types:
   ordinal weights `1, 2, ...`. More precisely,
   `M = 100 × evidence × (0.5 + 0.5 × c × trend)`, clamped to 0–100, where
   `trend` is that recency-weighted average.
+- **Evidence factor (E)** decides how much of the Rhythm and Momentum *points*
+  reach the score. Completion can be earned immediately, but consistency has to
+  be demonstrated through repeated behaviour, so a habit with a single
+  scheduled session has not yet shown any cadence, continuity, or trajectory.
+  With `k` scheduled sessions in the report period,
+  `E = 1 - exp(-(k / 1.3) ** 0.75)`. The exponent below 1 front-loads the curve
+  so the first repeats are worth the most evidence and each later one a little
+  less — the same intuition as the `min(1, k / 3)` confidence inside R and M,
+  but smooth instead of kinked. E only scales the contribution: the reported R
+  and M values are exactly as measured, `E` can never add points (so an
+  untouched record still scores 0), and it saturates at 1 — roughly 0.56 at one
+  session, 0.75 at two, 0.85 at three, 0.94 at five, 0.99 at ten, and
+  effectively 1.0 for any longer history, so established habits keep the
+  long-term scoring behaviour. A perfectly kept habit therefore scores about
+  70 at 1/1, 79 at 2/2, 87 at 3/3, 90 at 5/5, and 92-93 from 10/10 onward.
 - Rhythm and Momentum use only scheduled sessions inside the selected report
   period; history outside that period cannot change its score.
 - Cross-habit scores use a weighted mean. Habit `h` receives aggregation weight
