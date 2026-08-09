@@ -1587,6 +1587,18 @@ html {
     padding-top: 0.4rem;
 }
 
+.modern-form-card .form-save-note {
+    margin: 0.2rem 0 0;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: var(--ink-soft);
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent, var(--link, #4f6bed));
+    border-radius: 10px;
+}
+
 .modern-form-card .textarea {
     min-height: 72px;
     resize: vertical;

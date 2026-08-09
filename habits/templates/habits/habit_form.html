@@ -145,6 +145,12 @@
                 </div>
             </div>
 
+            {% if form.instance.pk %}
+                <p class="form-save-note field-span-2">
+                    Please note that any changes made to your schedule, priority, target value, or category will take effect starting tomorrow, so your current progress today won’t be affected.
+                </p>
+            {% endif %}
+
             <div class="form-actions field-span-2 modern-form-actions">
                 <button class="btn primary" type="submit">{{ submit_label }}</button>
                 <a class="btn ghost" href="{% url 'habits:today' %}">Cancel</a>
@@ -167,12 +173,7 @@
 
         <div class="form-side-divider"></div>
         <p class="help">
-            {% if form.instance.pk %}
-                Schedule, priority, and category changes take effect tomorrow.
-                Earlier reports keep the plan that was active on each date.
-            {% else %}
-                This habit will appear in your Today list based on the selected schedule.
-            {% endif %}
+            This habit will appear in your Today list based on the selected schedule.
         </p>
 
         {% if form.instance.pk %}
