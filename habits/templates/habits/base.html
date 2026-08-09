@@ -253,10 +253,12 @@
                                             <label class="quant-field">
                                                 <span class="sr-only">Progress value</span>
                                                 <input class="quant-value" type="number" min="0" step="any" {% if item.target_value %}max="{{ item.target_value|floatformat:'-2' }}"{% endif %} name="value_{{ item.habit.id }}" value="{{ item.raw_value|default_if_none:0|floatformat:'-2' }}" data-quant-input required>
-                                                {% if item.target_value or item.unit %}<span class="quant-suffix">{% if item.target_value %}/ {{ item.target_value|floatformat:'-2' }}{% if item.unit %} {{ item.unit }}{% endif %}{% elif item.unit %}{{ item.unit }}{% endif %}</span>{% endif %}
                                             </label>
                                             <button type="button" class="step-button" data-step="1" aria-label="Increase {{ item.habit.name }} by 1">+</button>
                                         </div>
+                                        {% if item.target_value %}
+                                            <p class="daily-recap-target">Max: {{ item.target_value|floatformat:'-2' }}{% if item.unit %} {{ item.unit }}{% endif %}</p>
+                                        {% endif %}
                                     {% endif %}
                                 </div>
                             </div>

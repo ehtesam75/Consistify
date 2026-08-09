@@ -2632,7 +2632,16 @@ body.recap-open > :not(.daily-recap-overlay) {
 }
 
 .daily-recap-row-quant .daily-recap-controls {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+}
+
+.daily-recap-target {
+    flex-basis: 100%;
+    margin: 0.15rem 0 0;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    text-align: right;
+    letter-spacing: 0.02em;
 }
 
 .daily-recap-field {
