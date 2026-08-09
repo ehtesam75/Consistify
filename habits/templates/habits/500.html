@@ -1,0 +1,9 @@
+{% extends "habits/base.html" %}
+{% block title %}Server error · Consistify{% endblock %}
+{% block content %}
+<section class="panel empty-panel">
+    <h1>Something went wrong</h1>
+    <p>An unexpected server error occurred. The issue has been logged and we'll look into it.</p>
+    <a class="button button-primary" href="{% url 'habits:index' %}">Back to home</a>
+</section>
+{% endblock %}

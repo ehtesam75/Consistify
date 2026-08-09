@@ -1,0 +1,9 @@
+{% extends "habits/base.html" %}
+{% block title %}Bad request · Consistify{% endblock %}
+{% block content %}
+<section class="panel empty-panel">
+    <h1>Bad request</h1>
+    <p>The request could not be processed. Please refresh the page and try again.</p>
+    <a class="button button-primary" href="{% url 'habits:index' %}">Back to home</a>
+</section>
+{% endblock %}

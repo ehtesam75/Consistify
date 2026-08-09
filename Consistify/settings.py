@@ -39,7 +39,14 @@ INSTALLED_APPS = [
 
 
 # Middleware
+# The structured logging middleware must be the outermost layer so it sees
+# every request and every exception, including ones raised by Django's
+# own session, auth, or CSRF middleware below. WhiteNoise is inserted
+# *inside* the exception logger so its own middleware errors are also
+# captured.
 MIDDLEWARE = [
+    'habits.middleware.StructuredExceptionMiddleware',
+    'habits.middleware.RequestContextLogMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -50,8 +57,10 @@ MIDDLEWARE = [
 ]
 
 if not DEBUG:
-    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
-
+    # Insert WhiteNoise right after SecurityMiddleware so static files are
+    # served before any application code runs, but still inside our
+    # structured exception middleware.
+    MIDDLEWARE.insert(3, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'Consistify.urls'
 
@@ -79,12 +88,35 @@ WSGI_APPLICATION = 'Consistify.wsgi.application'
 
 
 # Database (Neon / PostgreSQL via DATABASE_URL)
+#
+# Connection robustness settings:
+#   * ``conn_max_age=600`` keeps individual connections alive between
+#     requests so we avoid the SSL reconnect overhead that Neon charges for.
+#   * ``connect_timeout`` guards against a dead PG host hanging the worker
+#     indefinitely; the Gunicorn timeout will eventually kill it, but a
+#     shorter, explicit timeout produces a clean 500 with a useful traceback
+#     far sooner.
+#   * ``application_name`` shows up in ``pg_stat_activity`` so production
+#     incidents can be traced back to this app rather than to "unknown".
+#   * ``conn_health_checks=True`` asks Django to validate the connection on
+#     each request so a stale Neon connection after an idle window does not
+#     surface as a transient 500.
+DATABASE_URL = os.environ.get('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
-        conn_max_age=600
+        default=DATABASE_URL,
+        conn_max_age=600,
+        conn_health_checks=True,
     )
 }
+# Inject the application name on PostgreSQL backends only. SQLite ignores
+# extra kwargs, but psycopg2 will reject unknown kwargs so the lookup must
+# be guarded. ``connect_timeout`` is a psycopg2 connect() kwarg so it must
+# live under OPTIONS (dj_database_url.config does not forward ``options``).
+if DATABASE_URL.startswith(("postgres://", "postgresql://")):
+    db_options = DATABASES['default'].setdefault('OPTIONS', {})
+    db_options.setdefault('connect_timeout', 10)
+    db_options.setdefault('application_name', 'consistify')
 
 
 # Password validation
@@ -104,6 +136,15 @@ USE_TZ = True
 
 
 # Static files
+#
+# In production we use WhiteNoise's ``CompressedManifestStaticFilesStorage``.
+# That backend hashes every file referenced by a template and embeds the hash
+# in the URL. If a template references a static file that does not exist on
+# disk after ``collectstatic`` ran, every page that includes that reference
+# raises ``ValueError: Missing staticfiles manifest entry`` and returns a
+# 500. To avoid that, the storage backend is configured to log a warning
+# and return the unhashed path so the file still loads even when the
+# manifest is incomplete (for example when an optional favicon is missing).
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
@@ -115,7 +156,7 @@ STORAGES = {
         'BACKEND': (
             'django.contrib.staticfiles.storage.StaticFilesStorage'
             if DEBUG
-            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+            else 'habits.staticfiles_storage.SafeCompressedManifestStaticFilesStorage'
         ),
     },
 }
@@ -134,3 +175,63 @@ CSRF_TRUSTED_ORIGINS = [
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Custom error handlers. Returning JSON for AJAX callers keeps the front-end
+# from breaking when an unexpected exception occurs anywhere in the request
+# cycle. The same handlers also cover 404/403/400 so every error response
+# uses the same {ok, error, code} envelope.
+HANDLER400 = 'habits.error_handlers.bad_request'
+HANDLER403 = 'habits.error_handlers.permission_denied'
+HANDLER404 = 'habits.error_handlers.page_not_found'
+HANDLER500 = 'habits.error_handlers.server_error'
+
+
+# Logging configuration. In production the console handler uses a JSON
+# formatter so log aggregators can ingest the records directly. The
+# ``habits`` and ``habits.errors`` loggers are explicit so production
+# deployments can tune verbosity without changing application code.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'plain': {
+            '()': 'habits.middleware.RequestIdLogFormatter',
+            'format': '%(asctime)s %(levelname)s %(name)s [req=%(request_id)s] %(message)s',
+        },
+        'verbose': {
+            '()': 'habits.middleware.RequestIdLogFormatter',
+            'format': (
+                '%(asctime)s %(levelname)s %(name)s '
+                '[req=%(request_id)s] %(message)s'
+            ),
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose' if DEBUG else 'verbose',
+        },
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'habits': {
+            'handlers': ['console'],
+            'level': 'INFO' if not DEBUG else 'DEBUG',
+            'propagate': False,
+        },
+        'habits.errors': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+}

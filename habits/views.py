@@ -718,88 +718,108 @@ def update_progress(request, habit_id):
     habit = get_object_or_404(Habit, id=habit_id, user=request.user)
     target_date = _parse_date_value(request.POST.get("date"))
     today = timezone.localdate()
+    is_ajax = _wants_json(request)
 
-    if target_date is None:
-        return _progress_error_response(
-            request,
-            "Choose a valid date before updating progress.",
-        )
-
-    if not can_update_progress_on(target_date, today):
-        return _progress_error_response(
-            request,
-            "You can only update progress for today and the previous day.",
-        )
-
-    if habit.is_paused_on(target_date):
-        return _progress_error_response(request, "This habit is paused for that day.")
-
-    if not habit.is_scheduled_on(target_date):
-        return _progress_error_response(
-            request,
-            "This habit is not scheduled for that day.",
-        )
-
-    completion, _ = HabitCompletion.objects.get_or_create(
-        habit=habit,
-        date=target_date,
-    )
-
-    plan_config = resolve_habit_plan_on(habit, target_date)
-    effective_habit_type = plan_config.habit_type if plan_config else habit.habit_type
-    effective_target_value = (
-        plan_config.target_value if plan_config else habit.target_value
-    )
-
-    completion_percentage = Decimal("0")
-    raw_value = None
-
-    if effective_habit_type == Habit.HABIT_BINARY:
-        is_done = request.POST.get("completed") is not None
-        completion_percentage = Decimal("100") if is_done else Decimal("0")
-        raw_value = completion_percentage
-    elif effective_habit_type == Habit.HABIT_PARTIAL:
-        completion_percentage = _clamp_percentage(request.POST.get("completion_percentage"))
-        raw_value = completion_percentage
-    else:
-        if not effective_target_value or effective_target_value <= 0:
+    try:
+        if target_date is None:
             return _progress_error_response(
                 request,
-                "Add a target value before logging progress.",
+                "Choose a valid date before updating progress.",
             )
-        target_value = effective_target_value.quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
+
+        if not can_update_progress_on(target_date, today):
+            return _progress_error_response(
+                request,
+                "You can only update progress for today and the previous day.",
+            )
+
+        if habit.is_paused_on(target_date):
+            return _progress_error_response(request, "This habit is paused for that day.")
+
+        if not habit.is_scheduled_on(target_date):
+            return _progress_error_response(
+                request,
+                "This habit is not scheduled for that day.",
+            )
+
+        completion, _ = HabitCompletion.objects.get_or_create(
+            habit=habit,
+            date=target_date,
         )
-        raw_value = _parse_decimal(request.POST.get("current_value")) or Decimal("0")
-        raw_value = raw_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
+        plan_config = resolve_habit_plan_on(habit, target_date)
+        effective_habit_type = plan_config.habit_type if plan_config else habit.habit_type
+        effective_target_value = (
+            plan_config.target_value if plan_config else habit.target_value
+        )
 
-        if raw_value < 0:
-            raw_value = Decimal("0")
-        if raw_value > target_value:
-            raw_value = target_value
-        completion_percentage = _percentage_from_value(raw_value, target_value)
+        completion_percentage = Decimal("0")
+        raw_value = None
 
-    completion.completion_percentage = completion_percentage
-    completion.raw_value = raw_value
-    completion.save(update_fields=["completion_percentage", "raw_value"])
+        if effective_habit_type == Habit.HABIT_BINARY:
+            is_done = request.POST.get("completed") is not None
+            completion_percentage = Decimal("100") if is_done else Decimal("0")
+            raw_value = completion_percentage
+        elif effective_habit_type == Habit.HABIT_PARTIAL:
+            completion_percentage = _clamp_percentage(request.POST.get("completion_percentage"))
+            raw_value = completion_percentage
+        else:
+            if not effective_target_value or effective_target_value <= 0:
+                return _progress_error_response(
+                    request,
+                    "Add a target value before logging progress.",
+                )
+            target_value = effective_target_value.quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            raw_value = _parse_decimal(request.POST.get("current_value")) or Decimal("0")
+            raw_value = raw_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        today_metrics = compute_today_metrics(request.user, target_date)
-        return JsonResponse({
-            "ok": True,
-            "completion_percentage": float(completion_percentage),
-            "raw_value": float(raw_value) if raw_value is not None else None,
-            "completed_count": today_metrics["completed_count"],
-            "scheduled_count": today_metrics["scheduled_count"],
-            "completion_rate": today_metrics["completion_rate"],
-        })
+            if raw_value < 0:
+                raw_value = Decimal("0")
+            if raw_value > target_value:
+                raw_value = target_value
+            completion_percentage = _percentage_from_value(raw_value, target_value)
 
-    return redirect(_safe_next_url(request) or reverse("habits:today"))
+        completion.completion_percentage = completion_percentage
+        completion.raw_value = raw_value
+        completion.save(update_fields=["completion_percentage", "raw_value"])
+
+        if is_ajax:
+            today_metrics = compute_today_metrics(request.user, target_date)
+            return JsonResponse({
+                "ok": True,
+                "completion_percentage": float(completion_percentage),
+                "raw_value": float(raw_value) if raw_value is not None else None,
+                "completed_count": today_metrics["completed_count"],
+                "scheduled_count": today_metrics["scheduled_count"],
+                "completion_rate": today_metrics["completion_rate"],
+            })
+
+        return redirect(_safe_next_url(request) or reverse("habits:today"))
+    except Exception:
+        # Database/network errors or unexpected conditions still surface as
+        # safe JSON for AJAX callers and friendly messages for normal browsers.
+        logger.exception(
+            "update_progress failed for habit_id=%s by user_id=%s",
+            habit_id,
+            getattr(request.user, "id", None),
+        )
+        return _progress_error_response(
+            request,
+            "Could not save your progress right now. Please try again.",
+        )
 
 
 @csrf_exempt
 def cron_job(request):
+    """External cron entry point.
+
+    The view is intentionally tolerant: any unexpected exception is caught
+    here and re-emitted as a JSON 500. Combined with the structured exception
+    middleware, the cron provider receives a predictable response shape and
+    the failure is fully logged on the server side.
+    """
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "Method not allowed."}, status=405)
 
@@ -812,7 +832,17 @@ def cron_job(request):
     ):
         return JsonResponse({"ok": False, "error": "Unauthorized."}, status=401)
 
-    _run_cron_job()
+    try:
+        _run_cron_job()
+    except Exception:
+        # Re-raise so the structured exception middleware records the full
+        # traceback with the request payload, then return a safe JSON
+        # envelope so the cron provider sees a clean failure response.
+        logger.exception("Cron job failed during execution.")
+        return JsonResponse(
+            {"ok": False, "error": "Cron job failed.", "code": "cron_failed"},
+            status=500,
+        )
     logger.info("Cron job executed successfully.")
     return JsonResponse({"ok": True, "message": "Cron job executed successfully."})
 
@@ -826,19 +856,29 @@ def reorder_habits(request):
     except ValueError:
         return JsonResponse({"ok": False, "error": "Invalid habit ids."}, status=400)
 
-    # Archived habits are shown in a separate, non-draggable list, so the
-    # reorder payload only needs to be a valid subset of the user's habits.
-    user_habit_ids = set(
-        Habit.objects.filter(user=request.user).values_list("id", flat=True)
-    )
-    if len(set(ordered_ids)) != len(ordered_ids) or (
-        set(ordered_ids) - user_habit_ids
-    ):
-        return JsonResponse({"ok": False, "error": "Habit set mismatch."}, status=400)
+    try:
+        # Archived habits are shown in a separate, non-draggable list, so
+        # the reorder payload only needs to be a valid subset of the
+        # user's habits.
+        user_habit_ids = set(
+            Habit.objects.filter(user=request.user).values_list("id", flat=True)
+        )
+        if len(set(ordered_ids)) != len(ordered_ids) or (
+            set(ordered_ids) - user_habit_ids
+        ):
+            return JsonResponse({"ok": False, "error": "Habit set mismatch."}, status=400)
 
-    for index, habit_id in enumerate(ordered_ids):
-        Habit.objects.filter(id=habit_id, user=request.user).update(sort_order=index + 1)
-
+        for index, habit_id in enumerate(ordered_ids):
+            Habit.objects.filter(id=habit_id, user=request.user).update(sort_order=index + 1)
+    except Exception:
+        logger.exception(
+            "reorder_habits failed for user_id=%s",
+            getattr(request.user, "id", None),
+        )
+        return JsonResponse(
+            {"ok": False, "error": "Could not save the new order. Please try again."},
+            status=500,
+        )
 
     return JsonResponse({"ok": True})
 
@@ -1474,24 +1514,39 @@ def daily_recap(request):
         messages.error(request, "Please fill in all pending habits before continuing.")
         return redirect(_safe_next_url(request) or reverse("habits:today"))
 
-    with transaction.atomic():
-        for habit, completion_percentage, raw_value in updates:
-            completion, _ = HabitCompletion.objects.get_or_create(
-                habit=habit,
-                date=target_date,
-            )
-            completion.completion_percentage = completion_percentage
-            completion.raw_value = raw_value
-            completion.save(update_fields=["completion_percentage", "raw_value"])
+    try:
+        with transaction.atomic():
+            for habit, completion_percentage, raw_value in updates:
+                completion, _ = HabitCompletion.objects.get_or_create(
+                    habit=habit,
+                    date=target_date,
+                )
+                completion.completion_percentage = completion_percentage
+                completion.raw_value = raw_value
+                completion.save(update_fields=["completion_percentage", "raw_value"])
 
-        # Record the finished recap in the same transaction as the completions.
-        # "Save and continue" may legitimately persist progress below 100%, so
-        # this row, not the pending-habit check, is what stops the prompt from
-        # reappearing on other devices, browsers, and sessions.
-        mark_daily_recap_completed(request.user, target_date)
+            # Record the finished recap in the same transaction as the completions.
+            # "Save and continue" may legitimately persist progress below 100%, so
+            # this row, not the pending-habit check, is what stops the prompt from
+            # reappearing on other devices, browsers, and sessions.
+            mark_daily_recap_completed(request.user, target_date)
+    except Exception:
+        logger.exception(
+            "daily_recap failed for user_id=%s on %s",
+            getattr(request.user, "id", None),
+            target_date,
+        )
+        messages.error(
+            request,
+            "Could not save your recap right now. Please try again.",
+        )
+        return redirect(_safe_next_url(request) or reverse("habits:today"))
 
     request.session.pop("daily_recap_date", None)
     return redirect(_safe_next_url(request) or reverse("habits:today"))
+
+
+
 
 
 def signup(request):
@@ -1589,6 +1644,18 @@ def _progress_error_response(request, message):
         return JsonResponse({"ok": False, "error": message}, status=400)
     messages.error(request, message)
     return redirect(_safe_next_url(request) or reverse("habits:today"))
+
+
+def _wants_json(request):
+    """Return True when the caller prefers JSON over an HTML redirect.
+
+    Used by error helpers to decide whether to return a JSON envelope or to
+    fall back to the standard messages framework + redirect flow.
+    """
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return True
+    accept = request.headers.get("Accept", "")
+    return "application/json" in accept and "text/html" not in accept
 
 
 def _parse_decimal(raw_value):
