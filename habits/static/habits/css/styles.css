@@ -826,6 +826,66 @@ main > section + section {
     justify-content: flex-end;
 }
 
+/* Desktop quantitative input on the today page:
+   - render the input as a standalone number field with native up/down arrows
+   - show "/ target unit" as a sibling to the right of the input
+   - hide the + / - step buttons (kept off-DOM in the template as well) */
+.today-page .progress-form[data-habit-type="quantitative"] .progress-controls .step-button {
+    display: none;
+}
+
+.today-page .progress-form[data-habit-type="quantitative"] .quant-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.today-page .progress-form[data-habit-type="quantitative"] .quant-field .quant-value {
+    width: 70px;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--ink);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.today-page .progress-form[data-habit-type="quantitative"] .quant-field .quant-value:focus {
+    outline: 2px solid rgba(176, 122, 55, 0.2);
+    border-color: var(--accent);
+}
+
+.today-page .progress-form[data-habit-type="quantitative"] .quant-field .quant-value::-webkit-outer-spin-button,
+.today-page .progress-form[data-habit-type="quantitative"] .quant-field .quant-value::-webkit-inner-spin-button {
+    -webkit-appearance: auto;
+    margin: 0;
+}
+
+.today-page .progress-form[data-habit-type="quantitative"] .quant-field .quant-value {
+    -moz-appearance: auto;
+    appearance: auto;
+}
+
+.today-page .progress-form[data-habit-type="quantitative"] .quant-suffix {
+    display: inline;
+    padding: 0;
+    margin: 0 0 0 0.4rem;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    color: var(--ink-soft);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
 .progress-range {
     width: 110px;
     accent-color: var(--accent);
