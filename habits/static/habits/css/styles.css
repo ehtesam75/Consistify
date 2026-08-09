@@ -1692,6 +1692,13 @@ html {
     color: var(--ink-soft);
 }
 
+.field-label-inline {
+    margin-left: 0.4rem;
+    font-weight: 500;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+}
+
 .errorlist {
     margin: 0.38rem 0 0;
     padding-left: 1rem;

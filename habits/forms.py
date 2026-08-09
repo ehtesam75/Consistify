@@ -101,6 +101,9 @@ class HabitForm(forms.ModelForm):
         self.fields["target_value"].required = False
         self.fields["unit"].required = False
         self.fields["categories"].queryset = HabitCategory.objects.all()
+        name_field = self.fields["name"]
+        name_field.max_length = 25
+        name_field.widget.attrs["maxlength"] = 25
         if self.instance and self.instance.days_of_week:
             self.initial["days_of_week"] = self.instance.days_of_week.split(",")
         if self.instance and self.instance.tags:
