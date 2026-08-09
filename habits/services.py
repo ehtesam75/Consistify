@@ -44,16 +44,26 @@ RHYTHM_COVERAGE_WEIGHT = 0.8
 RHYTHM_CONTINUITY_WEIGHT = 0.2
 RECENT_METRIC_CONFIDENCE_SESSIONS = 3
 # Evidence curve for the rhythm/momentum *contribution* to the Consistify
-# Score. ``evidence = 1 - exp(-(sessions / SCALE) ** SHAPE)`` is a stretched
-# exponential (a Weibull CDF): smooth and gap-free everywhere, strictly
-# increasing, and saturating at 1. ``SHAPE`` below 1 makes the first few
-# repeats worth the most evidence and later ones worth progressively less,
-# which mirrors the existing ``min(1, k / 3)`` confidence idea inside R and M
-# without its hard kink at exactly three sessions. With these constants a
-# perfectly kept habit earns roughly 55% of the R/M points at one session,
-# 75% at two, 85% at three, 94% at five, and 99%+ from ten sessions on.
-SCORE_EVIDENCE_SCALE_SESSIONS = 1.3
-SCORE_EVIDENCE_SHAPE = 0.75
+# Score. The raw curve ``1 - exp(-(sessions / SCALE) ** SHAPE)`` is a stretched
+# exponential (a Weibull CDF): smooth and gap-free everywhere and strictly
+# increasing. ``SHAPE`` below 1 makes the first few repeats worth the most
+# evidence and later ones worth progressively less, which mirrors the existing
+# ``min(1, k / 3)`` confidence idea inside R and M without its hard kink at
+# exactly three sessions.
+#
+# The curve is then normalised by its own value at ``SCORE_EVIDENCE_FULL_
+# SESSIONS`` so that evidence reaches exactly 1 there. That constant is
+# ``RHYTHM_SESSION_WINDOW``, because seven sessions is the point where R (and,
+# at six, M) already consume every observation they can: past it, more
+# in-window sessions tell the recent-signal components nothing new, so there is
+# nothing left for the evidence factor to withhold. This matters most for
+# low-frequency habits, whose 30-day window holds only a handful of
+# occurrences. With these constants a perfectly kept habit earns roughly 56% of
+# the R/M points at one session, 74% at two, 84% at three, 95% at five, and all
+# of them from seven on.
+SCORE_EVIDENCE_SCALE_SESSIONS = 1.6
+SCORE_EVIDENCE_SHAPE = 0.65
+SCORE_EVIDENCE_FULL_SESSIONS = RHYTHM_SESSION_WINDOW
 # Scheduled sessions required before a leaderboard score is trusted in full.
 LEADERBOARD_CONFIDENCE_SESSIONS = 30
 LEADERBOARD_NEUTRAL_SCORE = 50.0
@@ -857,6 +867,18 @@ def _recent_momentum(scheduled_dates, completion_map):
     return raw_momentum * evidence
 
 
+def _raw_score_evidence(sessions):
+    """Return the un-normalised stretched-exponential evidence curve."""
+    growth = (sessions / SCORE_EVIDENCE_SCALE_SESSIONS) ** SCORE_EVIDENCE_SHAPE
+    return 1.0 - exp(-growth)
+
+
+# Value of the raw curve at full evidence, so ``_score_evidence`` can normalise
+# to exactly 1.0 there. Computed once at import; the constants never change at
+# runtime.
+_FULL_SCORE_EVIDENCE = _raw_score_evidence(SCORE_EVIDENCE_FULL_SESSIONS)
+
+
 def _score_evidence(session_count):
     """Return how much of the rhythm/momentum points a record has earned.
 
@@ -870,25 +892,40 @@ def _score_evidence(session_count):
     define them; only the number of *points* they contribute to the Consistify
     Score is held back until the repetition exists.
 
-    The factor is a stretched exponential (Weibull CDF)::
+    The factor is a stretched exponential (Weibull CDF), normalised so that it
+    reaches exactly 1 at ``SCORE_EVIDENCE_FULL_SESSIONS``::
 
-        evidence = 1 - exp(-(sessions / SCALE) ** SHAPE)
+        raw(k)   = 1 - exp(-(k / SCALE) ** SHAPE)
+        evidence = min(1, raw(sessions) / raw(FULL_SESSIONS))
 
     Properties that make it fit the existing design:
         * ``evidence(0) = 0`` and it grows continuously and strictly with every
-          extra scheduled session, so there is no step at any session count and
-          no threshold to game. Adding one more session always helps a little.
+          extra scheduled session up to full evidence, so there is no step at
+          any session count and no threshold to game. Adding one more session
+          always helps a little.
         * ``SHAPE < 1`` front-loads the curve: the first repeats are worth the
           most evidence and later ones progressively less. That is the same
           intuition as the ``min(1, k / 3)`` confidence already used inside R
           and M, but smooth instead of kinked at exactly three sessions, and it
           keeps working past three.
-        * It saturates at 1 (99%+ from ten sessions on, 1.0 for any longer
-          record), so established habits keep the long-term scoring behaviour.
+        * Full evidence is ``RHYTHM_SESSION_WINDOW`` sessions, which is exactly
+          where R stops taking in new observations (M stops at six). Beyond that
+          point, extra in-window sessions cannot tell R or M anything further,
+          so there is nothing left to withhold and evidence stays at 1. This
+          keeps established *low-frequency* habits whole: a year-old weekly
+          habit whose 30-day window holds five sessions is judged on the same
+          scale the recent-signal components actually use, instead of being
+          discounted for a calendar window it cannot fill.
         * It is a multiplier in ``[0, 1]``, so it can only ever hold points
           back, never create them. A completely untouched window still scores
           ``0`` rhythm and ``0`` momentum, so the zero-activity floor is
           untouched: ``0 * evidence`` is still ``0``.
+
+    Evidence is counted strictly inside the reporting window, from the same
+    ``scheduled_total`` the components are measured over. Older sessions from
+    outside the period are deliberately not consulted: R and M cannot see them
+    either, so letting them raise the evidence factor would credit a value with
+    observations that never entered its calculation.
     """
     try:
         sessions = float(session_count)
@@ -896,8 +933,7 @@ def _score_evidence(session_count):
         return 0.0
     if not isfinite(sessions) or sessions <= 0:
         return 0.0
-    growth = (sessions / SCORE_EVIDENCE_SCALE_SESSIONS) ** SCORE_EVIDENCE_SHAPE
-    return max(0.0, min(1.0, 1.0 - exp(-growth)))
+    return max(0.0, min(1.0, _raw_score_evidence(sessions) / _FULL_SCORE_EVIDENCE))
 
 
 def _consistency_score(
