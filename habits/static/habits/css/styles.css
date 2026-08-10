@@ -886,6 +886,35 @@ main > section + section {
     white-space: nowrap;
 }
 
+.today-page .today-quant-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    flex-wrap: nowrap;
+}
+
+.today-page .today-quant-controls .step-button {
+    width: 30px;
+    height: 30px;
+    font-size: 1rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.today-page .today-quant-controls .step-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.today-page .today-quant-controls .quant-field {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
 .progress-range {
     width: 110px;
     accent-color: var(--accent);
@@ -3606,6 +3635,32 @@ body.auth-page main {
         width: 100%;
         justify-content: flex-start;
         align-items: flex-start;
+    }
+
+    /* Mobile/PWA: re-show the - / + step buttons inside the quantitative
+       row. The desktop rule above hides them, so we mirror its selector
+       here to win on cascade while keeping desktop layout untouched. */
+    .today-page .progress-form[data-habit-type="quantitative"] .progress-controls .step-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        font-size: 1.05rem;
+        line-height: 1;
+        flex: 0 0 auto;
+    }
+
+    .today-page .progress-form[data-habit-type="quantitative"] .progress-controls .today-quant-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: nowrap;
+    }
+
+    .today-page .progress-form[data-habit-type="quantitative"] .progress-controls .step-button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
     }
 
     .today-page .progress-range {

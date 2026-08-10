@@ -106,11 +106,15 @@
                                         <input type="range" class="progress-range" min="0" max="100" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-range {% if not can_edit_progress %}disabled{% endif %}>
                                         <input type="number" class="progress-input" name="completion_percentage" min="0" max="100" step="1" value="{{ item.completion_percentage|floatformat:0 }}" data-progress-input {% if not can_edit_progress %}disabled{% endif %}>
                                     {% else %}
-                                        <span class="quant-field">
-                                            <input type="number" class="progress-input quant-value" name="current_value" min="0" step="any" {% if item.target_value %}max="{{ item.target_value|floatformat:'-2' }}"{% endif %} value="{{ item.raw_value|default_if_none:0|floatformat:'-2' }}" data-quant-input {% if not can_edit_progress %}disabled{% endif %}>
-                                            {% if item.target_value %}
-                                                <span class="quant-suffix">/ {{ item.target_value|floatformat:'-2' }}{% if item.unit %} {{ item.unit }}{% endif %}</span>
-                                            {% endif %}
+                                        <span class="today-quant-controls">
+                                            <button type="button" class="step-button" data-step="-1" aria-label="Decrease {{ item.habit.name }}" {% if not can_edit_progress %}disabled{% endif %}>−</button>
+                                            <span class="quant-field">
+                                                <input type="number" class="progress-input quant-value" name="current_value" min="0" step="any" {% if item.target_value %}max="{{ item.target_value|floatformat:'-2' }}"{% endif %} value="{{ item.raw_value|default_if_none:0|floatformat:'-2' }}" data-quant-input {% if not can_edit_progress %}disabled{% endif %}>
+                                                {% if item.target_value %}
+                                                    <span class="quant-suffix">/ {{ item.target_value|floatformat:'-2' }}{% if item.unit %} {{ item.unit }}{% endif %}</span>
+                                                {% endif %}
+                                            </span>
+                                            <button type="button" class="step-button" data-step="1" aria-label="Increase {{ item.habit.name }}" {% if not can_edit_progress %}disabled{% endif %}>+</button>
                                         </span>
 
                                     {% endif %}
