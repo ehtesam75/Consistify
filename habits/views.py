@@ -471,6 +471,7 @@ def habit_detail(request, habit_id):
         "chart_percentages": chart_percentages,
         "tags": habit.get_tags(),
         "detail_window_note": "Last 30 days",
+        "last30_label": f"Since {chart_dates[0].strftime('%b %d, %Y')}" if chart_dates else "Since today",
         "all_time_label": f"Since {all_time_start.strftime('%b %d, %Y')}",
         "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
 
