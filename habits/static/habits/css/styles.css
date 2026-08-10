@@ -3906,6 +3906,14 @@ body.auth-page main {
         margin-top: 0.4rem;
     }
 
+    .profile-page .hero {
+        margin-bottom: 0.4rem;
+    }
+
+    .profile-page .stats-grid.wide {
+        margin-top: 0.4rem;
+    }
+
     .today-page .hero-title-row {
         display: flex;
         align-items: center;
