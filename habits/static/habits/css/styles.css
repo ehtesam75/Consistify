@@ -858,8 +858,13 @@ main > section + section {
 }
 
 .today-page .progress-form[data-habit-type="quantitative"] .quant-field .quant-value:focus {
-    outline: 2px solid rgba(176, 122, 55, 0.2);
-    border-color: var(--accent);
+    outline: none;
+    border-color: var(--border);
+}
+
+.today-page .progress-form[data-habit-type="quantitative"] .quant-field:focus-within {
+    outline: none;
+    border-color: var(--border);
 }
 
 .today-page .progress-form[data-habit-type="quantitative"] .quant-field .quant-value::-webkit-outer-spin-button,
