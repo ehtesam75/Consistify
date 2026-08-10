@@ -3898,6 +3898,14 @@ body.auth-page main {
         display: none;
     }
 
+    .dashboard-page .hero {
+        margin-bottom: 0.4rem;
+    }
+
+    .dashboard-page .stats-grid.wide {
+        margin-top: 0.4rem;
+    }
+
     .today-page .hero-title-row {
         display: flex;
         align-items: center;
