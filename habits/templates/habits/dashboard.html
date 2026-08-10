@@ -11,6 +11,7 @@
             <span class="dashboard-title-mobile">Dashboard</span>
         </h1>
         <p class="subtitle">{{ today|date:"F j, Y" }}</p>
+        <p class="subtitle analytics-cutoff-note">{{ analytics_cutoff_note }}</p>
     </div>
     <div class="hero-actions">
         <a class="btn primary mobile-hide-action" href="{% url 'habits:habit_create' %}">Create habit</a>
@@ -29,7 +30,7 @@
                 <button type="button" class="score-driver-help-button" aria-label="About completion" aria-describedby="dashboard-stat-help-completion" aria-expanded="false" data-score-driver-help>
                     <span aria-hidden="true">ⓘ</span>
                 </button>
-                <span class="score-driver-tooltip" id="dashboard-stat-help-completion" role="tooltip">Average progress across scheduled sessions, weighted by each habit's priority.</span>
+                <span class="score-driver-tooltip" id="dashboard-stat-help-completion" role="tooltip">Average progress across scheduled sessions, weighted by each habit's priority. {{ analytics_cutoff_note }}</span>
             </div>
         </div>
         <span class="stat-value">{{ overall_rate }}%</span>

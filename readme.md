@@ -57,6 +57,47 @@ Users can create multiple habits with different tracking types:
 
 ## 📈 Analytics & Insights
 
+### 🗓️ Finalized-day cutoff
+
+Analytics use finalized activity through yesterday. Today's activity is
+included after the day ends.
+
+A single rule drives this, rather than a per-metric patch:
+
+```python
+analytics_end_date = local_today - timedelta(days=1)
+```
+
+- Every historical metric counts sessions through `iter_finalized_occurrences`,
+  which trims the requested `end_date` to that cutoff before delegating to the
+  raw `iter_scheduled_occurrences` primitive. Consistency Score and its
+  Q/F/R/M/E components, completion rate, dashboard stats, charts, habit and
+  category analytics, habit compare, most improved/declined, biggest score
+  booster/drag, weekly and monthly reports, leaderboard scores, and category
+  rankings all inherit the cutoff from that one place.
+- Period lengths are preserved. Use `analytics_window(days)` for a window that
+  ends yesterday and keeps its full length: on August 10, the 30-day window is
+  July 11 - August 9, not a 29-day window.
+- Today's sessions stay out of `scheduled_total`, Rhythm's last 7 sessions,
+  Momentum's last 6 sessions, `E(k)`, aggregation weights, and
+  leaderboard/category evidence counts.
+- Chart series end at the cutoff, so no axis label shows today's date for a
+  point that was deliberately excluded.
+- The cutoff is derived from the local date on every request
+  (`timezone.localdate()`), so it rolls over on its own at local midnight. No
+  cron job or stored snapshot is needed for correctness.
+- "Local" means the configured `TIME_ZONE`, currently `Asia/Dhaka`, which every
+  user shares. The cutoff resolves through Django's active timezone rather than
+  UTC, so if per-user timezones are added later (by activating the user's zone
+  per request), the cutoff follows automatically with no change here.
+
+**Today page exception.** The Today page stays live: scheduled habits,
+quantitative progress, completion status, and the progress/completion UI all
+update immediately. Those values simply do not enter analytics until the local
+day ends. If yesterday's finalized history is `100, 100, 100, 100, 100, 100`,
+analytics keep showing exactly that while today moves 0% -> 40% -> 100%. After
+local midnight, today's final result becomes eligible.
+
 #### 📊 Average Scheduled-Session Progress
 - Every completion rate uses one shared priority-weighted average across
   **every scheduled session**

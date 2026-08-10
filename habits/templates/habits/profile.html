@@ -8,6 +8,7 @@
         <p class="eyebrow">User profile</p>
         <h1>{{ profile_user.username }}</h1>
         <p class="subtitle">Long-term summary as of {{ today|date:"F j, Y" }}</p>
+        <p class="subtitle analytics-cutoff-note">{{ analytics_cutoff_note }}</p>
         {% if not is_own_profile %}
             <p class="subtitle">Viewing {{ profile_user.username }}'s progress profile.</p>
         {% endif %}

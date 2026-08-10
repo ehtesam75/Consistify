@@ -4870,3 +4870,10 @@ body.auth-page main {
         justify-self: start;
     }
 }
+
+/* Finalized-analytics cutoff notice shown on every analytics surface. */
+.analytics-cutoff-note {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    opacity: 0.85;
+}

@@ -32,7 +32,11 @@ from .models import (
 )
 from .plan_versions import ensure_initial_plan_version, schedule_habit_plan_edit
 from .services import (
+    ANALYTICS_CUTOFF_NOTE,
+    analytics_end_date,
+    analytics_window,
     build_category_analytics,
+
     build_habit_score_drivers,
     build_monthly_reports,
     build_overall_score_breakdown,
@@ -250,12 +254,17 @@ def archived_habits(request):
 @login_required
 def dashboard(request):
     today = timezone.localdate()
-    window_start = today - timedelta(days=29)
+    # Every number on this page is analytics, so the whole window ends at the
+    # finalized cutoff. ``analytics_window`` keeps the full 30-day length by
+    # moving the start back with the end, rather than shortening the period to
+    # 29 days by trimming only the end.
+    window_start, window_end = analytics_window(30, today)
     dashboard_window_note = "Last 30 days"
     previous_window_start, previous_window_end = _previous_period_for_window(
         window_start,
-        today,
+        window_end,
     )
+
     habits = list(
         Habit.objects.filter(user=request.user)
         .prefetch_related("categories", "pauses", "plan_versions__categories")
@@ -265,9 +274,10 @@ def dashboard(request):
         1 for habit in habits if not habit.is_paused and not habit.is_archived
     )
 
-    aggregated = compute_user_metrics(habits, window_start, today)
+    aggregated = compute_user_metrics(habits, window_start, window_end)
 
     habit_cards = aggregated["per_habit"]
+
     aggregate = aggregated["aggregate"]
     total_scheduled = aggregate["total_scheduled"]
     total_completed = aggregate["total_completed"]
@@ -278,12 +288,16 @@ def dashboard(request):
     score_breakdown = build_overall_score_breakdown(
         habits,
         window_start,
-        today,
+        window_end,
         previous_window_start,
         previous_window_end,
         precomputed_metrics=habit_cards,
     )
-    score_breakdown["current_period_label"] = _format_period_label(window_start, today)
+    score_breakdown["current_period_label"] = _format_period_label(
+        window_start,
+        window_end,
+    )
+
     score_breakdown["previous_period_label"] = (
         _format_period_label(previous_window_start, previous_window_end)
         if previous_window_start and previous_window_end
@@ -293,21 +307,25 @@ def dashboard(request):
     score_drivers = build_habit_score_drivers(
         habits,
         window_start,
-        today,
+        window_end,
         previous_window_start,
         previous_window_end,
         precomputed_metrics=habit_cards,
     )
-    category_analytics = build_category_analytics(habits, window_start, today)
+    category_analytics = build_category_analytics(habits, window_start, window_end)
+
 
     doing_well = [card for card in habit_cards if card["scheduled"] and card["rate"] >= 80]
     needs_focus = [card for card in habit_cards if card["scheduled"] and card["rate"] < 50]
 
-    chart_days = 14
-    chart_start = today - timedelta(days=chart_days - 1)
-    chart_series = daily_average_completion_series(habits, chart_start, today)
+    # The trend chart is analytics too, so it plots 14 finalized days ending
+    # yesterday. Labels come from the same series, so the x-axis never shows
+    # today's date for a point that was deliberately excluded.
+    chart_start, chart_end = analytics_window(14, today)
+    chart_series = daily_average_completion_series(habits, chart_start, chart_end)
     chart_labels = [item["label"] for item in chart_series]
     chart_rates = [item["value"] for item in chart_series]
+
 
     context = {
         "today": today,
@@ -325,10 +343,13 @@ def dashboard(request):
         "category_analytics": category_analytics,
         "chart_labels": json.dumps(chart_labels),
         "chart_rates": json.dumps(chart_rates),
-        "dashboard_window_label": _format_period_label(window_start, today),
+        "dashboard_window_label": _format_period_label(window_start, window_end),
         "dashboard_window_note": dashboard_window_note,
+        "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
+        "analytics_end_date": window_end,
     }
     return render(request, "habits/dashboard.html", context)
+
 
 
 @login_required
@@ -348,7 +369,16 @@ def habit_detail(request, habit_id):
     history_dates = list(iter_scheduled_dates(habit, all_time_start, today))
     history_limit = 15
     recent_history_dates = history_dates[-history_limit:]
-    chart_dates = history_dates[-history_limit:]
+    # The chart is analytics: it plots finalized sessions only, so no x-axis
+    # label advertises today's date for data that is deliberately excluded.
+    # The history list keeps today's row as a live "Pending/Done" status.
+    finalized_history_dates = [
+        scheduled_date
+        for scheduled_date in history_dates
+        if scheduled_date <= analytics_end_date(today)
+    ]
+    chart_dates = finalized_history_dates[-history_limit:]
+
 
     completion_map, value_map = get_completion_maps(habit, all_time_start, today)
     history = []
@@ -374,8 +404,9 @@ def habit_detail(request, habit_id):
             }
         )
 
-    window_start = today - timedelta(days=29)
+    window_start, _ = analytics_window(30, today)
     window_completion_map = {
+
         date: value for date, value in completion_map.items() if date >= window_start
     }
     window_value_map = {
@@ -441,6 +472,8 @@ def habit_detail(request, habit_id):
         "tags": habit.get_tags(),
         "detail_window_note": "Last 30 days",
         "all_time_label": f"Since {all_time_start.strftime('%b %d, %Y')}",
+        "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
+
     }
     return render(request, "habits/habit_detail.html", context)
 
@@ -935,6 +968,7 @@ def reports(request):
         "monthly_labels": json.dumps(monthly_labels),
         "monthly_rates": json.dumps(monthly_rates),
         "monthly_consistency": json.dumps(monthly_consistency),
+        "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
     }
     return render(request, "habits/reports.html", context)
 
@@ -947,9 +981,12 @@ def habit_compare(request):
         .order_by("sort_order", "name")
     )
     today = timezone.localdate()
-    window_start = today - timedelta(days=89)
-    last30_start = today - timedelta(days=29)
+    # Both comparison windows are analytics: they end at yesterday and keep
+    # their full length by moving the start back with the end.
+    window_start, window_end = analytics_window(90, today)
+    last30_start, last30_end = analytics_window(30, today)
     habits_by_id = {habit.id: habit for habit in habits}
+
     selected_ids = []
     for raw_id in request.GET.getlist("habit_ids"):
         try:
@@ -968,10 +1005,15 @@ def habit_compare(request):
 
     if len(selected_habits) >= 2:
         for habit in selected_habits:
-            metrics_90 = habit_performance_metrics(habit, window_start, today)
-            metrics_30 = habit_performance_metrics(habit, last30_start, today)
+            metrics_90 = habit_performance_metrics(habit, window_start, window_end)
+            metrics_30 = habit_performance_metrics(habit, last30_start, last30_end)
             all_time_start = habit_tracking_start(habit)
-            metrics_all = habit_performance_metrics(habit, all_time_start, today)
+            metrics_all = habit_performance_metrics(
+                habit,
+                all_time_start,
+                window_end,
+            )
+
             comparison_rows.append(
                 {
                     "habit": habit,
@@ -990,30 +1032,38 @@ def habit_compare(request):
         "chart_payload": json.dumps(chart_payload),
         "window_start": window_start,
         "today": today,
+        "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
+
     }
     return render(request, "habits/habit_compare.html", context)
 
 
 def _build_compare_chart_payload(selected_habits, today):
+    # Compare charts are analytics, so every series ends at the finalized
+    # cutoff. Labels come from the same range, so no chart prints today's
+    # date next to a point that was deliberately excluded.
+    end_date = analytics_end_date(today)
+
     def _build_range(start_date):
-        if start_date > today:
-            return [today]
-        days = (today - start_date).days + 1
+        if start_date > end_date:
+            return [end_date]
+        days = (end_date - start_date).days + 1
         return [start_date + timedelta(days=offset) for offset in range(days)]
 
     def _build_timeframe_series(start_date):
         labels = [day.strftime("%b %d") for day in _build_range(start_date)]
         datasets = []
         for habit in selected_habits:
-            completion_map, _ = get_completion_maps(habit, start_date, today)
+            completion_map, _ = get_completion_maps(habit, start_date, end_date)
             occurrences = {
                 occurrence.date: occurrence
                 for occurrence in iter_scheduled_occurrences(
                     habit,
                     start_date,
-                    today,
+                    end_date,
                 )
             }
+
             tracking_start = habit_tracking_start(habit)
             weighted_completion_total = 0.0
             priority_weight_total = 0.0
@@ -1041,7 +1091,7 @@ def _build_compare_chart_payload(selected_habits, today):
             datasets.append({"label": habit.name, "data": points})
         return {"labels": labels, "datasets": datasets}
 
-    last30_start = today - timedelta(days=29)
+    last30_start, _ = analytics_window(30, today)
     all_time_start = min(
         habit_tracking_start(habit)
         for habit in selected_habits
@@ -1050,6 +1100,7 @@ def _build_compare_chart_payload(selected_habits, today):
         "last30": _build_timeframe_series(last30_start),
         "all": _build_timeframe_series(all_time_start),
     }
+
 
 
 def _previous_period_for_window(window_start, window_end):
@@ -1170,12 +1221,13 @@ def _build_profile_context(profile_user, current_user):
     ]
     monthly_history_reports = list(reversed(monthly_reports))
 
-    daily_window_days = 15
-    daily_start = today - timedelta(days=daily_window_days - 1)
+    # Profile charts are analytics: a full 15 finalized days ending yesterday,
+    # so the x-axis never labels today for a point that was excluded.
+    daily_start, daily_end = analytics_window(15, today)
     daily_series = daily_average_completion_series(
         metrics["habits"],
         daily_start,
-        today,
+        daily_end,
     )
     daily_labels = [item["label"] for item in daily_series]
     daily_rates = [item["value"] for item in daily_series]
@@ -1198,6 +1250,7 @@ def _build_profile_context(profile_user, current_user):
         "daily_rates": json.dumps(daily_rates),
         "friend_request": friend_request,
         "friend_status": friend_status,
+        "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
     }
     return context
 
@@ -1252,12 +1305,20 @@ def leaderboard(request):
 
     participants = [request.user] + _accepted_friends_for(request.user)
 
+    # Ranking is analytics, so both windows end at the finalized cutoff. The
+    # 30-day window keeps its full length by moving the start back with the
+    # end, and the displayed range shows the same dates that were scored.
+    window_end = analytics_end_date(today)
+
     if leaderboard_window == "current":
-        window_start = today - timedelta(days=29)
+        window_start, window_end = analytics_window(30, today)
         window_label = "Last 30 days"
-        window_range = f"{window_start.strftime('%b %d')} - {today.strftime('%b %d')}"
+        window_range = (
+            f"{window_start.strftime('%b %d')} - {window_end.strftime('%b %d')}"
+        )
         window_title = "Current window"
     else:
+
         # Every participant is measured over one identical calendar window.
         # Previously each user was scored from their own first tracked date, so
         # the column compared a 3-day record against a 2-year record and called
@@ -1267,15 +1328,20 @@ def leaderboard(request):
         participant_starts = [
             _user_tracking_start(user, today) for user in participants
         ]
-        window_start = min(participant_starts) if participant_starts else today
+        window_start = min(participant_starts) if participant_starts else window_end
         window_label = "All tracked history"
-        window_range = f"{window_start.strftime('%b %d, %Y')} - {today.strftime('%b %d, %Y')}"
+        window_range = (
+            f"{window_start.strftime('%b %d, %Y')} - "
+            f"{window_end.strftime('%b %d, %Y')}"
+        )
         window_title = "All time"
 
     entries = []
 
     for user in participants:
-        metrics = _build_user_metrics(user, today, start_date=window_start)
+        # Scoring every participant to ``window_end`` keeps today's sessions out
+        # of both the score and the evidence count that weights the ranking.
+        metrics = _build_user_metrics(user, window_end, start_date=window_start)
         total_scheduled = metrics["total_scheduled"]
         entries.append(
             {
@@ -1331,7 +1397,9 @@ def leaderboard(request):
             "leaderboard_window_range": window_range,
             "leaderboard_window_title": window_title,
             "leaderboard_window_start": window_start,
+            "leaderboard_window_end": window_end,
             "leaderboard_min_sessions": LEADERBOARD_CONFIDENCE_SESSIONS,
+            "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
         },
     )
 

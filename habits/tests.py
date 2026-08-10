@@ -291,15 +291,18 @@ class ConsistifyScoreAuditRegressionTests(TestCase):
             username="audit-newcomer",
             password="not-used",
         )
+        # Three *finalized* perfect days. Analytics stop at yesterday, so the
+        # newcomer's history has to end there for this to be a 3-session
+        # record rather than a 2-session one.
         newcomer_habit = Habit.objects.create(
             user=newcomer,
             name="Newcomer habit",
             schedule_type=Habit.SCHEDULE_DAILY,
-            start_date=self.today - timedelta(days=2),
+            start_date=self.today - timedelta(days=3),
             priority=Habit.PRIORITY_MEDIUM,
         )
         ensure_initial_plan_version(newcomer_habit)
-        for offset in range(3):
+        for offset in range(1, 4):
             HabitCompletion.objects.create(
                 habit=newcomer_habit,
                 date=self.today - timedelta(days=offset),
@@ -358,9 +361,11 @@ class ConsistifyScoreAuditRegressionTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["leaderboard_window"], "current")
+        # Thirty finalized days ending yesterday, so the window starts one day
+        # earlier than a today-anchored range would.
         self.assertEqual(
             response.context["leaderboard_window_start"],
-            self.today - timedelta(days=29),
+            self.today - timedelta(days=30),
         )
 
     # ---- M3: score breakdown and drivers reuse precomputed metrics -----
@@ -1601,14 +1606,18 @@ class ConsistencyScoreTests(TestCase):
         )
         self.assertEqual(overall_score, expected_score)
 
-    def test_unlogged_today_matches_an_explicit_zero_completion(self):
-        today = date(2026, 1, 2)
-        yesterday = today - timedelta(days=1)
-        habit = self.make_habit("Daily", yesterday)
-        self.log_completion(habit, yesterday, 100)
+    def test_unlogged_finalized_day_matches_an_explicit_zero_completion(self):
+        # The missed day must be a *finalized* one. Analytics stop at
+        # yesterday, so today's session — logged or not — is out of scope
+        # here and is covered by the finalized-cutoff regression suite.
+        today = date(2026, 1, 3)
+        first_day = date(2026, 1, 1)
+        missed_day = date(2026, 1, 2)
+        habit = self.make_habit("Daily", first_day)
+        self.log_completion(habit, first_day, 100)
 
         with patch("habits.services.timezone.localdate", return_value=today):
-            metrics = habit_performance_metrics(habit, yesterday, today)
+            metrics = habit_performance_metrics(habit, first_day, today)
 
         self.assertEqual(metrics["scheduled_total"], 2)
         self.assertEqual(metrics["completed_total"], 1)
@@ -1620,13 +1629,21 @@ class ConsistencyScoreTests(TestCase):
         self.assertEqual(metrics["consistency_score"], 37.1)
         unlogged_metrics = metrics
 
-        self.log_completion(habit, today, 0)
+        self.log_completion(habit, missed_day, 0)
         with patch("habits.services.timezone.localdate", return_value=today):
-            metrics = habit_performance_metrics(habit, yesterday, today)
+            metrics = habit_performance_metrics(habit, first_day, today)
 
         self.assertEqual(metrics["scheduled_total"], 2)
         self.assertEqual(metrics["completed_total"], 1)
         self.assertEqual(metrics["current_streak"], 0)
+        self.assertEqual(metrics, unlogged_metrics)
+
+        # Today's row is ignored either way, so a perfect day cannot lift
+        # these numbers until it is finalized.
+        self.log_completion(habit, today, 100)
+        with patch("habits.services.timezone.localdate", return_value=today):
+            metrics = habit_performance_metrics(habit, first_day, today)
+
         self.assertEqual(metrics, unlogged_metrics)
 
     def test_overall_score_breakdown_explains_score_change(self):
@@ -2049,23 +2066,29 @@ class ConsistencyScoreTests(TestCase):
 
     def test_weighted_partial_rate_is_consistent_across_site_features(self):
         today = date(2026, 5, 24)
+        yesterday = today - timedelta(days=1)
         low = self.make_habit(
             "Low complete",
-            today,
+            yesterday,
             priority=Habit.PRIORITY_LOW,
         )
         medium = self.make_habit(
             "Medium partial",
-            today,
+            yesterday,
             priority=Habit.PRIORITY_MEDIUM,
         )
         high = self.make_habit(
             "High pending",
-            today,
+            yesterday,
             priority=Habit.PRIORITY_HIGH,
         )
-        self.log_completion(low, today, 100)
-        self.log_completion(medium, today, 50)
+        # The same pattern is logged on yesterday and today. Analytics read the
+        # finalized yesterday; the Today page reads today. Both must therefore
+        # report the identical shared rate, which is exactly what this test is
+        # about.
+        for target_date in (yesterday, today):
+            self.log_completion(low, target_date, 100)
+            self.log_completion(medium, target_date, 50)
 
         # (0.8 * 100 + 1.0 * 50 + 1.3 * 0) / (0.8 + 1.0 + 1.3)
         expected_rate = 41.9
@@ -2131,13 +2154,14 @@ class ConsistencyScoreTests(TestCase):
 
     def test_today_and_dashboard_both_count_unlogged_current_sessions(self):
         today = date(2026, 5, 24)
+        yesterday = today - timedelta(days=1)
         completed = Habit.objects.create(
             user=self.user,
             name="Current complete",
             habit_type=Habit.HABIT_PARTIAL,
             schedule_type=Habit.SCHEDULE_DAILY,
             priority=Habit.PRIORITY_MEDIUM,
-            start_date=today,
+            start_date=yesterday,
         )
         Habit.objects.create(
             user=self.user,
@@ -2145,14 +2169,19 @@ class ConsistencyScoreTests(TestCase):
             habit_type=Habit.HABIT_PARTIAL,
             schedule_type=Habit.SCHEDULE_DAILY,
             priority=Habit.PRIORITY_MEDIUM,
-            start_date=today,
+            start_date=yesterday,
         )
-        HabitCompletion.objects.create(
-            habit=completed,
-            date=today,
-            completion_percentage=Decimal("100"),
-            raw_value=Decimal("100"),
-        )
+        # An unlogged scheduled session must count as 0% rather than being
+        # skipped. That has to be checked on a finalized day for analytics and
+        # on today for the live Today page, so the same shape is set up on
+        # both days.
+        for target_date in (yesterday, today):
+            HabitCompletion.objects.create(
+                habit=completed,
+                date=target_date,
+                completion_percentage=Decimal("100"),
+                raw_value=Decimal("100"),
+            )
         self.client.force_login(self.user)
 
         with patch("habits.views.timezone.localdate", return_value=today), patch(
@@ -2244,8 +2273,8 @@ class ConsistencyScoreTests(TestCase):
 
     def test_dashboard_uses_full_rolling_window_before_may_10(self):
         today = date(2026, 5, 17)
-        habit = self.make_habit("Older dashboard habit", date(2026, 4, 18))
-        self.log_completion(habit, date(2026, 4, 18), 100)
+        habit = self.make_habit("Older dashboard habit", date(2026, 4, 17))
+        self.log_completion(habit, date(2026, 4, 17), 100)
 
         self.client.force_login(self.user)
         with patch("habits.views.timezone.localdate", return_value=today), patch(
@@ -2255,7 +2284,8 @@ class ConsistencyScoreTests(TestCase):
             response = self.client.get(reverse("habits:dashboard"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Apr 18 - May 17")
+        # Still a full 30-day window, but it ends on the finalized yesterday.
+        self.assertContains(response, "Apr 17 - May 16")
 
     def test_reports_use_section_periods_before_may_10(self):
         today = date(2026, 5, 17)
@@ -2265,9 +2295,10 @@ class ConsistencyScoreTests(TestCase):
             weekly_reports = build_weekly_reports([habit], weeks=2, today=today)
             monthly_reports = build_monthly_reports([habit], months=2, today=today)
 
+        # The in-progress week is reported only through the finalized yesterday.
         self.assertEqual(
             [report["label"] for report in weekly_reports],
-            ["May 04 - May 10", "May 11 - May 17"],
+            ["May 04 - May 10", "May 11 - May 16"],
         )
         self.assertEqual(weekly_reports[0]["total_scheduled"], 7)
         self.assertEqual(
@@ -2299,8 +2330,10 @@ class ConsistencyScoreTests(TestCase):
             response = self.client.get(reverse("habits:habit_detail", args=[habit.id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["stats"]["completion_rate"], 0.0)
-        self.assertEqual(response.context["all_time_stats"]["completion_rate"], 36.2)
+        # The 30-day window now spans Apr 17 - May 16, so it catches the last
+        # logged day (Apr 17) that a today-anchored window just missed.
+        self.assertEqual(response.context["stats"]["completion_rate"], 3.3)
+        self.assertEqual(response.context["all_time_stats"]["completion_rate"], 37.0)
         self.assertEqual(len(response.context["history"]), 15)
         self.assertContains(response, "All time")
         self.assertContains(response, "Habit focus")
@@ -2567,7 +2600,7 @@ class FriendRequestFeatureTests(TestCase):
             1,
         )[1]
 
-        self.assertContains(current_window_response, "Apr 18 - May 17")
+        self.assertContains(current_window_response, "Apr 17 - May 16")
         self.assertContains(all_time_response, "All tracked history")
         self.assertLess(
             current_window_ranking.index("alice"),

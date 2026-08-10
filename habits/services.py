@@ -188,11 +188,78 @@ CONSISTENCY_SCORE_COMPONENTS = (
 
 
 
+# ---------------------------------------------------------------------------
+# Finalized-analytics cutoff
+# ---------------------------------------------------------------------------
+# Analytics describe *finished* days. Today is still in progress: a habit that
+# reads 0% at 9am may read 100% at 11pm, so letting today into a score, chart,
+# rate, ranking, or comparison makes every one of those numbers drift downward
+# through the morning and recover by evening. The user would watch their
+# Consistify Score fall without doing anything wrong.
+#
+# The rule is therefore global and centralised here: every historical metric
+# ends at ``analytics_end_date`` (yesterday, in the configured local timezone).
+# The only exception is the Today page's live progress/completion UI, which is
+# explicitly about the unfinished day and reads from ``compute_today_metrics``
+# and ``get_pending_habits_for_date`` instead of the analytics helpers below.
+#
+# The cutoff is derived from ``timezone.localdate()`` on every call, so it rolls
+# over on its own at local midnight. No cron job, no scheduled task, and no
+# stored snapshot is required for correctness.
+ANALYTICS_CUTOFF_NOTE = (
+    "Analytics use finalized activity through yesterday. "
+    "Today's activity is included after the day ends."
+)
+
+
+def analytics_end_date(today=None):
+    """Return the last date whose activity may enter analytics.
+
+    This is the single source of truth for the finalized-day cutoff::
+
+        analytics_end_date = local_today - timedelta(days=1)
+
+    ``today`` defaults to ``timezone.localdate()``, which resolves in the
+    active timezone rather than UTC, so the cutoff advances exactly at local
+    midnight. Consistify currently runs on a single configured ``TIME_ZONE``
+    (``Asia/Dhaka``) shared by every user; because this reads the *active*
+    timezone, adding per-user timezones later would move the cutoff with them
+    without touching this function.
+    """
+    if today is None:
+        today = timezone.localdate()
+    return today - timedelta(days=1)
+
+
+def clamp_analytics_end(end_date, today=None):
+    """Clamp an analytics window end to the finalized-day cutoff.
+
+    Callers may pass ``today`` (or any later date) as their window end; this
+    trims it back to yesterday so no analytics path can observe the unfinished
+    current day. Windows that already end in the past are returned unchanged.
+    """
+    cutoff = analytics_end_date(today)
+    return min(end_date, cutoff) if end_date > cutoff else end_date
+
+
+def analytics_window(days, today=None):
+    """Return the ``(start, end)`` dates of a ``days``-long finalized window.
+
+    The window ends at ``analytics_end_date`` and keeps its full intended
+    length. With today = Aug 10, a 30-day window is Jul 11 - Aug 9 — thirty
+    finalized days — rather than the 29-day Jul 12 - Aug 9 that would result
+    from measuring the start from today and merely trimming the end.
+    """
+    end_date = analytics_end_date(today)
+    return end_date - timedelta(days=max(1, days) - 1), end_date
+
+
 def can_update_progress_on(target_date, today=None):
     """Return whether normal progress editing is allowed for ``target_date``."""
     if today is None:
         today = timezone.localdate()
     return today - timedelta(days=1) <= target_date <= today
+
 
 
 def daily_recap_target_date(today=None):
@@ -1448,6 +1515,13 @@ def category_ranking_score(
 
 
 def build_category_analytics(habits, start_date, end_date):
+    # Category analytics attribute finalized sessions to categories, so the
+    # window is trimmed to yesterday before any occurrence is counted. This
+    # also keeps ``scheduled_total`` — the evidence count behind
+    # ``category_ranking_score`` — free of today's session, so a category
+    # cannot be crowned best or blamed weakest on the strength of a day the
+    # user has not finished yet.
+    end_date = clamp_analytics_end(end_date)
     summaries = []
     best_category = None
     weakest_category = None
@@ -1458,8 +1532,9 @@ def build_category_analytics(habits, start_date, end_date):
 
     for habit in habits:
         occurrences = list(
-            iter_scheduled_occurrences(habit, start_date, end_date)
+            iter_finalized_occurrences(habit, start_date, end_date)
         )
+
         if not occurrences:
             continue
 
@@ -1689,6 +1764,27 @@ def _performance_metrics_for_occurrences(
     }
 
 
+def iter_finalized_occurrences(habit, start_date, end_date):
+    """Yield scheduled sessions inside the finalized-analytics window.
+
+    This is the analytics-side gate in front of
+    ``iter_scheduled_occurrences``: the requested ``end_date`` is trimmed to
+    ``analytics_end_date`` so today's session can never enter a scored window.
+    Because every historical metric counts sessions through this helper,
+    ``scheduled_total``, the Rhythm and Momentum session lists, ``E(k)``, the
+    aggregation weights, and the leaderboard/category evidence counts all move
+    together and stay consistent with one another.
+
+    The Today page deliberately does *not* come through here; it calls
+    ``scheduled_occurrence_on`` so its live UI keeps seeing the current day.
+    """
+    yield from iter_scheduled_occurrences(
+        habit,
+        start_date,
+        clamp_analytics_end(end_date),
+    )
+
+
 def habit_performance_metrics(
     habit,
     start_date,
@@ -1696,7 +1792,15 @@ def habit_performance_metrics(
     completion_map=None,
     value_map=None,
 ):
+    # Analytics end at yesterday. Clamping the window here rather than in each
+    # metric means Q, F, R, M, E, the completion rate, the streaks, and every
+    # aggregate built on top of them are all measured over the same finalized
+    # set of sessions. Today's completion rows may still be present in a
+    # caller-supplied ``completion_map``; they are simply never looked up,
+    # because no occurrence carries today's date.
+    end_date = clamp_analytics_end(end_date)
     occurrences = list(iter_scheduled_occurrences(habit, start_date, end_date))
+
 
     loaded_completion_map = None
     loaded_value_map = None
@@ -1721,10 +1825,15 @@ def habit_performance_metrics(
 
 
 def calculate_streaks(habit, up_to_date=None):
+    # Streaks are historical statistics, so they end at the analytics cutoff
+    # inside ``habit_performance_metrics``. A habit completed today therefore
+    # extends its streak tomorrow, which keeps the number stable instead of
+    # letting it appear and disappear during the day.
     if up_to_date is None:
         up_to_date = timezone.localdate()
 
     metrics = habit_performance_metrics(
+
         habit,
         habit_tracking_start(habit),
         up_to_date,
@@ -1859,19 +1968,24 @@ def build_weekly_reports(habits, weeks=8, today=None):
     if today is None:
         today = timezone.localdate()
 
-    current_week_start = today - timedelta(days=today.weekday())
+    # Weekly snapshots are anchored on the finalized cutoff rather than on
+    # today, so the newest bucket is the week containing yesterday and its
+    # label stops at yesterday. Anchoring (instead of merely trimming the last
+    # period) keeps the requested number of periods intact and stops the label
+    # from advertising a date whose data is deliberately excluded.
+    report_end = clamp_analytics_end(today)
+    current_week_start = report_end - timedelta(days=report_end.weekday())
 
     reports = []
     for week_index in reversed(range(weeks)):
         period_start = current_week_start - timedelta(days=week_index * 7)
-        period_end = period_start + timedelta(days=6)
-        if period_end > today:
-            period_end = today
+        period_end = min(period_start + timedelta(days=6), report_end)
         label = f"{period_start.strftime('%b %d')} - {period_end.strftime('%b %d')}"
         reports.append(_build_period_snapshot(habits, period_start, period_end, label))
 
     _annotate_streak_changes(reports)
     return reports
+
 
 
 def _shift_month(base_date, months_back):
@@ -1887,13 +2001,18 @@ def build_monthly_reports(habits, months=6, today=None):
     if today is None:
         today = timezone.localdate()
 
+    # As with the weekly reports, months are anchored on the finalized cutoff
+    # so a partially-elapsed month is only ever reported through yesterday.
+    report_end = clamp_analytics_end(today)
+
     reports = []
     for months_back in reversed(range(months)):
-        year, month = _shift_month(today, months_back)
+        year, month = _shift_month(report_end, months_back)
         first_day = date(year, month, 1)
         last_day = date(year, month, monthrange(year, month)[1])
-        if months_back == 0 and today < last_day:
-            last_day = today
+        if report_end < last_day:
+            last_day = report_end
+
         reports.append(
             _build_period_snapshot(
                 habits,
@@ -2182,12 +2301,20 @@ def daily_average_completion_series(habits, start_date, end_date):
 
     Each value uses the same priority-weighted, partial-aware calculation as
     every headline rate. Missing completion rows contribute 0% on every scored
-    date, including today.
+    date.
+
+    The series ends at ``analytics_end_date``, so no chart plots a point (or
+    prints an axis label) for today. A partially-finished day would otherwise
+    render as a misleading dip at the right-hand edge of every trend line.
 
     Returns a list of dicts ``{"date", "label", "value"}`` so callers can pick
     either the raw date or formatted label and either float or ``None``.
     """
     habits = list(habits)
+    end_date = clamp_analytics_end(end_date)
+    if end_date < start_date:
+        return []
+
     completions = HabitCompletion.objects.filter(
         habit__in=habits,
         date__range=(start_date, end_date),
