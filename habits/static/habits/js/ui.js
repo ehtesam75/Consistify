@@ -106,6 +106,7 @@ window.ConsistifyUI = (() => {
         let touchDragging = false;
         let suppressClick = false;
         let touchHoldTimer = null;
+        const isCoarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
 
         const persistOrder = async () => {
             const orderedIds = [...list.querySelectorAll(".reorder-item")].map((item) =>
@@ -186,6 +187,30 @@ window.ConsistifyUI = (() => {
             event.preventDefault();
             moveDragging(event.clientY);
         });
+
+        if (isCoarsePointer) {
+            list.addEventListener(
+                "selectstart",
+                (event) => {
+                    if (!event.target.closest(".reorder-item") || event.target.closest("[data-no-drag]")) {
+                        return;
+                    }
+                    event.preventDefault();
+                },
+                true
+            );
+
+            list.addEventListener(
+                "contextmenu",
+                (event) => {
+                    if (!event.target.closest(".reorder-item") || event.target.closest("[data-no-drag]")) {
+                        return;
+                    }
+                    event.preventDefault();
+                },
+                true
+            );
+        }
 
         list.addEventListener(
             "touchstart",

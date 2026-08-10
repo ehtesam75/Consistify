@@ -2819,6 +2819,25 @@ body.recap-open > :not(.daily-recap-overlay) {
     border: 1px dashed var(--accent);
 }
 
+@media (pointer: coarse) {
+    .mobile-all-habits-page .reorder-item {
+        touch-action: pan-y;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
+
+    .mobile-all-habits-page .reorder-item * {
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    .mobile-all-habits-page .reorder-item.dragging {
+        cursor: grabbing;
+        touch-action: none;
+    }
+}
+
 .home-page {
     display: grid;
     gap: 3.2rem;
