@@ -1,7 +1,7 @@
 <div class="card all-habits-card" style="--i: 1;">
     <div class="card-header">
         <h2>All habits</h2>
-        <span class="tag">{{ all_count }} total · drag to reorder</span>
+        <span class="tag">{{ all_count }} active habit{{ all_count|pluralize }} · drag to reorder</span>
     </div>
     {% if habits %}
         <ul class="habit-list" id="habitSortList" data-reorder-url="{% url 'habits:reorder_habits' %}">
