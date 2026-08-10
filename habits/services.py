@@ -37,7 +37,29 @@ CONSISTENCY_RHYTHM_WEIGHT = 0.30
 CONSISTENCY_RECENT_MOMENTUM_WEIGHT = 0.15
 RHYTHM_SESSION_WINDOW = 7
 MOMENTUM_SESSION_WINDOW = 6
+# Reference point for "meaningful participation". Recent momentum still uses it
+# as the denominator of its evidence multiplier (``min(1, latest / 50)``), so it
+# must not be removed or repurposed. Consistency rhythm no longer treats it as a
+# hard pass/fail line; see ``_rhythm_participation``.
 RHYTHM_CONTINUATION_THRESHOLD = 50.0
+# Consistency rhythm scores each session with a *soft* participation value
+# instead of a binary success flag. Progress at or below the floor counts as no
+# participation, progress at or above the ceiling counts as full participation,
+# and the band between them transitions smoothly through 0.5 at the 50% mark.
+#
+# A hard threshold made rhythm discontinuous exactly where most real sessions
+# land: 50% scored 0 and 51% scored 1, so a single percentage point could swing
+# the reported rhythm by 100 points and the Consistify Score by roughly 30. The
+# band keeps the same meaning ("did this session amount to meaningful
+# participation?") while making the answer continuous, so no user can gain or
+# lose a large amount of score from a trivial difference in progress.
+#
+# The band is deliberately narrow and centred on 50: sessions at or below 45%
+# still earn nothing and sessions at or above 55% still count in full, so every
+# history that sat clearly on one side of the old threshold keeps exactly the
+# rhythm it had before.
+RHYTHM_PARTICIPATION_FLOOR = 45.0
+RHYTHM_PARTICIPATION_CEILING = 55.0
 MOMENTUM_STABLE_BAND = 5.0
 MOMENTUM_FULL_SIGNAL_CHANGE = 50.0
 RHYTHM_COVERAGE_WEIGHT = 0.8
@@ -133,9 +155,10 @@ CONSISTENCY_SCORE_COMPONENTS = (
             "interruptions."
         ),
         "help_text": (
-            "Reliability and continuity over the last seven scheduled "
-            "sessions. It rewards regularly maintaining meaningful "
-            "participation (logged above 50%) and avoiding interruptions. "
+            "Reliability and continuity across your recent scheduled "
+            "sessions. Participation gradually counts more around the 50% "
+            "mark, reaching full Rhythm participation at 55%, so a small "
+            "difference in progress only makes a small difference here. "
             "It does not measure improvement or decline — that is a "
             "separate signal called Recent Momentum."
         ),
@@ -666,7 +689,52 @@ def weighted_completion_rate(progress_entries):
 
 
 def _is_successful_continuation(percentage_value):
+    """Return whether progress clears the legacy binary success threshold.
+
+    Kept for callers that need the original pass/fail reading of a session.
+    Consistency rhythm no longer uses it — it scores participation on the
+    smooth band defined by ``_rhythm_participation`` — but the threshold itself
+    is still meaningful elsewhere (recent momentum's evidence multiplier).
+    """
     return _clamped_percentage(percentage_value) > RHYTHM_CONTINUATION_THRESHOLD
+
+
+def _rhythm_participation(percentage_value):
+    """Return how much a session counts as meaningful participation, 0..1.
+
+    This replaces the binary "did this session beat 50%?" test used by
+    consistency rhythm. Progress at or below ``RHYTHM_PARTICIPATION_FLOOR``
+    counts as no participation, progress at or above
+    ``RHYTHM_PARTICIPATION_CEILING`` counts in full, and the band between them
+    ramps smoothly through 0.5 at the midpoint::
+
+        x = clamp((progress - FLOOR) / (CEILING - FLOOR), 0, 1)
+        participation = 3x^2 - 2x^3
+
+    The ramp is the standard smoothstep curve, so participation is continuous
+    *and* flattens out at both ends of the band. That matters: a linear ramp
+    would still have a visible corner at 45% and 55%, and the whole point of
+    the band is that no single percentage point of progress should ever move
+    the score sharply.
+
+    With the default 45/55 band the curve reads:
+        <=45% -> 0.00    46% -> 0.03    49% -> 0.35    50% -> 0.50
+         51% -> 0.65     54% -> 0.97    >=55% -> 1.00
+
+    Because the band is closed at both ends, every session that sat clearly on
+    one side of the old 50% threshold produces exactly the participation the
+    old boolean produced (0 below 45, 1 above 55). Histories that never enter
+    the band therefore score exactly the rhythm they scored before.
+    """
+    percentage = _clamped_percentage(percentage_value)
+    span = RHYTHM_PARTICIPATION_CEILING - RHYTHM_PARTICIPATION_FLOOR
+    if span <= 0:
+        # Degenerate configuration: fall back to the binary reading rather
+        # than dividing by zero.
+        return 1.0 if percentage > RHYTHM_PARTICIPATION_FLOOR else 0.0
+    ramp = (percentage - RHYTHM_PARTICIPATION_FLOOR) / span
+    ramp = max(0.0, min(1.0, ramp))
+    return ramp * ramp * (3.0 - 2.0 * ramp)
 
 
 def _streak_metrics(scheduled_dates, completion_map):
@@ -711,13 +779,21 @@ def _consistency_rhythm(scheduled_dates, completion_map):
 
     Definition:
         * Look at the last ``RHYTHM_SESSION_WINDOW`` scheduled sessions.
-        * A session above ``RHYTHM_CONTINUATION_THRESHOLD`` (50%) is a
-          success; 50% or less, including an unlogged session, is a failure.
-        * ``coverage`` is the share of recent sessions that succeeded.
-        * ``continuity`` is the share of consecutive successful-session
-          transitions. With one session there are no transitions, so
-          ``continuity`` is defined as ``coverage`` (a single observation
-          cannot make a continuity claim beyond its own coverage).
+        * Each session is scored by ``_rhythm_participation`` on a smooth
+          0..1 band: at or below 45% it counts as no participation, at or
+          above 55% it counts in full, and it passes through 0.5 at the 50%
+          mark. An unlogged session is 0% progress and so contributes 0.
+          This replaced a hard ``> 50%`` test, which made a single
+          percentage point of progress worth up to 100 rhythm points.
+        * ``coverage`` is the average participation across recent sessions.
+        * ``continuity`` is the average of ``min(previous, current)`` across
+          consecutive sessions. A transition is only as strong as its weaker
+          end, which is the smooth reading of "were both of these sessions
+          kept?" — with 0/1 participation it reduces to exactly the old
+          "previous *and* current succeeded" count. With one session there
+          are no transitions, so ``continuity`` is defined as ``coverage``
+          (a single observation cannot make a continuity claim beyond its
+          own coverage).
         * ``raw_rhythm = 0.8 * coverage + 0.2 * continuity`` (so a single
           session has ``raw_rhythm = coverage``).
         * ``confidence = min(1, session_count / 3)`` and the result is
@@ -729,7 +805,7 @@ def _consistency_rhythm(scheduled_dates, completion_map):
           unconfident about, and shrinking toward the neutral 50% would hand
           out points for a record the user never earned. This zero-activity
           floor is deliberately narrow: any real progress at all, including
-          partial progress below the success threshold, goes through the
+          progress that earns little or no participation, goes through the
           normal coverage/continuity/confidence pipeline unchanged.
     """
     recent_dates = scheduled_dates[-RHYTHM_SESSION_WINDOW:]
@@ -744,16 +820,17 @@ def _consistency_rhythm(scheduled_dates, completion_map):
         # Zero activity. Every relevant session is untouched, so there is no
         # evidence to be unconfident *about*: confidence may damp an unproven
         # claim, but it must never *credit* an untouched record. Note this
-        # tests the raw progress values, not the success threshold — a user
-        # with genuine partial progress (10%, 40%, 50%) has done real work and
-        # must keep flowing through the normal calculation below.
+        # tests the raw progress values, not participation — a user with
+        # genuine partial progress (10%, 40%, 50%) has done real work and must
+        # keep flowing through the normal calculation below, even when that
+        # progress earns little or no participation.
         return 0.0
 
-    success_flags = [
-        _is_successful_continuation(value) for value in completion_values
+    participation_values = [
+        _rhythm_participation(value) for value in completion_values
     ]
-    session_count = len(success_flags)
-    coverage = sum(success_flags) / session_count
+    session_count = len(participation_values)
+    coverage = sum(participation_values) / session_count
 
     if session_count == 1:
         # With one session there are no transitions; continuity is defined
@@ -761,12 +838,21 @@ def _consistency_rhythm(scheduled_dates, completion_map):
         continuity = coverage
 
     else:
-        successful_pairs = sum(
-            1
-            for previous, current in zip(success_flags, success_flags[1:])
-            if previous and current
-        )
-        continuity = successful_pairs / (session_count - 1)
+        # ``min`` is the smooth reading of the old "previous *and* current
+        # succeeded" rule: a run of sessions is only as continuous as its
+        # weakest link. With binary 0/1 participation this is exactly the
+        # old successful-pair count, so histories that never enter the
+        # 45-55 band keep the rhythm they had before. It also leaves a
+        # perfectly steady history alone, because equal participation
+        # values make ``continuity == coverage`` and therefore
+        # ``raw_rhythm == coverage`` — a consistent user is never penalised
+        # twice for their own consistency.
+        continuity = sum(
+            min(previous, current)
+            for previous, current in zip(
+                participation_values, participation_values[1:]
+            )
+        ) / (session_count - 1)
 
     raw_rhythm = (
         coverage * RHYTHM_COVERAGE_WEIGHT

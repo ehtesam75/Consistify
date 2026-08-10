@@ -47,6 +47,7 @@ from .services import (
     LEADERBOARD_CONFIDENCE_SESSIONS,
     RHYTHM_SESSION_WINDOW,
     SCORE_EVIDENCE_FULL_SESSIONS,
+    _rhythm_participation,
     _score_evidence,
 )
 
@@ -724,7 +725,10 @@ class ConsistencyScoreTests(TestCase):
         start = date(2026, 1, 1)
         habit = self.make_habit("Fading rhythm", start)
         self.log_completion(habit, start, 100)
-        self.log_completion(habit, start + timedelta(days=1), 51)
+        # 60% is comfortably above the participation ceiling, so both sessions
+        # count as full participation and this measures only the effect of the
+        # misses that follow.
+        self.log_completion(habit, start + timedelta(days=1), 60)
 
         stable_metrics = habit_performance_metrics(
             habit,
@@ -787,7 +791,15 @@ class ConsistencyScoreTests(TestCase):
             seven_miss_metrics["streak_stability"],
         )
 
-    def test_consistency_rhythm_requires_more_than_fifty_percent(self):
+    def test_consistency_rhythm_scores_the_fifty_percent_mark_as_half(self):
+        """50% is half participation, and 50.01% is only barely more.
+
+        This replaced a hard ``> 50%`` success rule under which 50% earned
+        nothing and 50.01% earned everything. The participation band keeps
+        the same centre of gravity — 50% is exactly half — but the answer is
+        now continuous, so a hundredth of a percentage point can no longer
+        swing the result.
+        """
         start = date(2026, 1, 1)
         habit = self.make_habit("Threshold rhythm", start)
         self.log_completion(habit, start, 100)
@@ -805,8 +817,18 @@ class ConsistencyScoreTests(TestCase):
             start + timedelta(days=2),
         )
 
-        self.assertEqual(metrics_at_threshold["streak_stability"], 43.3)
-        self.assertEqual(metrics_above_threshold["streak_stability"], 53.3)
+        # [100, 50]: participation 1.0 and 0.5.
+        self.assertEqual(metrics_at_threshold["streak_stability"], 63.3)
+        # [100, 50, 50.01]: the extra hundredth of a point is worth ~0.001.
+        self.assertEqual(metrics_above_threshold["streak_stability"], 63.4)
+        # The old cliff would have made these differ by tens of points.
+        self.assertLess(
+            abs(
+                metrics_above_threshold["streak_stability"]
+                - metrics_at_threshold["streak_stability"]
+            ),
+            1.0,
+        )
 
     def test_consistency_rhythm_uses_only_the_seven_most_recent_sessions(self):
         start = date(2026, 1, 1)
@@ -1628,17 +1650,19 @@ class ConsistencyScoreTests(TestCase):
         # Both windows hold four scheduled sessions, so both carry E=0.9035.
         # current = 0.35*100 + 0.20*100 + 0.9035*(0.30*100 + 0.15*50) = 88.9
         self.assertEqual(breakdown["current_score"], 88.9)
-        # previous = 0.35*50 + 0.20*0 + 0.9035*(0.30*0 + 0.15*50) = 24.3
-        self.assertEqual(breakdown["previous_score"], 24.3)
-        self.assertEqual(breakdown["score_delta"], 64.6)
+        # previous = 0.35*50 + 0.20*0 + 0.9035*(0.30*50 + 0.15*50) = 37.8.
+        # A flat 50% history is half participation, so R is 50 rather than 0.
+        self.assertEqual(breakdown["previous_score"], 37.8)
+        self.assertEqual(breakdown["score_delta"], 51.1)
         # Q delta = (100-50) * 0.35 = 17.5 (completion is never evidence-damped)
         self.assertEqual(components["completion_quality"]["points_delta"], 17.5)
         # F delta = (100-0) * 0.20 = 20.0
         self.assertEqual(components["full_completion"]["points_delta"], 20.0)
-        # R delta = (100-0) * 0.30 * 0.9035 = 27.1 (was 0 before — full swing).
-        # The reported R *value* still swings the full 0 -> 100.
-        self.assertEqual(components["rhythm_stability"]["value_delta"], 100.0)
-        self.assertEqual(components["rhythm_stability"]["points_delta"], 27.1)
+        # R delta = (100-50) * 0.30 * 0.9035 = 13.5. The 50% window earns half
+        # participation instead of none, so the swing is half as large as the
+        # old binary rule produced.
+        self.assertEqual(components["rhythm_stability"]["value_delta"], 50.0)
+        self.assertEqual(components["rhythm_stability"]["points_delta"], 13.5)
         # M delta = 0 (weight and evidence unchanged; both windows are flat)
         self.assertEqual(components["recent_momentum"]["points_delta"], 0.0)
         # The breakdown still decomposes into the score it explains (each
@@ -3208,18 +3232,19 @@ class ZeroActivityRhythmRegressionTests(TestCase):
         self.assertGreater(metrics["consistency_score"], 0.0)
 
     def test_partial_progress_below_threshold_keeps_existing_rhythm(self):
-        """Real work is never floored, even below the 50% success threshold.
+        """Real work is never floored, even when it earns no participation.
 
         The zero-activity floor keys off untouched progress, *not* off the
-        success threshold. A user logging 10-50% has done genuine work, so the
+        participation band. A user logging 10-45% has done genuine work, so the
         normal coverage/continuity/confidence pipeline must still run and
         produce exactly the values it produced before the floor existed.
         """
-        # Pre-existing values: one session shrinks 0 coverage toward neutral by
-        # 1/3 confidence (33.3), two sessions by 2/3 confidence (16.7).
+        # One session shrinks 0 coverage toward neutral by 1/3 confidence
+        # (33.3), two sessions by 2/3 confidence (16.7). 45% sits exactly on
+        # the participation floor, so it still earns zero coverage.
         expected_by_session_count = {1: 33.3, 2: 16.7}
 
-        for percentage in (10, 30, 40, 50):
+        for percentage in (10, 30, 40, 45):
             for session_count, expected in expected_by_session_count.items():
                 with self.subTest(percentage=percentage, sessions=session_count):
                     habit = self._make_habit(f"Partial {percentage} x{session_count}")
@@ -3287,6 +3312,200 @@ class ZeroActivityRhythmRegressionTests(TestCase):
         self.assertEqual(metrics["streak_stability"], 16.7)
         self.assertGreater(metrics["consistency_score"], 0.0)
 
+
+
+class RhythmParticipationBandRegressionTests(TestCase):
+    """Rhythm must not jump at a single percentage point of progress.
+
+    Rhythm scored each session with a hard ``> 50%`` success flag, so 50%
+    counted as a total miss and 51% counted as a perfect session. One extra
+    percentage point could swing the reported rhythm by up to 100 points and
+    the Consistify Score by roughly 30. Participation is now a smooth 0..1
+    value across a narrow 45-55 band centred on 50.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="rhythm-band-user",
+            password="not-used",
+        )
+        self.start = date(2026, 1, 1)
+
+    def _rhythm_for(self, name, percentages):
+        habit = Habit.objects.create(
+            user=self.user,
+            name=name,
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            priority=Habit.PRIORITY_MEDIUM,
+            start_date=self.start,
+        )
+        for offset, percentage in enumerate(percentages):
+            value = Decimal(str(percentage))
+            HabitCompletion.objects.create(
+                habit=habit,
+                date=self.start + timedelta(days=offset),
+                completion_percentage=value,
+                raw_value=value,
+            )
+        return habit_performance_metrics(
+            habit,
+            self.start,
+            self.start + timedelta(days=len(percentages) - 1),
+        )
+
+    def test_participation_curve_matches_the_documented_shape(self):
+        expected = {
+            0: 0.0,
+            40: 0.0,
+            45: 0.0,
+            47.5: 0.15625,
+            50: 0.5,
+            52.5: 0.84375,
+            55: 1.0,
+            60: 1.0,
+            100: 1.0,
+        }
+        for percentage, participation in expected.items():
+            with self.subTest(percentage=percentage):
+                self.assertAlmostEqual(
+                    _rhythm_participation(percentage),
+                    participation,
+                    places=6,
+                )
+
+    def test_participation_is_monotonic_and_bounded(self):
+        previous = -1.0
+        for tenth in range(0, 1001):
+            percentage = tenth / 10
+            value = _rhythm_participation(percentage)
+            with self.subTest(percentage=percentage):
+                self.assertGreaterEqual(value, previous)
+                self.assertGreaterEqual(value, 0.0)
+                self.assertLessEqual(value, 1.0)
+            previous = value
+
+    def test_one_percentage_point_never_causes_a_large_rhythm_jump(self):
+        """The reported cliff: 50% vs 51% must be a small difference."""
+        for sessions in (1, 3, 7):
+            with self.subTest(sessions=sessions):
+                at_fifty = self._rhythm_for(f"Fifty x{sessions}", [50] * sessions)
+                at_fifty_one = self._rhythm_for(
+                    f"Fifty-one x{sessions}", [51] * sessions
+                )
+                rhythm_jump = (
+                    at_fifty_one["streak_stability"]
+                    - at_fifty["streak_stability"]
+                )
+                score_jump = (
+                    at_fifty_one["consistency_score"]
+                    - at_fifty["consistency_score"]
+                )
+                self.assertGreater(rhythm_jump, 0.0)
+                # The old binary rule produced a jump of up to 100 here.
+                self.assertLess(rhythm_jump, 16.0)
+                self.assertLess(score_jump, 6.0)
+
+    def test_rhythm_is_continuous_across_the_whole_progress_range(self):
+        """No single percentage point may move rhythm sharply, anywhere."""
+        previous = None
+        for percentage in range(0, 101):
+            metrics = self._rhythm_for(f"Sweep {percentage}", [percentage] * 7)
+            current = metrics["streak_stability"]
+            if previous is not None:
+                with self.subTest(percentage=percentage):
+                    self.assertLess(
+                        current - previous,
+                        16.0,
+                        "rhythm must not step at any progress value",
+                    )
+                    self.assertGreaterEqual(current, previous)
+            previous = current
+
+    def test_histories_outside_the_band_keep_their_previous_rhythm(self):
+        """Closed at both ends, so clear-cut histories are unaffected."""
+        unchanged = {
+            # (history, rhythm produced by the old binary rule)
+            (40,): 33.3,
+            (60,): 66.7,
+            (100,): 66.7,
+            (40, 40, 40, 40, 40, 40, 40): 0.0,
+            (60, 60, 60, 60, 60, 60, 60): 100.0,
+            (100, 0): 43.3,
+            (100, 40): 43.3,
+            (100, 60): 83.3,
+        }
+        for history, expected in unchanged.items():
+            with self.subTest(history=history):
+                metrics = self._rhythm_for(f"Outside {history}", list(history))
+                self.assertEqual(metrics["streak_stability"], expected)
+
+    def test_the_fifty_percent_history_now_sits_halfway(self):
+        """A flat 50% record is half participation, not a total failure."""
+        flat_fifty = self._rhythm_for("Flat fifty", [50] * 7)
+        flat_forty = self._rhythm_for("Flat forty", [40] * 7)
+        flat_sixty = self._rhythm_for("Flat sixty", [60] * 7)
+
+        self.assertEqual(flat_forty["streak_stability"], 0.0)
+        self.assertEqual(flat_fifty["streak_stability"], 50.0)
+        self.assertEqual(flat_sixty["streak_stability"], 100.0)
+
+    def test_continuity_still_rewards_grouping_over_alternating(self):
+        """``min(prev, current)`` preserves the old continuity behaviour."""
+        alternating = self._rhythm_for("Alternating", [80, 20, 80, 20, 80])
+        grouped = self._rhythm_for("Grouped", [20, 20, 80, 80, 80])
+
+        self.assertEqual(alternating["streak_stability"], 48.0)
+        self.assertEqual(grouped["streak_stability"], 58.0)
+        self.assertLess(
+            alternating["streak_stability"],
+            grouped["streak_stability"],
+        )
+
+    def test_a_steady_history_is_never_penalised_by_continuity(self):
+        """Equal participation means ``continuity == coverage``."""
+        for percentage in (20, 46, 50, 54, 70, 100):
+            with self.subTest(percentage=percentage):
+                metrics = self._rhythm_for(
+                    f"Steady {percentage}", [percentage] * 7
+                )
+                participation = _rhythm_participation(percentage)
+                self.assertAlmostEqual(
+                    metrics["streak_stability"],
+                    round(participation * 100, 1),
+                    delta=0.1,
+                )
+
+    def test_zero_activity_floor_is_unaffected_by_the_band(self):
+        """An untouched window still reports exactly zero."""
+        for sessions in (1, 2, 3, 7, 14):
+            with self.subTest(sessions=sessions):
+                metrics = self._rhythm_for(f"Zero x{sessions}", [0] * sessions)
+                self.assertEqual(metrics["streak_stability"], 0.0)
+                self.assertEqual(metrics["consistency_score"], 0.0)
+
+    def test_low_sample_confidence_still_shrinks_toward_neutral(self):
+        """Confidence behaviour is untouched by the participation change."""
+        one = self._rhythm_for("Confidence x1", [80])
+        two = self._rhythm_for("Confidence x2", [80, 80])
+        three = self._rhythm_for("Confidence x3", [80, 80, 80])
+
+        self.assertEqual(one["streak_stability"], 66.7)
+        self.assertEqual(two["streak_stability"], 83.3)
+        self.assertEqual(three["streak_stability"], 100.0)
+
+    def test_momentum_stays_independent_of_the_participation_band(self):
+        """Rhythm changed; momentum must report exactly what it did before."""
+        expectations = {
+            (50,): 50.0,
+            (51,): 50.0,
+            (30, 80): 83.3,
+            (100, 100, 100): 50.0,
+        }
+        for history, expected in expectations.items():
+            with self.subTest(history=history):
+                metrics = self._rhythm_for(f"Momentum {history}", list(history))
+                self.assertEqual(metrics["recent_momentum"], expected)
 
 
 class LeaderboardLowEvidenceRegressionTests(TestCase):

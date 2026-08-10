@@ -93,8 +93,19 @@ Users can create multiple habits with different tracking types:
   avoids interruptions. It is a *level* signal, not a *trend* signal;
   improvement and decline are reported separately by Recent Momentum. R uses
   the last seven scheduled sessions in the selected report period: 80% comes
-  from success coverage above **50%** and 20% from consecutive successful
-  sessions. With `k` observations, confidence is `min(1, k / 3)`; one or two
+  from participation coverage and 20% from continuity between consecutive
+  sessions. Each session earns a *participation* value between 0 and 1 rather
+  than a pass/fail flag: progress at or below **45%** earns 0, progress at or
+  above **55%** earns 1, and the band between ramps smoothly through 0.5 at
+  the 50% mark (`x = clamp((p - 45) / 10, 0, 1)`, `participation = 3x² - 2x³`).
+  Continuity is the average of `min(previous, current)` participation across
+  consecutive sessions, so a transition is only as strong as its weaker end.
+  This replaced a hard `> 50%` success test, under which 50% scored 0 and 51%
+  scored 1 — a single percentage point could move R by 100 and the Consistify
+  Score by roughly 30. Because the band is closed at both ends, any history
+  that stays clear of 45–55% scores exactly what it scored before, and a
+  perfectly steady history still satisfies `continuity = coverage`.
+  With `k` observations, confidence is `min(1, k / 3)`; one or two
   observations are shrunk toward a neutral 50% until three observations exist.
   More precisely, `R = 100 × (0.5 + c × (rawR - 0.5))`, where
   `rawR = 0.8 × coverage + 0.2 × continuity` and `c = min(1, k / 3)`. With
