@@ -443,6 +443,11 @@ def _habit_plan_configs(habit):
     if not versions:
         return (_mutable_habit_plan_config(habit),)
 
+    # A plan row written before the quantity columns existed (or by any writer
+    # that omitted the type) can carry a blank/legacy value. Falling through to
+    # the field default would report "binary" for a quantitative habit on Today
+    # and history while Edit Habit still read the correct type from ``Habit``.
+    # Resolving the blank against the habit keeps every page in agreement.
     configs = tuple(
         HabitPlanConfig(
             effective_from=version.effective_from,
@@ -453,13 +458,18 @@ def _habit_plan_configs(habit):
             days_of_week=frozenset(version.get_days_of_week_set()),
             priority=version.priority,
             category_ids=_related_category_ids(version),
-            habit_type=version.habit_type,
-            target_value=version.target_value,
-            unit=version.unit or "",
+            habit_type=version.habit_type or habit.habit_type,
+            target_value=(
+                version.target_value
+                if version.habit_type
+                else habit.target_value
+            ),
+            unit=(version.unit if version.habit_type else habit.unit) or "",
         )
         for version in versions
     )
     return configs
+
 
 
 def habit_tracking_start(habit):

@@ -212,11 +212,15 @@ class HabitPlanVersion(models.Model):
     )
     effective_from = models.DateField()
     schedule_anchor = models.DateField()
+    # No ``default`` on purpose. A column default of "binary" silently turned
+    # quantitative habits into binary ones whenever a plan row was written
+    # without an explicit type (see ``save`` below, which inherits instead).
     habit_type = models.CharField(
         max_length=14,
         choices=Habit.HABIT_TYPE_CHOICES,
-        default=Habit.HABIT_BINARY,
+        blank=True,
     )
+
     target_value = models.DecimalField(
         max_digits=8,
         decimal_places=2,
@@ -268,6 +272,60 @@ class HabitPlanVersion(models.Model):
     def __str__(self):
         return f"{self.habit.name} plan from {self.effective_from}"
 
+    def _inherited_source(self):
+        """Return the configuration a type-less row should inherit from.
+
+        The base ``Habit`` mirrors the *newest* configuration, including an
+        edit that is not effective yet. For a row effective in the past that
+        is the wrong source, so prefer the plan already effective on this
+        row's own ``effective_from`` and fall back to the habit only when
+        there is no earlier plan to inherit from.
+        """
+        if self.effective_from is not None:
+            predecessor = (
+                HabitPlanVersion.objects.filter(
+                    habit_id=self.habit_id,
+                    effective_from__lte=self.effective_from,
+                )
+                .exclude(pk=self.pk)
+                .exclude(habit_type="")
+                .order_by("-effective_from", "-id")
+                .first()
+            )
+            if predecessor is not None:
+                return predecessor
+        return self.habit
+
+    def save(self, *args, **kwargs):
+        """Inherit the scoring type from the habit when none was supplied.
+
+        A plan row written without an explicit ``habit_type`` used to fall back
+        to the field default of "binary", which silently reclassified
+        quantitative habits on every page that resolves an effective plan
+        (Today, history, reports) while Edit Habit still read the untouched
+        ``Habit`` record. Inheriting instead keeps every writer consistent:
+        omitting the type now means "same as the habit on that date", never
+        "binary".
+        """
+        if not self.habit_type and self.habit_id:
+            source = self._inherited_source()
+            self.habit_type = source.habit_type
+            if self.habit_type == Habit.HABIT_QUANTITATIVE:
+                if self.target_value is None:
+                    self.target_value = source.target_value
+                if not self.unit:
+                    self.unit = source.unit or ""
+
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = {
+                    *update_fields,
+                    "habit_type",
+                    "target_value",
+                    "unit",
+                }
+        super().save(*args, **kwargs)
+
     def get_days_of_week_set(self):
         if not self.days_of_week:
             return set()
@@ -276,6 +334,7 @@ class HabitPlanVersion(models.Model):
             for value in self.days_of_week.split(",")
             if value.strip()
         }
+
 
 
 class HabitCompletion(models.Model):

@@ -190,10 +190,33 @@ def schedule_habit_plan_edit(
 
         valid_schedules = {choice for choice, _label in Habit.SCHEDULE_CHOICES}
         valid_priorities = {choice for choice, _label in Habit.PRIORITY_CHOICES}
+        valid_habit_types = {choice for choice, _label in Habit.HABIT_TYPE_CHOICES}
         if values["schedule_type"] not in valid_schedules:
             raise ValidationError({"schedule_type": "Choose a valid schedule."})
         if values["priority"] not in valid_priorities:
             raise ValidationError({"priority": "Choose a valid priority."})
+        # Editing an unrelated field must never be able to reclassify the
+        # habit. A blank or unknown type here would otherwise be persisted and
+        # then read back as the field default on every date-scoped page.
+        if values["habit_type"] not in valid_habit_types:
+            raise ValidationError({"habit_type": "Choose a valid habit type."})
+        # A quantitative plan without a target is not scoreable: the progress
+        # views fall back to a binary/percentage reading, which is how a
+        # quantitative habit visually "became" binary. Carry the current
+        # target and unit forward whenever the caller did not supply them.
+        if values["habit_type"] == Habit.HABIT_QUANTITATIVE:
+            if values["target_value"] in (None, ""):
+                values["target_value"] = locked.target_value
+            if not values["unit"]:
+                values["unit"] = locked.unit or ""
+            if values["target_value"] in (None, "") or values["target_value"] <= 0:
+                raise ValidationError(
+                    {"target_value": "Target value must be greater than 0."}
+                )
+        else:
+            values["target_value"] = None
+            values["unit"] = ""
+
         if values["interval_days"] < 1:
             raise ValidationError({"interval_days": "Enter at least 1 day."})
         if values["weekly_interval"] < 1:

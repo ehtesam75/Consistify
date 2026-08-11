@@ -10,3 +10,4 @@ runserver.out.log
 .puku/puku-embeddings.db-wal
 AUDIT_REPORT.md
 habits/test_create.txt
+
