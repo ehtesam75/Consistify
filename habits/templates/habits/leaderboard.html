@@ -8,6 +8,7 @@
         <p class="eyebrow">Friends</p>
         <h1>Leaderboard</h1>
         <p class="subtitle">Ranked by {{ leaderboard_window_title|lower }} consistency as of {{ today|date:"F j, Y" }}.</p>
+        <p class="subtitle analytics-cutoff-note">{{ analytics_cutoff_note }}</p>
     </div>
     <div class="hero-actions">
         <a class="btn primary" href="{% url 'habits:user_search' %}">Find users</a>
@@ -23,7 +24,6 @@
             {% if leaderboard_window_range %}
                 <span class="leaderboard-window-range">&middot; {{ leaderboard_window_range }}</span>
             {% endif %}
-            <span class="leaderboard-window-range analytics-cutoff-note">&middot; {{ analytics_cutoff_note }}</span>
         </span>
     </div>
     <div class="segmented-control leaderboard-window-switch" aria-label="Leaderboard timeframe">
