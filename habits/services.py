@@ -505,6 +505,55 @@ def resolve_habit_plan_on(habit, target_date):
     return active
 
 
+def quantitative_value_period_start(habit, today=None):
+    """Return the date the Average Daily Value period begins for a habit.
+
+    The Average Daily Value on the Habit Details page must only average values
+    that share the same *meaning*. A quantitative reading of "5" is a different
+    measurement after the target, the unit, or the habit type changes, so the
+    averaging period restarts on the latest effective plan change that alters
+    what the quantitative value means:
+
+    * the target value changed,
+    * the unit changed, or
+    * the habit type changed *into* (or restarted) a quantitative
+      configuration.
+
+    Schedule, priority, category, and name changes never reset the period,
+    because they do not change the quantitative value itself. When several
+    relevant changes exist, the latest effective one wins. When no relevant
+    change has ever occurred, the habit's immutable tracking start is returned
+    so the full history is used.
+
+    The effective-dated ``HabitPlanVersion`` history is the source of truth
+    here rather than the current base ``Habit`` record, so a change that is not
+    in effect yet (its ``effective_from`` is still in the future relative to the
+    finalized-analytics cutoff of yesterday) does not prematurely truncate the
+    period.
+    """
+    tracking_start = habit_tracking_start(habit)
+    # Only plan changes that have actually taken effect within the finalized
+    # window (through yesterday) may move the period start. A pending edit that
+    # becomes effective tomorrow has no finalized data logged under it yet, so
+    # it must not blank out the stat.
+    cutoff = analytics_end_date(today)
+
+    period_start = tracking_start
+    previous = None
+    for config in _habit_plan_configs(habit):
+        if config.is_quantitative and previous is not None:
+            changes_meaning = (
+                not previous.is_quantitative
+                or previous.target_value != config.target_value
+                or (previous.unit or "") != (config.unit or "")
+            )
+            if changes_meaning and config.effective_from <= cutoff:
+                period_start = max(period_start, config.effective_from)
+        previous = config
+    return period_start
+
+
+
 def _schedule_interval_days(config):
     if config.schedule_type == Habit.SCHEDULE_WEEKLY:
         return max(1, config.weekly_interval) * 7

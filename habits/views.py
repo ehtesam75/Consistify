@@ -57,7 +57,9 @@ from .services import (
     leaderboard_ranking_score,
     LEADERBOARD_CONFIDENCE_SESSIONS,
     mark_daily_recap_completed,
+    quantitative_value_period_start,
     resolve_habit_plan_on,
+
     should_show_daily_recap,
     iter_scheduled_dates,
     weighted_completion_rate_from_totals,
@@ -432,7 +434,23 @@ def habit_detail(request, habit_id):
         completion_map,
         value_map,
     )
+    # The Average Daily Value only averages readings that share the same
+    # meaning. A change to the target, the unit, or the habit type (into a
+    # quantitative configuration) restarts the averaging period, while
+    # schedule / priority / category / name changes do not. When no relevant
+    # change has ever occurred this resolves to the habit's tracking start, so
+    # the full history is used exactly as before. The end is still clamped to
+    # yesterday inside ``completion_stats`` (finalized-analytics rule).
+    value_period_start = quantitative_value_period_start(habit, today)
+    avg_value_stats = completion_stats(
+        habit,
+        value_period_start,
+        today,
+        completion_map,
+        value_map,
+    )
     detailed_metrics = habit_performance_metrics(
+
         habit,
         all_time_start,
         today,
@@ -464,7 +482,9 @@ def habit_detail(request, habit_id):
         "history": history,
         "stats": stats,
         "all_time_stats": all_time_stats,
+        "avg_value_stats": avg_value_stats,
         "metrics": detailed_metrics,
+
         "current_streak": current_streak,
         "max_streak": max_streak,
         "today": today,
@@ -479,7 +499,12 @@ def habit_detail(request, habit_id):
         "detail_window_note": "Last 15 days",
         "completion_window_label": f"Since {effective_start.strftime('%b %d, %Y')}",
         "all_time_label": f"Since {all_time_start.strftime('%b %d, %Y')}",
+        # The Average Daily Value "Since" date must exactly match the date the
+        # average is calculated from, which restarts on the latest relevant
+        # quantitative plan change (target / unit / habit-type).
+        "avg_value_label": f"Since {value_period_start.strftime('%b %d, %Y')}",
         "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
+
 
     }
     return render(request, "habits/habit_detail.html", context)

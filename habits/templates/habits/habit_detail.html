@@ -66,18 +66,19 @@
             <div class="stat">
                 <span class="stat-label">Avg daily value</span>
                 <span class="stat-value">
-                    {% if all_time_stats.average_value_is_quantitative %}
-                        {{ all_time_stats.average_value|floatformat:0 }} {{ all_time_stats.average_value_unit }}
+                    {% if avg_value_stats.average_value_is_quantitative %}
+                        {{ avg_value_stats.average_value|floatformat:0 }} {{ avg_value_stats.average_value_unit }}
                     {% else %}
-                        {{ all_time_stats.average_value|floatformat:1 }}%
+                        {{ avg_value_stats.average_value|floatformat:1 }}%
                     {% endif %}
                 </span>
-                {% if all_time_stats.average_value_spans_mixed_plans %}
-                    <span class="stat-note">Latest plan only · {{ all_time_label }}</span>
+                {% if avg_value_stats.average_value_spans_mixed_plans %}
+                    <span class="stat-note">Latest plan only · {{ avg_value_label }}</span>
                 {% else %}
-                    <span class="stat-note">All time · {{ all_time_label }}</span>
+                    <span class="stat-note">{{ avg_value_label }}</span>
                 {% endif %}
             </div>
+
             <div class="stat">
                 <span class="stat-label">Consistency score</span>
                 <span class="stat-value">{{ metrics.consistency_score }}</span>
