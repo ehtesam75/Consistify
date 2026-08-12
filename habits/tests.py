@@ -536,21 +536,12 @@ class DashboardPresentationTests(TestCase):
         self.assertContains(response, "reached 100% completion")
         self.assertContains(
             response,
-            "Consistify Score = 35% Completion Quality + 20% Full Completion + 30% Consistency Rhythm + 15% Recent Momentum",
+            "Consistify Score = 35% Completion Quality + 20% Full Completion + evidence-adjusted 30% Consistency Rhythm + 15% Recent Momentum",
         )
         self.assertContains(
             response,
             "The percentage of scheduled sessions you finished at 100%",
         )
-        self.assertContains(
-            response,
-            "contributes the most to overall Consistency Score",
-        )
-        self.assertContains(
-            response,
-            "drags your overall Consistency Score down the most",
-        )
-
         self.assertContains(response, "largest increase in Consistency Score")
         self.assertContains(response, "largest decrease in Consistency Score")
 
@@ -626,6 +617,30 @@ class HabitFormPresentationTests(TestCase):
         self.assertContains(
             response,
             "91.0 consistency &middot; 88.0% completion",
+        )
+        self.assertContains(
+            response,
+            "This habit is shown because it adds the most to your overall Consistency Score.",
+        )
+        self.assertContains(
+            response,
+            "Its impact grows when it has stronger completion, a higher priority, and more scheduled sessions.",
+        )
+        self.assertContains(
+            response,
+            "The number is its weighted share of the current overall score.",
+        )
+        self.assertContains(
+            response,
+            "This habit is shown because it is lowering your score the most.",
+        )
+        self.assertContains(
+            response,
+            "Its impact grows when it has lower completion, a higher priority, and more scheduled sessions.",
+        )
+        self.assertContains(
+            response,
+            "The number is the estimated score gap this habit still has to close.",
         )
 
 

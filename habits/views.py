@@ -1161,8 +1161,9 @@ def _build_score_driver_cards(score_drivers):
             "value_label": "weighted share",
             "empty": "No scored habits yet.",
             "help_text": (
-                "This habit contributes the most to overall Consistency Score. "
-                "Strong performance, priority, and frequency increase its impact."
+                "This habit is shown because it adds the most to your overall Consistency Score. "
+                "Its impact grows when it has stronger completion, a higher priority, and more scheduled sessions. "
+                "The number is its weighted share of the current overall Consistency score."
             ),
         },
         {
@@ -1172,8 +1173,10 @@ def _build_score_driver_cards(score_drivers):
             "value_label": "possible score gap",
             "empty": "No scored habits yet.",
             "help_text": (
-                "This habit drags your overall Consistency Score down the most. "
-                "Lower performance, higher priority, and more sessions increase its impact."            ),
+                "This habit is shown because it is lowering your score the most. "
+                "Its impact grows when it has lower completion, a higher priority, and more scheduled sessions. "
+                "The number shows the gap between this habit's current contribution and its best possible contribution to your overall Consistency Score."
+            ),
         },
         {
             "title": "Most improved",
