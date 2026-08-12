@@ -410,6 +410,70 @@ window.ConsistifyUI = (() => {
                 });
             };
 
+            // Mirrors the server-side "Hide completed" filter so the row can
+            // disappear the moment the saved progress reaches 100%, without
+            // waiting for a full page refresh. Sessions store the toggle, so
+            // the server is the source of truth and the response carries it.
+            const applyHideCompleted = (data) => {
+                if (!data || typeof data.completed !== "boolean") {
+                    return;
+                }
+                const card = form.closest("[data-today-scheduled-card]");
+                if (!card) {
+                    return;
+                }
+                // Server payload wins over the rendered marker so a
+                // session change between page load and submit still
+                // applies. The marker is a fallback for the initial render.
+                if (typeof data.hide_completed === "boolean") {
+                    card.toggleAttribute(
+                        "data-hide-completed-active",
+                        data.hide_completed
+                    );
+                }
+                const hideCompleted =
+                    card.hasAttribute("data-hide-completed-active");
+                const row = form.closest("[data-habit-row]");
+                if (!row) {
+                    return;
+                }
+                row.hidden = hideCompleted && data.completed;
+                updateCompletedEmptyState(card);
+            };
+
+            const updateCompletedEmptyState = (card) => {
+                if (!card) {
+                    return;
+                }
+                const list = card.querySelector("[data-today-scheduled-list]");
+                const completed = card.querySelector(
+                    '[data-empty-state="all-completed"]'
+                );
+                const noneScheduled = card.querySelector(
+                    '[data-empty-state="no-habits"]'
+                );
+                if (!list || !completed || !noneScheduled) {
+                    return;
+                }
+                const totalRows = list.querySelectorAll("[data-habit-row]").length;
+                const visibleRows = Array.from(
+                    list.querySelectorAll("[data-habit-row]")
+                ).filter((row) => !row.hidden).length;
+                const isHiding = card.hasAttribute("data-hide-completed-active");
+                if (totalRows === 0) {
+                    completed.hidden = true;
+                    noneScheduled.hidden = false;
+                    return;
+                }
+                if (visibleRows === 0 && isHiding) {
+                    completed.hidden = false;
+                    noneScheduled.hidden = true;
+                    return;
+                }
+                completed.hidden = true;
+                noneScheduled.hidden = true;
+            };
+
             const fetchSubmit = async ({ keepalive = false } = {}) => {
                 const formData = new FormData(form);
                 try {
@@ -425,6 +489,7 @@ window.ConsistifyUI = (() => {
                     if (response.ok) {
                         const data = await response.json();
                         updateSummaryCounter(data);
+                        applyHideCompleted(data);
                     }
                 } catch (error) {
                     console.error("Failed to save habit progress", error);

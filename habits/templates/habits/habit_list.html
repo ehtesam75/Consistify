@@ -61,7 +61,7 @@
 </div>
 
 <section class="card-grid">
-    <div class="card" style="--i: 0;">
+    <div class="card today-scheduled-card" style="--i: 0;" data-today-scheduled-card {% if hide_completed %}data-hide-completed-active="1"{% endif %}>
         <div class="card-header">
             <h2>Scheduled habits</h2>
             <div class="card-header-actions">
@@ -74,9 +74,9 @@
             </div>
         </div>
         {% if scheduled_habits %}
-            <ul class="habit-list">
+            <ul class="habit-list" data-today-scheduled-list>
                 {% for item in scheduled_habits %}
-                    <li class="habit-row progress-row" style="--i: {{ forloop.counter0 }};">
+                    <li class="habit-row progress-row" style="--i: {{ forloop.counter0 }};" data-habit-row="{{ item.habit.id }}">
                         <div class="habit-info">
                             <a class="habit-name" href="{% url 'habits:habit_detail' item.habit.id %}">{{ item.habit.name }}</a>
                             <p class="habit-meta">{{ item.schedule_summary }}</p>
@@ -135,11 +135,8 @@
                 {% endfor %}
             </ul>
         {% else %}
-            {% if hide_completed and scheduled_count %}
-                <p class="empty">All scheduled habits are completed.</p>
-            {% else %}
-                <p class="empty">No habits scheduled for this day.</p>
-            {% endif %}
+            <p class="empty" data-empty-state="no-habits" {% if hide_completed and scheduled_count %}hidden{% endif %}>No habits scheduled for this day.</p>
+            <p class="empty" data-empty-state="all-completed" {% if not hide_completed or not scheduled_count %}hidden{% endif %}>All scheduled habits are completed.</p>
         {% endif %}
     </div>
     {% include "habits/partials/all_habits_card.html" %}

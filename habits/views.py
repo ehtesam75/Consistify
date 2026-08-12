@@ -852,6 +852,18 @@ def update_progress(request, habit_id):
 
         if is_ajax:
             today_metrics = compute_today_metrics(request.user, target_date)
+            is_completed = completion_percentage >= Decimal("100")
+            # Surface the "completed" flag and current "hide completed" setting
+            # so the client can show/hide the row immediately on success,
+            # without waiting for a page refresh. Sessions are already
+            # populated for AJAX callers (the page rendered the form), so
+            # falling back to False when absent is safe.
+            session_hide_completed = request.session.get("today_hide_completed")
+            hide_completed = (
+                session_hide_completed
+                if isinstance(session_hide_completed, bool)
+                else False
+            )
             return JsonResponse({
                 "ok": True,
                 "completion_percentage": float(completion_percentage),
@@ -859,6 +871,8 @@ def update_progress(request, habit_id):
                 "completed_count": today_metrics["completed_count"],
                 "scheduled_count": today_metrics["scheduled_count"],
                 "completion_rate": today_metrics["completion_rate"],
+                "completed": is_completed,
+                "hide_completed": hide_completed,
             })
 
         return redirect(_safe_next_url(request) or reverse("habits:today"))

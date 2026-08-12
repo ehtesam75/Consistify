@@ -1994,6 +1994,180 @@ class ConsistencyScoreTests(TestCase):
         completion = HabitCompletion.objects.get(habit=habit, date=today)
         self.assertEqual(completion.completion_percentage, Decimal("75"))
 
+    def test_update_progress_ajax_reports_completed_and_hide_completed(self):
+        """The AJAX ``update_progress`` response carries the data the
+        client needs to mirror the server-side "Hide completed" filter
+        without a page refresh.
+        """
+        today = date(2026, 5, 24)
+        binary = Habit.objects.create(
+            user=self.user,
+            name="Binary habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+        )
+        partial = Habit.objects.create(
+            user=self.user,
+            name="Partial habit",
+            habit_type=Habit.HABIT_PARTIAL,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+        )
+        quantitative = Habit.objects.create(
+            user=self.user,
+            name="Quantitative habit",
+            habit_type=Habit.HABIT_QUANTITATIVE,
+            target_value=Decimal("8"),
+            unit="cups",
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+        )
+
+        self.client.force_login(self.user)
+        # Persist the "Hide completed" preference the same way the today page
+        # does when the user clicks the toggle.
+        session = self.client.session
+        session["today_hide_completed"] = True
+        session.save()
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            # Binary: ticking "completed" should report completed=True.
+            binary_response = self.client.post(
+                reverse("habits:update_progress", args=[binary.id]),
+                {"date": today.isoformat(), "completed": "1"},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+            self.assertEqual(binary_response.status_code, 200)
+            binary_payload = json.loads(binary_response.content)
+            self.assertTrue(binary_payload["ok"])
+            self.assertTrue(binary_payload["completed"])
+            self.assertTrue(binary_payload["hide_completed"])
+            self.assertEqual(binary_payload["completion_percentage"], 100.0)
+
+            # Partial: setting 100% reports completed=True; below 100% reports
+            # completed=False so the JS can show the row again.
+            partial_done = self.client.post(
+                reverse("habits:update_progress", args=[partial.id]),
+                {"date": today.isoformat(), "completion_percentage": "100"},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+            self.assertEqual(partial_done.status_code, 200)
+            partial_done_payload = json.loads(partial_done.content)
+            self.assertTrue(partial_done_payload["completed"])
+            self.assertTrue(partial_done_payload["hide_completed"])
+
+            partial_partial = self.client.post(
+                reverse("habits:update_progress", args=[partial.id]),
+                {"date": today.isoformat(), "completion_percentage": "75"},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+            self.assertFalse(json.loads(partial_partial.content)["completed"])
+
+            # Quantitative: hitting the target value reports completed=True.
+            quantitative_done = self.client.post(
+                reverse("habits:update_progress", args=[quantitative.id]),
+                {"date": today.isoformat(), "current_value": "8"},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+            self.assertEqual(quantitative_done.status_code, 200)
+            quantitative_payload = json.loads(quantitative_done.content)
+            self.assertTrue(quantitative_payload["completed"])
+            self.assertEqual(quantitative_payload["completion_percentage"], 100.0)
+
+            # Below the target value reports completed=False.
+            quantitative_partial = self.client.post(
+                reverse("habits:update_progress", args=[quantitative.id]),
+                {"date": today.isoformat(), "current_value": "6"},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+            self.assertFalse(json.loads(quantitative_partial.content)["completed"])
+
+        # Summary numbers also flow back so the header percentage updates.
+        # The first payload was captured right after the binary save, so only
+        # the binary habit is completed at that moment.
+        self.assertEqual(binary_payload["scheduled_count"], 3)
+        self.assertEqual(binary_payload["completed_count"], 1)
+
+    def test_update_progress_ajax_reports_hide_completed_off(self):
+        """When the session "hide completed" flag is off, the response
+        reflects that so the client can keep the row visible regardless
+        of completion.
+        """
+        today = date(2026, 5, 24)
+        habit = Habit.objects.create(
+            user=self.user,
+            name="Toggled-off habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+        )
+        self.client.force_login(self.user)
+        # Explicitly off — this is the default page state, but be explicit
+        # so the test fails if the default ever changes.
+        session = self.client.session
+        session["today_hide_completed"] = False
+        session.save()
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            response = self.client.post(
+                reverse("habits:update_progress", args=[habit.id]),
+                {"date": today.isoformat(), "completed": "1"},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertTrue(payload["completed"])
+        self.assertFalse(payload["hide_completed"])
+
+    def test_today_page_marks_hide_completed_active_for_js(self):
+        """The today page renders a marker attribute on the scheduled
+        card when the server-side "Hide completed" filter is on, so the
+        JS can mirror the filter immediately after the AJAX save.
+        """
+        today = date(2026, 5, 24)
+        Habit.objects.create(
+            user=self.user,
+            name="Visible habit",
+            habit_type=Habit.HABIT_BINARY,
+            schedule_type=Habit.SCHEDULE_DAILY,
+            start_date=today - timedelta(days=2),
+        )
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today):
+            hidden = self.client.get(
+                reverse("habits:today"),
+                {"date": today.isoformat(), "hide_completed": "1"},
+            )
+            self.assertEqual(hidden.status_code, 200)
+            self.assertContains(hidden, "data-hide-completed-active=\"1\"")
+            self.assertContains(hidden, "data-habit-row")
+
+            shown = self.client.get(
+                reverse("habits:today"),
+                {"date": today.isoformat(), "hide_completed": "0"},
+            )
+            self.assertEqual(shown.status_code, 200)
+            self.assertNotContains(shown, "data-hide-completed-active=\"1\"")
+
+    def test_today_page_empty_state_renders_both_messages(self):
+        """Both empty-state messages render in the source so the JS can
+        toggle them without a page refresh.
+        """
+        today = date(2026, 5, 24)
+        # No habits scheduled at all.
+        self.client.force_login(self.user)
+        with patch("habits.views.timezone.localdate", return_value=today):
+            response = self.client.get(
+                reverse("habits:today"),
+                {"date": today.isoformat()},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No habits scheduled for this day.")
+        self.assertContains(response, "All scheduled habits are completed.")
+
+
     def test_today_page_renders_completion_rate_in_summary(self):
         today = date(2026, 5, 24)
         scheduled_habit = Habit.objects.create(

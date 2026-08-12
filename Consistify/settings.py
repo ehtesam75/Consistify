@@ -101,7 +101,15 @@ WSGI_APPLICATION = 'Consistify.wsgi.application'
 #   * ``conn_health_checks=True`` asks Django to validate the connection on
 #     each request so a stale Neon connection after an idle window does not
 #     surface as a transient 500.
-DATABASE_URL = os.environ.get('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
+DATABASE_URL = os.environ.get('DATABASE_URL') or f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+# ``dj_database_url.config`` reads ``DATABASE_URL`` from the environment
+# directly (ignoring the ``default=`` we pass when the variable is set but
+# empty), so reflect the resolved value back into the environment to keep
+# both code paths in sync. Without this, an explicitly empty
+# ``DATABASE_URL`` (e.g. exported by a shell profile) produces
+# ``django.db.backends.dummy`` and every request crashes with
+# ``ImproperlyConfigured`` the moment the session middleware hits the DB.
+os.environ['DATABASE_URL'] = DATABASE_URL
 DATABASES = {
     'default': dj_database_url.config(
         default=DATABASE_URL,

@@ -739,6 +739,14 @@ main > section + section {
     background: var(--surface-alt);
 }
 
+/* The default "[hidden] { display: none }" rule loses to the explicit
+   display: flex/grid on rows and empty-state messages, so the JS-driven
+   "Hide completed" toggle would otherwise leave the row visible. */
+.habit-row[hidden],
+.empty[hidden] {
+    display: none !important;
+}
+
 .progress-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
