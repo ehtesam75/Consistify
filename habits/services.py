@@ -155,12 +155,10 @@ CONSISTENCY_SCORE_COMPONENTS = (
             "interruptions."
         ),
         "help_text": (
-            "Reliability and continuity across your recent scheduled "
-            "sessions. Participation gradually counts more around the 50% "
-            "mark, reaching full Rhythm participation at 55%, so a small "
-            "difference in progress only makes a small difference here. "
-            "It does not measure improvement or decline — that is a "
-            "separate signal called Recent Momentum."
+            "Reliability and continuity across your recent scheduled sessions. "
+            "It rewards regularly making meaningful progress and staying consistent "
+            "from one scheduled session to the next. Progress around 50% receives "
+            "partial credit, while 55% or more receives full Rhythm credit."
         ),
     },
     {
@@ -175,12 +173,11 @@ CONSISTENCY_SCORE_COMPONENTS = (
             "stable."
         ),
         "help_text": (
-            "Trajectory over the last six scheduled sessions. It compares "
-            "recent performance with your recent baseline and rewards "
-            "meaningful improvement while filtering out small fluctuations "
-            "and sparse data."
-            "The value is centred at 50 (neutral), so flat users do not gain or "
-            "lose ground from momentum alone."
+            "Your recent performance trend across the last six scheduled sessions. "
+            "Higher values mean your performance has been improving, lower values "
+            "mean it has been declining, and around 50 means it has stayed fairly "
+            "stable. Small day-to-day changes are ignored so they do not create "
+            "misleading swings."
         ),
     },
 
