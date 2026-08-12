@@ -2310,6 +2310,8 @@ class ConsistencyScoreTests(TestCase):
     def test_habit_detail_uses_all_time_stats_and_limits_history(self):
         today = date(2026, 5, 17)
         habit = self.make_habit("All time detail habit", date(2026, 4, 1))
+        # Log 17 days starting from April 1, but they won't be in the 15-day window.
+        # The 15-day window (May 2-16) is after the last logged date (April 17).
         for offset in range(17):
             self.log_completion(habit, habit.start_date + timedelta(days=offset), 100)
 
@@ -2330,9 +2332,10 @@ class ConsistencyScoreTests(TestCase):
             response = self.client.get(reverse("habits:habit_detail", args=[habit.id]))
 
         self.assertEqual(response.status_code, 200)
-        # The 30-day window now spans Apr 17 - May 16, so it catches the last
-        # logged day (Apr 17) that a today-anchored window just missed.
-        self.assertEqual(response.context["stats"]["completion_rate"], 3.3)
+        # The 15-day window now spans May 2 - May 16, which contains no logged days
+        # (logged days were April 1-17). So completion_rate should be 0% for the window,
+        # but all_time_stats shows 37% (17 completed out of 46 days total from April 1-17 + May 1-17).
+        self.assertEqual(response.context["stats"]["completion_rate"], 0.0)
         self.assertEqual(response.context["all_time_stats"]["completion_rate"], 37.0)
         self.assertEqual(len(response.context["history"]), 15)
         self.assertContains(response, "All time")
@@ -2340,6 +2343,97 @@ class ConsistencyScoreTests(TestCase):
         self.assertContains(response, 'class="habit-detail-page"')
         self.assertContains(response, "Swipe to see more")
         self.assertContains(response, "15 sessions")
+
+    def test_15day_completion_window_for_established_habit(self):
+        """Habit older than 15 days shows 15-day completion window."""
+        today = date(2026, 8, 12)
+        # Habit created 20 days ago (July 23)
+        habit = self.make_habit("Established habit", date(2026, 7, 23))
+        # Log 100% completion for all 20 days
+        for offset in range(20):
+            self.log_completion(habit, habit.start_date + timedelta(days=offset), 100)
+
+        # Record yesterday's recap as done
+        DailyRecapCompletion.objects.create(
+            user=self.user,
+            date=today - timedelta(days=1),
+        )
+
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today), patch(
+            "habits.services.timezone.localdate",
+            return_value=today,
+        ):
+            response = self.client.get(reverse("habits:habit_detail", args=[habit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        # The 15-day window spans July 28 - August 11 (today - 1)
+        # All 15 days should have 100% completion
+        self.assertEqual(response.context["stats"]["completion_rate"], 100.0)
+        # The label should show "Since Jul 28, 2026"
+        self.assertIn("Since Jul 28, 2026", response.context["completion_window_label"])
+        # Verify today is NOT included (finalized analytics rule)
+        self.assertNotIn("Aug 12", response.context["completion_window_label"])
+
+    def test_15day_completion_window_for_young_habit(self):
+        """Habit younger than 15 days shows completion from creation date."""
+        today = date(2026, 8, 12)
+        # Habit created 10 days ago (August 2)
+        habit = self.make_habit("Young habit", date(2026, 8, 2))
+        # Log 100% completion for all 10 days
+        for offset in range(10):
+            self.log_completion(habit, habit.start_date + timedelta(days=offset), 100)
+
+        # Record yesterday's recap as done
+        DailyRecapCompletion.objects.create(
+            user=self.user,
+            date=today - timedelta(days=1),
+        )
+
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today), patch(
+            "habits.services.timezone.localdate",
+            return_value=today,
+        ):
+            response = self.client.get(reverse("habits:habit_detail", args=[habit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        # With only 10 days of history, the window starts from creation date (Aug 2)
+        # and ends at yesterday (Aug 11). That's 10 days.
+        # If the habit is scheduled daily, all 10 logged days should be 100%
+        self.assertEqual(response.context["stats"]["completion_rate"], 100.0)
+        # The label should show "Since Aug 02, 2026" (creation date)
+        self.assertIn("Since Aug 02, 2026", response.context["completion_window_label"])
+
+    def test_15day_completion_today_excluded_from_window(self):
+        """Today's activity is not included in the 15-day completion window."""
+        today = date(2026, 8, 12)
+        # Habit created 20 days ago
+        habit = self.make_habit("Today test habit", date(2026, 7, 23))
+        # Log completion for all days in the 15-day window plus today
+        for offset in range(21):
+            self.log_completion(habit, habit.start_date + timedelta(days=offset), 100)
+
+        # Record yesterday's recap as done
+        DailyRecapCompletion.objects.create(
+            user=self.user,
+            date=today - timedelta(days=1),
+        )
+
+        self.client.force_login(self.user)
+
+        with patch("habits.views.timezone.localdate", return_value=today), patch(
+            "habits.services.timezone.localtime", return_value=datetime(2026, 8, 12, 10, 0, 0)):
+            response = self.client.get(reverse("habits:habit_detail", args=[habit.id]))
+
+        self.assertEqual(response.status_code, 200)
+        # The 15-day window is July 28 - August 11 (today - 1)
+        # Today (Aug 12) should NOT be in the calculation, even though logged
+        self.assertEqual(response.context["stats"]["completion_rate"], 100.0)
+        # The label must end at Aug 11 (yesterday), not today
+        self.assertIn("Since Jul 28, 2026", response.context["completion_window_label"])
 
     def test_paused_dates_are_excluded_from_metrics(self):
         start = date(2026, 1, 1)
