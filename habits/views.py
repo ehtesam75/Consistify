@@ -404,18 +404,24 @@ def habit_detail(request, habit_id):
             }
         )
 
-    window_start, _ = analytics_window(30, today)
+    window_start, window_end = analytics_window(30, today)
+    # If the habit hasn't been tracked for the full 30 days, start from its
+    # immutable tracking start instead of pretending a full window exists.
+    effective_start = max(window_start, all_time_start)
     window_completion_map = {
-
-        date: value for date, value in completion_map.items() if date >= window_start
+        date: value
+        for date, value in completion_map.items()
+        if effective_start <= date <= window_end
     }
     window_value_map = {
-        date: value for date, value in value_map.items() if date >= window_start
+        date: value
+        for date, value in value_map.items()
+        if effective_start <= date <= window_end
     }
     stats = completion_stats(
         habit,
-        window_start,
-        today,
+        effective_start,
+        window_end,
         window_completion_map,
         window_value_map,
     )
@@ -471,7 +477,11 @@ def habit_detail(request, habit_id):
         "chart_percentages": chart_percentages,
         "tags": habit.get_tags(),
         "detail_window_note": "Last 30 days",
-        "last30_label": f"Since {chart_dates[0].strftime('%b %d, %Y')}" if chart_dates else "Since today",
+        "last30_label": (
+            f"{window_start.strftime('%b %d')} - {window_end.strftime('%b %d, %Y')}"
+            if effective_start == window_start
+            else f"Since {effective_start.strftime('%b %d, %Y')}"
+        ),
         "all_time_label": f"Since {all_time_start.strftime('%b %d, %Y')}",
         "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
 
