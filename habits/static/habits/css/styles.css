@@ -4980,3 +4980,19 @@ body.auth-page main {
     color: var(--ink-soft);
     opacity: 0.85;
 }
+
+@media (max-width: 820px) {
+    /* Mobile layout omits the explanatory cutoff notice everywhere except the dashboard. */
+    .analytics-cutoff-note {
+        display: none;
+    }
+
+    .dashboard-page .analytics-cutoff-note {
+        display: block;
+    }
+
+    /* Reports hero hides its only action on mobile; collapse the empty slot so it doesn't reserve space. */
+    .reports-page .hero-actions {
+        display: none;
+    }
+}
