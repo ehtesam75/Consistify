@@ -668,7 +668,8 @@ class ProgressSharingAccessTests(ProgressSharingTestMixin, TestCase):
             changed_profile_response,
             "BOB SHARED ONLY WITH ALICE",
         )
-        self.assertNotContains(changed_profile_response, "Yesterday's Progress")
+        self.assertNotContains(changed_profile_response, "Request Progress Sharing")
+        self.assertContains(changed_profile_response, "Become Friends to Unlock More")
 
     def test_revoking_removes_access_for_both_participants_immediately(self):
         friendship = self.make_friendship()
@@ -1018,6 +1019,42 @@ class YesterdayProgressDataTests(ProgressSharingTestMixin, TestCase):
 
 
 class ProgressSharingProfileStateTests(ProgressSharingTestMixin, TestCase):
+    def assert_profile_analytics_hidden(self, response):
+        self.assertFalse(response.context["can_view_analytics"])
+        self.assertIsNone(response.context["overall_completion"])
+        self.assertIsNone(response.context["consistency_score"])
+        self.assertEqual(response.context["monthly_reports"], [])
+        self.assertEqual(response.context["daily_labels"], "[]")
+        self.assertContains(response, "Become Friends to Unlock More")
+        self.assertContains(response, "overall stats and recent progress")
+
+    def test_nonfriend_and_pending_friend_request_cannot_retrieve_profile_analytics(self):
+        private_habit = self.make_habit(name="PRIVATE PROFILE HABIT")
+        self.log_progress(private_habit)
+
+        nonfriend_response = self.get_profile(self.alice, self.bob)
+        self.assert_profile_analytics_hidden(nonfriend_response)
+        self.assertNotContains(nonfriend_response, "PRIVATE PROFILE HABIT")
+        self.assertContains(nonfriend_response, "Add friend")
+
+        FriendRequest.objects.create(from_user=self.alice, to_user=self.bob)
+        pending_response = self.get_profile(self.alice, self.bob)
+        self.assert_profile_analytics_hidden(pending_response)
+        self.assertNotContains(pending_response, "PRIVATE PROFILE HABIT")
+
+    def test_self_and_accepted_friend_can_retrieve_profile_analytics(self):
+        private_habit = self.make_habit(name="VISIBLE PROFILE HABIT")
+        self.log_progress(private_habit)
+
+        own_response = self.get_profile(self.bob, self.bob)
+        self.assertTrue(own_response.context["can_view_analytics"])
+        self.assertEqual(own_response.context["total_habits"], 1)
+
+        self.make_friendship()
+        friend_response = self.get_profile(self.alice, self.bob)
+        self.assertTrue(friend_response.context["can_view_analytics"])
+        self.assertEqual(friend_response.context["total_habits"], 1)
+
     def test_profile_renders_none_outgoing_incoming_and_active_states(self):
         friendship = self.make_friendship()
 
@@ -1083,8 +1120,8 @@ class ProgressSharingProfileStateTests(ProgressSharingTestMixin, TestCase):
 
     def test_nonfriend_and_own_profile_do_not_offer_progress_sharing(self):
         nonfriend_response = self.get_profile(self.alice, self.bob)
-        self.assertNotContains(nonfriend_response, "Yesterday's Progress")
         self.assertNotContains(nonfriend_response, "Request Progress Sharing")
+        self.assertContains(nonfriend_response, "Become Friends to Unlock More")
 
         own_response = self.get_profile(self.alice, self.alice)
         self.assertNotContains(own_response, "Yesterday's Progress")

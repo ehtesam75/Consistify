@@ -1251,12 +1251,13 @@ def username_profile(request, username):
 
 def _build_profile_context(profile_user, current_user):
     today = timezone.localdate()
+    is_own_profile = profile_user == current_user
     friend_request = None
-    friend_status = "none"
+    friend_status = "none" if not is_own_profile else "self"
     progress_sharing = None
     progress_sharing_state = "unavailable"
     yesterday_progress = None
-    if profile_user != current_user:
+    if not is_own_profile:
         friend_request = _friend_request_between(profile_user, current_user)
         if friend_request:
             if friend_request.status == FriendRequest.STATUS_ACCEPTED:
@@ -1288,37 +1289,47 @@ def _build_profile_context(profile_user, current_user):
                 )
                 if yesterday_progress is not None:
                     progress_sharing_state = "active"
-    metrics = _build_user_metrics(profile_user, today)
+    can_view_analytics = is_own_profile or friend_status == "accepted"
+    metrics = None
+    monthly_reports = []
+    monthly_history_reports = []
+    daily_labels = []
+    daily_rates = []
+    progress_labels = []
+    progress_rates = []
+    if can_view_analytics:
+        metrics = _build_user_metrics(profile_user, today)
 
-    monthly_reports = build_monthly_reports(metrics["habits"], months=12, today=today)
-    progress_labels = [item["label"] for item in monthly_reports]
-    progress_rates = [
-        item["completion_rate"] if item["total_scheduled"] else None
-        for item in monthly_reports
-    ]
-    monthly_history_reports = list(reversed(monthly_reports))
+        monthly_reports = build_monthly_reports(metrics["habits"], months=12, today=today)
+        progress_labels = [item["label"] for item in monthly_reports]
+        progress_rates = [
+            item["completion_rate"] if item["total_scheduled"] else None
+            for item in monthly_reports
+        ]
+        monthly_history_reports = list(reversed(monthly_reports))
 
-    # Profile charts are analytics: a full 15 finalized days ending yesterday,
-    # so the x-axis never labels today for a point that was excluded.
-    daily_start, daily_end = analytics_window(15, today)
-    daily_series = daily_average_completion_series(
-        metrics["habits"],
-        daily_start,
-        daily_end,
-    )
-    daily_labels = [item["label"] for item in daily_series]
-    daily_rates = [item["value"] for item in daily_series]
+        # Profile charts use finalized days only, so today is never shown as a
+        # point whose data was excluded.
+        daily_start, daily_end = analytics_window(15, today)
+        daily_series = daily_average_completion_series(
+            metrics["habits"],
+            daily_start,
+            daily_end,
+        )
+        daily_labels = [item["label"] for item in daily_series]
+        daily_rates = [item["value"] for item in daily_series]
 
     context = {
         "profile_user": profile_user,
-        "is_own_profile": profile_user == current_user,
+        "is_own_profile": is_own_profile,
+        "can_view_analytics": can_view_analytics,
         "today": today,
-        "total_habits": metrics["total_habits"],
-        "overall_completion": metrics["overall_completion"],
-        "best_streak": metrics["best_streak"],
-        "consistency_score": metrics["consistency_score"],
-        "total_scheduled": metrics["total_scheduled"],
-        "total_completed": metrics["total_completed"],
+        "total_habits": metrics["total_habits"] if metrics else None,
+        "overall_completion": metrics["overall_completion"] if metrics else None,
+        "best_streak": metrics["best_streak"] if metrics else None,
+        "consistency_score": metrics["consistency_score"] if metrics else None,
+        "total_scheduled": metrics["total_scheduled"] if metrics else None,
+        "total_completed": metrics["total_completed"] if metrics else None,
         "monthly_reports": monthly_reports,
         "monthly_history_reports": monthly_history_reports,
         "progress_labels": json.dumps(progress_labels),

@@ -2407,6 +2407,26 @@ html {
     margin-bottom: 2rem;
 }
 
+.profile-benefits-card {
+    margin-bottom: 2rem;
+}
+
+.profile-benefits-card > p {
+    max-width: 42rem;
+}
+
+.profile-benefits-list {
+    display: grid;
+    gap: 0.7rem;
+    max-width: 42rem;
+    margin: 1rem 0;
+    padding-left: 1.25rem;
+}
+
+.profile-benefits-list li::marker {
+    color: var(--teal);
+}
+
 .progress-sharing-card-header {
     align-items: flex-start;
 }
