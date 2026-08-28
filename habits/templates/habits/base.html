@@ -64,40 +64,61 @@
                 </nav>
                 <div class="nav-utility">
                     <details class="notification-menu">
-                        <summary class="notification-button icon-toggle" aria-label="Friend requests" title="Friend requests">
+                        <summary class="notification-button icon-toggle" aria-label="Notifications" title="Notifications">
                             <svg class="notification-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"></path>
                                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                             </svg>
-                            {% if incoming_friend_request_count %}
-                                <span class="notification-badge">{{ incoming_friend_request_count }}</span>
+                            {% if notification_count %}
+                                <span class="notification-badge">{{ notification_count }}</span>
                             {% endif %}
                         </summary>
                         <div class="notification-panel">
                             <div class="notification-panel-header">
-                                <strong>Friend requests</strong>
-                                {% if incoming_friend_request_count %}
-                                    <span class="tag">{{ incoming_friend_request_count }} new</span>
+                                <strong>Notifications</strong>
+                                {% if notification_count %}
+                                    <span class="tag">{{ notification_count }} new</span>
                                 {% endif %}
                             </div>
-                            {% if incoming_friend_requests %}
+                            {% if notifications %}
                                 <ul class="notification-list">
-                                    {% for friend_request in incoming_friend_requests %}
+                                    {% for notification in notifications %}
                                         <li class="notification-item">
                                             <div>
-                                                <a class="notification-user" href="{% url 'habits:user_profile' friend_request.from_user.username %}">{{ friend_request.from_user.username }}</a>
-                                                <span class="notification-meta">sent you a request</span>
+                                                <a class="notification-user" href="{% url 'habits:user_profile' notification.user.username %}">{{ notification.user.username }}</a>
+                                                {% if notification.kind == "progress_sharing" %}
+                                                    <span class="notification-meta"><strong>Progress Sharing Request</strong></span>
+                                                    <span class="notification-meta">wants to share yesterday's habit progress with you</span>
+                                                    <span class="notification-meta">Accepting gives you both mutual access.</span>
+                                                {% else %}
+                                                    <span class="notification-meta">sent you a request</span>
+                                                {% endif %}
                                             </div>
-                                            <form method="post" action="{% url 'habits:accept_friend_request' friend_request.id %}">
-                                                {% csrf_token %}
-                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                                <button type="submit" class="btn primary small">Accept</button>
-                                            </form>
+                                            {% if notification.kind == "progress_sharing" %}
+                                                <div class="progress-sharing-actions">
+                                                    <form method="post" action="{% url 'habits:accept_progress_sharing' notification.request.id %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                        <button type="submit" class="btn primary small">Accept</button>
+                                                    </form>
+                                                    <form method="post" action="{% url 'habits:decline_progress_sharing' notification.request.id %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                        <button type="submit" class="btn ghost small">Decline</button>
+                                                    </form>
+                                                </div>
+                                            {% else %}
+                                                <form method="post" action="{% url 'habits:accept_friend_request' notification.request.id %}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                    <button type="submit" class="btn primary small">Accept</button>
+                                                </form>
+                                            {% endif %}
                                         </li>
                                     {% endfor %}
                                 </ul>
                             {% else %}
-                                <p class="empty notification-empty">No pending friend requests.</p>
+                                <p class="empty notification-empty">No new notifications.</p>
                             {% endif %}
                             <div class="notification-panel-footer">
                                 <a class="btn ghost small" href="{% url 'habits:user_search' %}">Find users</a>

@@ -1,6 +1,7 @@
+from django.db.models import Q
 from django.utils import timezone
 
-from .models import FriendRequest
+from .models import FriendRequest, ProgressSharing
 from .services import should_show_daily_recap
 
 
@@ -9,6 +10,9 @@ def friend_request_notifications(request):
         return {
             "incoming_friend_request_count": 0,
             "incoming_friend_requests": [],
+            "incoming_progress_sharing_requests": [],
+            "notification_count": 0,
+            "notifications": [],
         }
 
     incoming_requests = (
@@ -19,10 +23,43 @@ def friend_request_notifications(request):
         .select_related("from_user")
         .order_by("-created_at")
     )
+    incoming_sharing_requests = (
+        ProgressSharing.objects.filter(
+            Q(user_one=request.user) | Q(user_two=request.user),
+            status=ProgressSharing.STATUS_PENDING,
+            friendship__status=FriendRequest.STATUS_ACCEPTED,
+        )
+        .exclude(requester=request.user)
+        .select_related("requester")
+        .order_by("-requested_at")
+    )
+
+    notifications = [
+        {
+            "kind": "friend_request",
+            "user": friend_request.from_user,
+            "request": friend_request,
+            "created_at": friend_request.created_at,
+        }
+        for friend_request in incoming_requests
+    ]
+    notifications.extend(
+        {
+            "kind": "progress_sharing",
+            "user": sharing.requester,
+            "request": sharing,
+            "created_at": sharing.requested_at,
+        }
+        for sharing in incoming_sharing_requests
+    )
+    notifications.sort(key=lambda notification: notification["created_at"], reverse=True)
 
     return {
         "incoming_friend_request_count": incoming_requests.count(),
         "incoming_friend_requests": incoming_requests[:5],
+        "incoming_progress_sharing_requests": incoming_sharing_requests[:5],
+        "notification_count": len(notifications),
+        "notifications": notifications[:10],
     }
 
 

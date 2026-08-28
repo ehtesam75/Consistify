@@ -289,6 +289,58 @@ class ProgressSharingActionTests(ProgressSharingTestMixin, TestCase):
             sorted((self.alice.pk, self.bob.pk)),
         )
 
+    def test_recipient_sees_progress_sharing_notification_with_mutual_access_actions(self):
+        friendship = self.make_friendship()
+        response = self.post_as(
+            self.alice,
+            "habits:request_progress_sharing",
+            [self.bob.pk],
+        )
+        self.assertEqual(response.status_code, 302)
+        sharing = ProgressSharing.objects.get(friendship=friendship)
+
+        self.client.force_login(self.bob)
+        response = self.client.get(reverse("habits:today"))
+
+        self.assertContains(response, "wants to share yesterday's habit progress with you")
+        self.assertContains(response, "Accepting gives you both mutual access.")
+        self.assertContains(
+            response,
+            reverse("habits:accept_progress_sharing", args=[sharing.pk]),
+        )
+        self.assertContains(
+            response,
+            reverse("habits:decline_progress_sharing", args=[sharing.pk]),
+        )
+
+    def test_progress_sharing_notification_is_recipient_only_and_disappears_after_decline(self):
+        friendship = self.make_friendship()
+        sharing = self.make_sharing(friendship, requester=self.alice)
+
+        self.client.force_login(self.alice)
+        requester_response = self.client.get(reverse("habits:today"))
+        self.assertNotContains(
+            requester_response,
+            "wants to share yesterday's habit progress with you",
+        )
+
+        self.client.force_login(self.bob)
+        recipient_response = self.client.get(reverse("habits:today"))
+        self.assertContains(
+            recipient_response,
+            "wants to share yesterday's habit progress with you",
+        )
+        decline_response = self.client.post(
+            reverse("habits:decline_progress_sharing", args=[sharing.pk]),
+            {"next": reverse("habits:today")},
+        )
+        self.assertEqual(decline_response.status_code, 302)
+        self.assertFalse(ProgressSharing.objects.filter(pk=sharing.pk).exists())
+        self.assertNotContains(
+            self.client.get(reverse("habits:today")),
+            "wants to share yesterday's habit progress with you",
+        )
+
     def test_duplicate_and_crossed_requests_converge_on_first_pending_request(self):
         self.make_friendship()
         request_url_args = [self.bob.pk]
@@ -320,6 +372,15 @@ class ProgressSharingActionTests(ProgressSharingTestMixin, TestCase):
         self.assertEqual(sharing.status, ProgressSharing.STATUS_PENDING)
         self.assertEqual(sharing.requester, self.alice)
         self.assertEqual(sharing.requested_at, original_requested_at)
+
+        self.client.force_login(self.bob)
+        response = self.client.get(reverse("habits:today"))
+        self.assertEqual(
+            response.content.decode().count(
+                "wants to share yesterday's habit progress with you"
+            ),
+            1,
+        )
 
     def test_only_recipient_can_accept_a_pending_request(self):
         friendship = self.make_friendship()
@@ -469,6 +530,13 @@ class ProgressSharingActionTests(ProgressSharingTestMixin, TestCase):
                 self.assertFalse(
                     ProgressSharing.objects.filter(pk=sharing.pk).exists()
                 )
+                if status == ProgressSharing.STATUS_PENDING:
+                    self.client.force_login(self.bob)
+                    response = self.client.get(reverse("habits:today"))
+                    self.assertNotContains(
+                        response,
+                        "wants to share yesterday's habit progress with you",
+                    )
 
     def test_duplicate_active_and_stale_actions_do_not_change_state(self):
         friendship = self.make_friendship()
