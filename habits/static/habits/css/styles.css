@@ -2503,6 +2503,13 @@ html {
     margin: 0;
 }
 
+.progress-sharing-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
 .progress-sharing-actions {
     display: flex;
     flex-wrap: wrap;
@@ -4404,6 +4411,16 @@ body.auth-page main {
 
     .progress-sharing-stop-form .btn {
         width: 100%;
+    }
+
+    .progress-sharing-summary-row {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .progress-sharing-toggle {
+        align-self: flex-start;
     }
 
     .yesterday-progress-row {

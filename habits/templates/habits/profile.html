@@ -47,11 +47,6 @@
                     <span class="score-driver-tooltip" id="yesterday-progress-help-{{ profile_user.id }}" role="tooltip">Shows the habits this user had scheduled yesterday and how much of each habit they completed.</span>
                 </div>
             </div>
-            {% if progress_sharing_state == "active" and progress_sharing %}
-                <button class="progress-sharing-toggle" type="button" aria-expanded="true" aria-controls="yesterday-progress-details-{{ profile_user.id }}" data-progress-sharing-toggle>
-                    <span data-progress-sharing-toggle-label>Collapse details</span>
-                </button>
-            {% endif %}
         </div>
         {% if progress_sharing_state == "active" and progress_sharing %}
             <form class="progress-sharing-stop-form" method="post" action="{% url 'habits:stop_progress_sharing' progress_sharing.id %}" data-confirm-action data-confirm-message="Stopping Progress Sharing will remove access for both of you. Neither person will be able to see the other's yesterday progress.">
@@ -63,13 +58,18 @@
     </div>
 
     {% if progress_sharing_state == "active" and yesterday_progress %}
-        <p class="progress-sharing-summary">
-            <strong>{{ yesterday_progress.scheduled_count }}</strong> Scheduled
-            <span aria-hidden="true">•</span>
-            <strong>{{ yesterday_progress.completed_count }}</strong> Completed
-            <span aria-hidden="true">•</span>
-            <strong>{{ yesterday_progress.completion_rate }}%</strong>
-        </p>
+        <div class="progress-sharing-summary-row">
+            <p class="progress-sharing-summary">
+                <strong>{{ yesterday_progress.scheduled_count }}</strong> Scheduled
+                <span aria-hidden="true">•</span>
+                <strong>{{ yesterday_progress.completed_count }}</strong> Completed
+                <span aria-hidden="true">•</span>
+                <strong>{{ yesterday_progress.completion_rate }}%</strong>
+            </p>
+            <button class="progress-sharing-toggle" type="button" aria-expanded="true" aria-controls="yesterday-progress-details-{{ profile_user.id }}" data-progress-sharing-toggle>
+                <span data-progress-sharing-toggle-label>Collapse details</span>
+            </button>
+        </div>
         <div id="yesterday-progress-details-{{ profile_user.id }}" data-progress-sharing-details>
             {% if yesterday_progress.rows %}
                 <ul class="yesterday-progress-list">
