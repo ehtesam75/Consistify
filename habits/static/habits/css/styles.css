@@ -2611,6 +2611,7 @@ html {
 
 .yesterday-progress-list {
     display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
     gap: 0.65rem;
     padding: 0;
     margin: 1rem 0 0;
