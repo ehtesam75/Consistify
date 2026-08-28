@@ -4526,7 +4526,7 @@ body.auth-page main {
     }
 
     .profile-page .hero > div:first-child {
-        width: auto;
+        width: 100%;
     }
 
     .profile-title-row {

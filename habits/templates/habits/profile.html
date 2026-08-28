@@ -26,6 +26,12 @@
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                     <button class="btn ghost" type="submit">Cancel Request</button>
                 </form>
+            {% elif not is_own_profile and friend_status == "incoming_pending" and friend_request %}
+                <form class="profile-header-action profile-header-action-mobile profile-mobile-action" method="post" action="{% url 'habits:accept_friend_request' friend_request.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="btn primary" type="submit">Accept request</button>
+                </form>
             {% endif %}
         </div>
         {% if can_view_analytics and is_own_profile %}
@@ -58,7 +64,7 @@
                 <button class="btn ghost" type="submit">Cancel Request</button>
             </form>
         {% elif not is_own_profile and friend_status == "incoming_pending" and friend_request %}
-            <form method="post" action="{% url 'habits:accept_friend_request' friend_request.id %}">
+            <form class="profile-desktop-action" method="post" action="{% url 'habits:accept_friend_request' friend_request.id %}">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <button class="btn primary" type="submit">Accept request</button>
@@ -198,11 +204,11 @@
     </div>
     <p>Add this user as a friend to:</p>
     <ul class="profile-benefits-list">
-        <li>View their <strong>overall stats and recent progress</strong></li>
-        <li>See <strong>long-term completion rate and other performance stats</strong></li>
-        <li><strong>Request access</strong> to view their <strong>Yesterday's Progress</strong></li>
-        <li><strong>Compete together on the leaderboard</strong></li>
-        <li><strong>Track each other's progress and stay accountable</strong></li>
+        <li>View their overall stats and recent progress</li>
+        <li>See long-term completion rate and other performance stats</li>
+        <li>Request access to view their Yesterday's Progress</li>
+        <li>Compete together on the leaderboard</li>
+        <li>Track each other's progress and stay accountable</li>
         <li>Help motivate each other to stay consistent</li>
     </ul>
     <p class="help">Until you become friends, only basic profile information is visible.</p>
