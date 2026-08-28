@@ -4546,13 +4546,18 @@ body.auth-page main {
     }
 
     .progress-sharing-summary-row {
-        align-items: flex-start;
+        align-items: center;
         flex-direction: column;
         gap: 0.75rem;
     }
 
+    .progress-sharing-summary {
+        justify-content: center;
+        text-align: center;
+    }
+
     .progress-sharing-toggle {
-        align-self: flex-start;
+        align-self: center;
     }
 
     .yesterday-progress-row {

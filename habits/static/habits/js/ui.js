@@ -806,11 +806,32 @@ window.ConsistifyUI = (() => {
                 return;
             }
 
+            const storageKey = `progress-sharing-details:${details.id}`;
+            let isExpanded = true;
+            try {
+                const storedState = window.localStorage.getItem(storageKey);
+                if (storedState === "expanded" || storedState === "collapsed") {
+                    isExpanded = storedState === "expanded";
+                }
+            } catch (error) {
+                isExpanded = true;
+            }
+
+            toggle.setAttribute("aria-expanded", String(isExpanded));
+            details.hidden = !isExpanded;
+            label.textContent = isExpanded ? "Collapse details" : "Expand details";
+
             toggle.addEventListener("click", () => {
-                const isExpanded = toggle.getAttribute("aria-expanded") === "true";
-                toggle.setAttribute("aria-expanded", String(!isExpanded));
-                details.hidden = isExpanded;
-                label.textContent = isExpanded ? "Expand details" : "Collapse details";
+                const isCurrentlyExpanded = toggle.getAttribute("aria-expanded") === "true";
+                const nextIsExpanded = !isCurrentlyExpanded;
+                toggle.setAttribute("aria-expanded", String(nextIsExpanded));
+                details.hidden = !nextIsExpanded;
+                label.textContent = nextIsExpanded ? "Collapse details" : "Expand details";
+                try {
+                    window.localStorage.setItem(storageKey, nextIsExpanded ? "expanded" : "collapsed");
+                } catch (error) {
+                    // Continue to support browsers where storage is unavailable.
+                }
             });
         });
     }
