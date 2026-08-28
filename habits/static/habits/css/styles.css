@@ -4561,7 +4561,11 @@ body.auth-page main {
     }
 
     .yesterday-progress-row {
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .yesterday-progress-habit::after {
+        content: ": ";
     }
 
     .yesterday-progress-result {
