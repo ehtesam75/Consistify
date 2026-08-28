@@ -13,7 +13,14 @@ from .plan_versions import ensure_initial_plan_version
 
 @admin.register(Habit)
 class HabitAdmin(admin.ModelAdmin):
+    # Existing habits must change every effective-dated plan field through the
+    # normal Edit Habit flow. Letting Django admin write any of these directly
+    # updates the mirrored Habit row without creating a HabitPlanVersion, which
+    # makes Edit Habit and date-scoped pages such as Today disagree.
     versioned_fields = (
+        "habit_type",
+        "target_value",
+        "unit",
         "schedule_type",
         "categories",
         "priority",
@@ -59,16 +66,22 @@ class HabitPlanVersionAdmin(admin.ModelAdmin):
     list_display = (
         "habit",
         "effective_from",
+        "habit_type",
+        "target_value",
+        "unit",
         "schedule_type",
         "schedule_anchor",
         "priority",
         "category_list",
     )
-    list_filter = ("effective_from", "schedule_type", "priority", "categories")
+    list_filter = ("effective_from", "habit_type", "schedule_type", "priority", "categories")
     search_fields = ("habit__name", "habit__user__username")
     fields = (
         "habit",
         "effective_from",
+        "habit_type",
+        "target_value",
+        "unit",
         "schedule_type",
         "schedule_anchor",
         "interval_days",
