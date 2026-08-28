@@ -83,13 +83,12 @@
                             {% if notifications %}
                                 <ul class="notification-list">
                                     {% for notification in notifications %}
-                                        <li class="notification-item">
-                                            <div>
+                                        <li class="notification-item{% if notification.kind == "progress_sharing" %} progress-sharing-notification{% endif %}">
+                                            <div class="notification-copy">
                                                 <a class="notification-user" href="{% url 'habits:user_profile' notification.user.username %}">{{ notification.user.username }}</a>
                                                 {% if notification.kind == "progress_sharing" %}
-                                                    <span class="notification-meta"><strong>Progress Sharing Request</strong></span>
-                                                    <span class="notification-meta">wants to share yesterday's habit progress with you</span>
-                                                    <span class="notification-meta">Accepting gives you both mutual access.</span>
+                                                    <span class="notification-meta"><strong>Progress sharing request</strong></span>
+                                                    <p class="notification-message">{{ notification.user.username }} wants to share yesterday's habit progress with you. Accepting gives both of you mutual access.</p>
                                                 {% else %}
                                                     <span class="notification-meta">sent you a request</span>
                                                 {% endif %}

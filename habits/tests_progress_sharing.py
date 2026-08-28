@@ -303,7 +303,7 @@ class ProgressSharingActionTests(ProgressSharingTestMixin, TestCase):
         response = self.client.get(reverse("habits:today"))
 
         self.assertContains(response, "wants to share yesterday's habit progress with you")
-        self.assertContains(response, "Accepting gives you both mutual access.")
+        self.assertContains(response, "Accepting gives both of you mutual access.")
         self.assertContains(
             response,
             reverse("habits:accept_progress_sharing", args=[sharing.pk]),

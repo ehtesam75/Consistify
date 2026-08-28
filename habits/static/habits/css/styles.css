@@ -481,6 +481,31 @@ body.nav-open .nav-toggle-bar:nth-child(3) {
     background: var(--surface-alt);
 }
 
+.progress-sharing-notification {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.notification-copy {
+    min-width: 0;
+}
+
+.notification-message {
+    margin: 0.18rem 0 0;
+    color: var(--ink-soft);
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+
+.progress-sharing-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.progress-sharing-actions .btn {
+    min-width: 0;
+}
+
 .notification-item form,
 .user-result-actions form {
     margin: 0;
