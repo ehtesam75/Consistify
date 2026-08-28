@@ -29,6 +29,31 @@ urlpatterns = [
         views.remove_friend,
         name="remove_friend",
     ),
+    path(
+        "friends/progress-sharing/request/<int:user_id>/",
+        views.request_progress_sharing,
+        name="request_progress_sharing",
+    ),
+    path(
+        "friends/progress-sharing/<int:sharing_id>/accept/",
+        views.accept_progress_sharing,
+        name="accept_progress_sharing",
+    ),
+    path(
+        "friends/progress-sharing/<int:sharing_id>/decline/",
+        views.decline_progress_sharing,
+        name="decline_progress_sharing",
+    ),
+    path(
+        "friends/progress-sharing/<int:sharing_id>/cancel/",
+        views.cancel_progress_sharing,
+        name="cancel_progress_sharing",
+    ),
+    path(
+        "friends/progress-sharing/<int:sharing_id>/stop/",
+        views.stop_progress_sharing,
+        name="stop_progress_sharing",
+    ),
     path("daily-recap/", views.daily_recap, name="daily_recap"),
     path("habits/new/", views.habit_create, name="habit_create"),
     path("habits/<int:habit_id>/", views.habit_detail, name="habit_detail"),

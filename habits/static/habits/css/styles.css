@@ -2395,10 +2395,138 @@ html {
 }
 
 .score-driver-help.is-open .score-driver-tooltip,
+.score-driver-help:focus-within .score-driver-tooltip,
 .score-driver-help:hover .score-driver-tooltip {
     visibility: visible;
     opacity: 1;
     transform: translateY(0);
+}
+
+.profile-page .progress-sharing-card {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.progress-sharing-card-header {
+    align-items: flex-start;
+}
+
+.progress-sharing-headings {
+    display: grid;
+    min-width: 0;
+    gap: 0.3rem;
+}
+
+.progress-sharing-feature-label,
+.progress-sharing-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.progress-sharing-feature-label {
+    color: var(--teal);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.progress-sharing-title-row h2 {
+    min-width: 0;
+    margin: 0;
+}
+
+.progress-sharing-card .score-driver-help {
+    position: static;
+}
+
+.progress-sharing-card .score-driver-tooltip {
+    top: 4.8rem;
+    right: 1.6rem;
+    left: 1.6rem;
+    width: auto;
+}
+
+.progress-sharing-stop-form {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.progress-sharing-state {
+    display: grid;
+    justify-items: start;
+    gap: 0.75rem;
+}
+
+.progress-sharing-state p,
+.progress-sharing-state form,
+.progress-sharing-summary,
+.progress-sharing-mutual-note {
+    margin: 0;
+}
+
+.progress-sharing-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.progress-sharing-actions form {
+    margin: 0;
+}
+
+.progress-sharing-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.55rem;
+    color: var(--ink-soft);
+}
+
+.progress-sharing-summary strong {
+    color: var(--ink);
+}
+
+.yesterday-progress-list {
+    display: grid;
+    gap: 0.65rem;
+    padding: 0;
+    margin: 1rem 0 0;
+    list-style: none;
+}
+
+.yesterday-progress-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(10rem, auto);
+    align-items: center;
+    gap: 0.75rem 1rem;
+    padding: 0.8rem 1rem;
+    border-radius: 16px;
+    background: var(--surface-alt);
+}
+
+.yesterday-progress-habit {
+    min-width: 0;
+    color: var(--ink);
+    font-weight: 650;
+    overflow-wrap: anywhere;
+}
+
+.yesterday-progress-result {
+    min-width: 0;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.progress-sharing-empty {
+    margin: 0.85rem 0 0;
+}
+
+.progress-sharing-mutual-note {
+    margin-top: 0.85rem;
 }
 
 .driver-habit-name {
@@ -4233,6 +4361,23 @@ body.auth-page main {
 }
 
 @media (max-width: 520px) {
+    .progress-sharing-card-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .progress-sharing-stop-form .btn {
+        width: 100%;
+    }
+
+    .yesterday-progress-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .yesterday-progress-result {
+        text-align: left;
+    }
+
     .habit-detail-page main {
         padding-bottom: 2rem;
     }

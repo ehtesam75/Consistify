@@ -1,6 +1,7 @@
 from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, timedelta
+from decimal import Decimal
 from math import exp, isfinite, sqrt
 
 from django.db.models import Q
@@ -2274,6 +2275,77 @@ def compute_user_metrics(habits, start_date, end_date):
     }
 
 
+def get_shared_yesterday_progress(viewer, profile_user, today=None):
+    """Return the narrowly scoped sharing payload, or ``None`` without access.
+
+    This is the backend permission boundary for another user's daily details.
+    Callers cannot supply an arbitrary history date: the only date resolved is
+    the application's finalized analytics date (yesterday in the configured
+    local timezone).  The returned rows intentionally contain only the fields
+    approved for sharing, never the Habit object, notes, descriptions, streaks,
+    or analytics history.
+    """
+    from .models import FriendRequest, ProgressSharing
+
+    if (
+        not getattr(viewer, "is_authenticated", False)
+        or not getattr(viewer, "pk", None)
+        or not getattr(profile_user, "pk", None)
+        or viewer.pk == profile_user.pk
+    ):
+        return None
+
+    friendship_key = FriendRequest.build_friendship_key(
+        viewer.pk,
+        profile_user.pk,
+    )
+    sharing = (
+        ProgressSharing.between(viewer, profile_user)
+        .filter(
+            status=ProgressSharing.STATUS_ACTIVE,
+            friendship__status=FriendRequest.STATUS_ACCEPTED,
+            friendship__friendship_key=friendship_key,
+        )
+        .first()
+    )
+    if sharing is None:
+        return None
+
+    target_date = analytics_end_date(today)
+    daily = compute_today_metrics(profile_user, target_date)
+    rows = []
+    for item in daily["rows"]:
+        raw_value = item["raw_value"]
+        if item["habit_type"] == Habit.HABIT_QUANTITATIVE and raw_value is None:
+            raw_value = Decimal("0")
+        rows.append(
+            {
+                "habit_name": item["habit"].name,
+                "habit_type": item["habit_type"],
+                "completed": item["completed"],
+                "completion_percentage": item["completion_percentage"],
+                "completed_amount": raw_value,
+                "target_amount": item["target_value"],
+                "unit": item["unit"] or "",
+            }
+        )
+
+    scheduled_count = daily["scheduled_count"]
+    completed_count = daily["completed_count"]
+    full_completion_rate = (
+        round((completed_count / scheduled_count) * 100)
+        if scheduled_count
+        else 0
+    )
+    return {
+        "date": target_date,
+        "scheduled_count": scheduled_count,
+        "completed_count": completed_count,
+        "completion_rate": full_completion_rate,
+        "rows": rows,
+    }
+
+
 def compute_today_metrics(user, target_date):
     """Single source of truth for the today-page summary.
 
@@ -2325,7 +2397,7 @@ def compute_today_metrics(user, target_date):
         raw_value = None
         if completion and completion.raw_value is not None:
             raw_value = float(completion.raw_value)
-            if config.is_quantitative:
+            if config.is_quantitative and raw_value.is_integer():
                 raw_value = int(raw_value)
         rows.append(
             {

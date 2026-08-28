@@ -704,7 +704,9 @@ window.ConsistifyUI = (() => {
     }
 
     function initDeleteConfirmations() {
-        const deleteForms = document.querySelectorAll("[data-confirm-delete]");
+        const deleteForms = document.querySelectorAll(
+            "[data-confirm-delete], [data-confirm-action]"
+        );
         deleteForms.forEach((form) => {
             form.addEventListener("submit", (event) => {
                 const message =
@@ -763,6 +765,8 @@ window.ConsistifyUI = (() => {
                 if (willOpen) {
                     item.classList.add("is-open");
                     button.setAttribute("aria-expanded", "true");
+                } else {
+                    button.blur();
                 }
             });
         });
@@ -771,6 +775,10 @@ window.ConsistifyUI = (() => {
             helpItems.forEach((item) => {
                 if (!item.contains(event.target)) {
                     closeHelp(item);
+                    const button = item.querySelector("[data-score-driver-help]");
+                    if (button && document.activeElement === button) {
+                        button.blur();
+                    }
                 }
             });
         });
@@ -779,7 +787,13 @@ window.ConsistifyUI = (() => {
             if (event.key !== "Escape") {
                 return;
             }
-            helpItems.forEach(closeHelp);
+            helpItems.forEach((item) => {
+                closeHelp(item);
+                const button = item.querySelector("[data-score-driver-help]");
+                if (button && document.activeElement === button) {
+                    button.blur();
+                }
+            });
         });
     }
 

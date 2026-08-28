@@ -25,6 +25,108 @@
     </div>
 </section>
 
+{% if not is_own_profile and friend_status == "accepted" %}
+<section class="card progress-sharing-card" style="--i: 0;" aria-labelledby="yesterday-progress-title">
+    <div class="card-header progress-sharing-card-header">
+        <div class="progress-sharing-headings">
+            <div class="progress-sharing-feature-label">
+                <span>Progress Sharing</span>
+                <div class="score-driver-help">
+                    <button type="button" class="score-driver-help-button" aria-label="About Progress Sharing" aria-describedby="progress-sharing-help-{{ profile_user.id }}" aria-expanded="false" data-score-driver-help>
+                        <span aria-hidden="true">ⓘ</span>
+                    </button>
+                    <span class="score-driver-tooltip" id="progress-sharing-help-{{ profile_user.id }}" role="tooltip">Progress Sharing lets you and a friend mutually see each other's scheduled habit progress from yesterday.</span>
+                </div>
+            </div>
+            <div class="progress-sharing-title-row">
+                <h2 id="yesterday-progress-title">Yesterday's Progress</h2>
+                <div class="score-driver-help">
+                    <button type="button" class="score-driver-help-button" aria-label="About Yesterday's Progress" aria-describedby="yesterday-progress-help-{{ profile_user.id }}" aria-expanded="false" data-score-driver-help>
+                        <span aria-hidden="true">ⓘ</span>
+                    </button>
+                    <span class="score-driver-tooltip" id="yesterday-progress-help-{{ profile_user.id }}" role="tooltip">Shows the habits this user had scheduled yesterday and how much of each habit they completed.</span>
+                </div>
+            </div>
+        </div>
+        {% if progress_sharing_state == "active" and progress_sharing %}
+            <form class="progress-sharing-stop-form" method="post" action="{% url 'habits:stop_progress_sharing' progress_sharing.id %}" data-confirm-action data-confirm-message="Stopping Progress Sharing will remove access for both of you. Neither person will be able to see the other's yesterday progress.">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn danger small" type="submit">Stop Progress Sharing</button>
+            </form>
+        {% endif %}
+    </div>
+
+    {% if progress_sharing_state == "active" and yesterday_progress %}
+        <p class="progress-sharing-summary">
+            <strong>{{ yesterday_progress.scheduled_count }}</strong> Scheduled
+            <span aria-hidden="true">•</span>
+            <strong>{{ yesterday_progress.completed_count }}</strong> Completed
+            <span aria-hidden="true">•</span>
+            <strong>{{ yesterday_progress.completion_rate }}%</strong>
+        </p>
+        {% if yesterday_progress.rows %}
+            <ul class="yesterday-progress-list">
+                {% for row in yesterday_progress.rows %}
+                    <li class="yesterday-progress-row">
+                        <span class="yesterday-progress-habit" title="{{ row.habit_name }}">{{ row.habit_name }}</span>
+                        <span class="yesterday-progress-result">
+                            {% if row.habit_type == "quantitative" %}
+                                {{ row.completed_amount|floatformat:"-2" }} / {{ row.target_amount|floatformat:"-2" }}{% if row.unit %} {{ row.unit }}{% endif %}
+                            {% elif row.habit_type == "binary" %}
+                                {% if row.completed %}Completed{% else %}Not completed{% endif %}
+                            {% else %}
+                                {{ row.completion_percentage|floatformat:"-1" }}% complete
+                            {% endif %}
+                        </span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty progress-sharing-empty">No habits were scheduled yesterday.</p>
+        {% endif %}
+        <p class="help progress-sharing-mutual-note">Stopping sharing removes access for both people.</p>
+    {% elif progress_sharing_state == "outgoing_pending" and progress_sharing %}
+        <div class="progress-sharing-state">
+            <p><strong>Progress sharing request sent.</strong></p>
+            <p class="help">If your friend accepts, both of you will be able to see each other's yesterday progress.</p>
+            <form method="post" action="{% url 'habits:cancel_progress_sharing' progress_sharing.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn ghost small" type="submit">Cancel Request</button>
+            </form>
+        </div>
+    {% elif progress_sharing_state == "incoming_pending" and progress_sharing %}
+        <div class="progress-sharing-state">
+            <p><strong>{{ profile_user.username }} requested Progress Sharing.</strong></p>
+            <p class="help">If you accept, both of you will be able to see each other's yesterday habit progress.</p>
+            <div class="progress-sharing-actions">
+                <form method="post" action="{% url 'habits:accept_progress_sharing' progress_sharing.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="btn primary small" type="submit">Accept</button>
+                </form>
+                <form method="post" action="{% url 'habits:decline_progress_sharing' progress_sharing.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="btn ghost small" type="submit">Decline</button>
+                </form>
+            </div>
+        </div>
+    {% else %}
+        <div class="progress-sharing-state">
+            <p><strong>Progress is private.</strong></p>
+            <p class="help">If your friend accepts, both of you will be able to see each other's yesterday progress.</p>
+            <form method="post" action="{% url 'habits:request_progress_sharing' profile_user.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn primary small" type="submit">Request Progress Sharing</button>
+            </form>
+        </div>
+    {% endif %}
+</section>
+{% endif %}
+
 <section class="stats-grid wide">
     <div class="stat-card">
         <span class="stat-label">Total habits</span>
