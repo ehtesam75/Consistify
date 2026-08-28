@@ -1096,7 +1096,7 @@ class ProgressSharingProfileStateTests(ProgressSharingTestMixin, TestCase):
 
         response = self.get_profile()
 
-        self.assertContains(response, 'class="score-driver-help"', count=2)
+        self.assertContains(response, 'class="score-driver-help progress-sharing-desktop-help"', count=2)
         self.assertContains(response, "data-score-driver-help", count=2)
         self.assertContains(response, 'role="tooltip"', count=2)
         self.assertContains(

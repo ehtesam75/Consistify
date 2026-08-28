@@ -58,7 +58,7 @@
         <div class="progress-sharing-headings">
             <div class="progress-sharing-feature-label">
                 <span>Progress Sharing</span>
-                <div class="score-driver-help">
+                <div class="score-driver-help progress-sharing-desktop-help">
                     <button type="button" class="score-driver-help-button" aria-label="About progress sharing" aria-describedby="progress-sharing-help-{{ profile_user.id }}" aria-expanded="false" data-score-driver-help>
                         <span aria-hidden="true">ⓘ</span>
                     </button>
@@ -67,7 +67,7 @@
             </div>
             <div class="progress-sharing-title-row">
                 <h2 id="yesterday-progress-title">Yesterday's Progress</h2>
-                <div class="score-driver-help">
+                <div class="score-driver-help progress-sharing-desktop-help">
                     <button type="button" class="score-driver-help-button" aria-label="About yesterday's progress" aria-describedby="yesterday-progress-help-{{ profile_user.id }}" aria-expanded="false" data-score-driver-help>
                         <span aria-hidden="true">ⓘ</span>
                     </button>
@@ -96,6 +96,10 @@
             </form>
         {% endif %}
     </div>
+
+    {% if progress_sharing_state != "active" %}
+        <p class="progress-sharing-mobile-explanation">Progress Sharing lets you and a friend see each other's yesterday habit progress for accountability.</p>
+    {% endif %}
 
     {% if progress_sharing_state == "active" and yesterday_progress %}
         <div class="progress-sharing-summary-row">

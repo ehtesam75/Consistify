@@ -2488,6 +2488,10 @@ html {
     text-transform: none;
 }
 
+.progress-sharing-mobile-explanation {
+    display: none;
+}
+
 .progress-sharing-toggle {
     display: inline-flex;
     align-items: center;
@@ -4481,6 +4485,18 @@ body.auth-page main {
     .progress-sharing-card-header {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .progress-sharing-desktop-help {
+        display: none;
+    }
+
+    .progress-sharing-mobile-explanation {
+        display: block;
+        margin: 0 0 0.85rem;
+        color: var(--ink-soft);
+        font-size: 0.82rem;
+        line-height: 1.4;
     }
 
     .progress-sharing-title-row {
