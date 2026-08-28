@@ -2332,16 +2332,11 @@ def get_shared_yesterday_progress(viewer, profile_user, today=None):
 
     scheduled_count = daily["scheduled_count"]
     completed_count = daily["completed_count"]
-    full_completion_rate = (
-        round((completed_count / scheduled_count) * 100)
-        if scheduled_count
-        else 0
-    )
     return {
         "date": target_date,
         "scheduled_count": scheduled_count,
         "completed_count": completed_count,
-        "completion_rate": full_completion_rate,
+        "completion_rate": daily["completion_rate"],
         "rows": rows,
     }
 

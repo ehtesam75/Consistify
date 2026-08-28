@@ -825,7 +825,7 @@ class YesterdayProgressDataTests(ProgressSharingTestMixin, TestCase):
         self.assertIn("Completed", exercise_row)
         self.assertIn("Not completed", meditation_row)
 
-    def test_summary_counts_fully_completed_habits_not_weighted_partial_progress(self):
+    def test_summary_keeps_full_completion_counts_and_uses_weighted_partial_rate(self):
         completed = self.make_habit(
             name="Low priority completed",
             priority=Habit.PRIORITY_LOW,
@@ -848,7 +848,49 @@ class YesterdayProgressDataTests(ProgressSharingTestMixin, TestCase):
 
         self.assertEqual(payload["scheduled_count"], 3)
         self.assertEqual(payload["completed_count"], 1)
-        self.assertEqual(payload["completion_rate"], 33)
+        self.assertEqual(payload["completion_rate"], 41.9)
+
+    def test_completion_rate_uses_priorities_effective_yesterday(self):
+        completed = self.make_habit(
+            name="Historically low completed",
+            priority=Habit.PRIORITY_HIGH,
+        )
+        missed = self.make_habit(
+            name="Historically high missed",
+            priority=Habit.PRIORITY_LOW,
+        )
+        for habit, historical_priority, current_priority in (
+            (completed, Habit.PRIORITY_LOW, Habit.PRIORITY_HIGH),
+            (missed, Habit.PRIORITY_HIGH, Habit.PRIORITY_LOW),
+        ):
+            HabitPlanVersion.objects.create(
+                habit=habit,
+                effective_from=self.OLDER_DAY,
+                schedule_anchor=self.OLDER_DAY,
+                habit_type=Habit.HABIT_BINARY,
+                schedule_type=Habit.SCHEDULE_DAILY,
+                interval_days=1,
+                weekly_interval=1,
+                priority=historical_priority,
+            )
+            HabitPlanVersion.objects.create(
+                habit=habit,
+                effective_from=self.TODAY,
+                schedule_anchor=self.OLDER_DAY,
+                habit_type=Habit.HABIT_BINARY,
+                schedule_type=Habit.SCHEDULE_DAILY,
+                interval_days=1,
+                weekly_interval=1,
+                priority=current_priority,
+            )
+        self.log_progress(completed, percentage=100)
+        self.log_progress(missed, percentage=0)
+
+        payload = self.shared_progress()
+
+        self.assertEqual(payload["scheduled_count"], 2)
+        self.assertEqual(payload["completed_count"], 1)
+        self.assertEqual(payload["completion_rate"], 38.1)
 
     def test_yesterday_uses_historical_target_unit_and_type_after_today_edit(self):
         habit = self.make_habit(
