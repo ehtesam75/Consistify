@@ -16,14 +16,13 @@
                 </form>
             {% endif %}
         </div>
-        {% if can_view_analytics %}
+        {% if can_view_analytics and is_own_profile %}
             <p class="subtitle">Long-term summary as of {{ today|date:"F j, Y" }}</p>
             <p class="subtitle analytics-cutoff-note">{{ analytics_cutoff_note }}</p>
+        {% elif not is_own_profile %}
+            <p class="subtitle">Viewing {{ profile_user.username }}'s progress profile.</p>
         {% else %}
             <p class="subtitle">Basic profile</p>
-        {% endif %}
-        {% if not is_own_profile %}
-            <p class="subtitle">Viewing {{ profile_user.username }}'s progress profile.</p>
         {% endif %}
     </div>
     <div class="hero-actions">
