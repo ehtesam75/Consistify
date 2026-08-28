@@ -29,6 +29,7 @@ from .models import (
     HabitCategory,
     HabitCompletion,
     HabitPause,
+    ProgressSharing,
 )
 from .plan_versions import ensure_initial_plan_version, schedule_habit_plan_edit
 from .services import (
@@ -49,6 +50,7 @@ from .services import (
     daily_recap_target_date,
     daily_average_completion_series,
     get_pending_habits_for_date,
+    get_shared_yesterday_progress,
     get_completion_maps,
     get_next_scheduled_date,
     habit_tracking_start,
@@ -1177,7 +1179,7 @@ def _build_score_driver_cards(score_drivers):
             "help_text": (
                 "This habit is shown because it adds the most to your overall Consistency Score. "
                 "Its impact grows when it has stronger completion, a higher priority, and more scheduled sessions. "
-                "The number is its weighted share of the current overall Consistency score."
+                "The number is its weighted share of the current overall score."
             ),
         },
         {
@@ -1189,7 +1191,7 @@ def _build_score_driver_cards(score_drivers):
             "help_text": (
                 "This habit is shown because it is lowering your score the most. "
                 "Its impact grows when it has lower completion, a higher priority, and more scheduled sessions. "
-                "The number shows the gap between this habit's current contribution and its best possible contribution to your overall Consistency Score."
+                "The number is the estimated score gap this habit still has to close."
             ),
         },
         {
@@ -1251,6 +1253,9 @@ def _build_profile_context(profile_user, current_user):
     today = timezone.localdate()
     friend_request = None
     friend_status = "none"
+    progress_sharing = None
+    progress_sharing_state = "unavailable"
+    yesterday_progress = None
     if profile_user != current_user:
         friend_request = _friend_request_between(profile_user, current_user)
         if friend_request:
@@ -1260,6 +1265,29 @@ def _build_profile_context(profile_user, current_user):
                 friend_status = "incoming_pending"
             else:
                 friend_status = "outgoing_pending"
+
+    if friend_status == "accepted":
+        progress_sharing_state = "none"
+        progress_sharing = (
+            ProgressSharing.between(profile_user, current_user)
+            .filter(friendship=friend_request)
+            .first()
+        )
+        if progress_sharing is not None:
+            if progress_sharing.status == ProgressSharing.STATUS_PENDING:
+                progress_sharing_state = (
+                    "outgoing_pending"
+                    if progress_sharing.requester_id == current_user.id
+                    else "incoming_pending"
+                )
+            elif progress_sharing.status == ProgressSharing.STATUS_ACTIVE:
+                yesterday_progress = get_shared_yesterday_progress(
+                    current_user,
+                    profile_user,
+                    today=today,
+                )
+                if yesterday_progress is not None:
+                    progress_sharing_state = "active"
     metrics = _build_user_metrics(profile_user, today)
 
     monthly_reports = build_monthly_reports(metrics["habits"], months=12, today=today)
@@ -1299,6 +1327,9 @@ def _build_profile_context(profile_user, current_user):
         "daily_rates": json.dumps(daily_rates),
         "friend_request": friend_request,
         "friend_status": friend_status,
+        "progress_sharing": progress_sharing,
+        "progress_sharing_state": progress_sharing_state,
+        "yesterday_progress": yesterday_progress,
         "analytics_cutoff_note": ANALYTICS_CUTOFF_NOTE,
     }
     return context
@@ -1545,6 +1576,162 @@ def accept_friend_request(request, request_id):
 
 @login_required
 @require_POST
+def request_progress_sharing(request, user_id):
+    User = get_user_model()
+    target_user = get_object_or_404(User, id=user_id)
+    next_url = _safe_next_url(request)
+    fallback_url = reverse(
+        "habits:user_profile",
+        args=[target_user.username],
+    )
+
+    if target_user == request.user:
+        messages.error(request, "You cannot share progress with yourself.")
+        return redirect(next_url or fallback_url)
+
+    friendship = _friend_request_between(request.user, target_user)
+    if friendship is None or friendship.status != FriendRequest.STATUS_ACCEPTED:
+        messages.error(request, "Only friends can request Progress Sharing.")
+        return redirect(next_url or fallback_url)
+
+    outcome = "already_pending"
+    try:
+        with transaction.atomic():
+            locked_friendship = (
+                FriendRequest.objects.select_for_update()
+                .filter(
+                    pk=friendship.pk,
+                    status=FriendRequest.STATUS_ACCEPTED,
+                )
+                .first()
+            )
+            if locked_friendship is None:
+                outcome = "not_friends"
+            else:
+                existing = ProgressSharing.objects.filter(
+                    friendship=locked_friendship
+                ).first()
+                if existing is None:
+                    ProgressSharing.objects.create(
+                        friendship=locked_friendship,
+                        user_one=request.user,
+                        user_two=target_user,
+                        requester=request.user,
+                    )
+                    outcome = "sent"
+                elif existing.status == ProgressSharing.STATUS_ACTIVE:
+                    outcome = "already_active"
+    except IntegrityError:
+        # The unique friendship/pair constraints resolve simultaneous requests
+        # into one row.  Once the competing transaction commits, report the
+        # resulting state instead of surfacing a server error.
+        existing = ProgressSharing.objects.filter(friendship=friendship).first()
+        outcome = (
+            "already_active"
+            if existing and existing.status == ProgressSharing.STATUS_ACTIVE
+            else "already_pending"
+        )
+
+    if outcome == "sent":
+        messages.success(request, "Progress sharing request sent.")
+    elif outcome == "already_active":
+        messages.info(request, "Progress Sharing is already active with this friend.")
+    elif outcome == "not_friends":
+        messages.error(request, "Only friends can request Progress Sharing.")
+    else:
+        messages.info(request, "A Progress Sharing request is already pending.")
+    return redirect(next_url or fallback_url)
+
+
+@login_required
+@require_POST
+def accept_progress_sharing(request, sharing_id):
+    next_url = _safe_next_url(request)
+    with transaction.atomic():
+        sharing = get_object_or_404(
+            ProgressSharing.objects.select_for_update()
+            .select_related("friendship", "user_one", "user_two")
+            .filter(Q(user_one=request.user) | Q(user_two=request.user))
+            .exclude(requester=request.user),
+            pk=sharing_id,
+            status=ProgressSharing.STATUS_PENDING,
+        )
+        friendship_still_active = FriendRequest.objects.select_for_update().filter(
+            pk=sharing.friendship_id,
+            status=FriendRequest.STATUS_ACCEPTED,
+        ).exists()
+        if not friendship_still_active:
+            sharing.delete()
+            messages.error(request, "Progress Sharing requires an active friendship.")
+        else:
+            sharing.accept()
+            messages.success(
+                request,
+                f"You and {sharing.requester.username} are now sharing yesterday's progress.",
+            )
+    return redirect(next_url or reverse("habits:user_search"))
+
+
+@login_required
+@require_POST
+def decline_progress_sharing(request, sharing_id):
+    next_url = _safe_next_url(request)
+    with transaction.atomic():
+        sharing = get_object_or_404(
+            ProgressSharing.objects.select_for_update()
+            .filter(Q(user_one=request.user) | Q(user_two=request.user))
+            .exclude(requester=request.user),
+            pk=sharing_id,
+            status=ProgressSharing.STATUS_PENDING,
+        )
+        sharing.delete()
+    messages.success(request, "Progress Sharing request declined.")
+    return redirect(next_url or reverse("habits:user_search"))
+
+
+@login_required
+@require_POST
+def cancel_progress_sharing(request, sharing_id):
+    next_url = _safe_next_url(request)
+    with transaction.atomic():
+        sharing = get_object_or_404(
+            ProgressSharing.objects.select_for_update(),
+            pk=sharing_id,
+            requester=request.user,
+            status=ProgressSharing.STATUS_PENDING,
+        )
+        sharing.delete()
+    messages.success(request, "Progress Sharing request canceled.")
+    return redirect(next_url or reverse("habits:user_search"))
+
+
+@login_required
+@require_POST
+def stop_progress_sharing(request, sharing_id):
+    next_url = _safe_next_url(request)
+    with transaction.atomic():
+        sharing = get_object_or_404(
+            ProgressSharing.objects.select_for_update().filter(
+                Q(user_one=request.user) | Q(user_two=request.user)
+            ),
+            pk=sharing_id,
+            status=ProgressSharing.STATUS_ACTIVE,
+        )
+        other_user = (
+            sharing.user_two
+            if sharing.user_one_id == request.user.id
+            else sharing.user_one
+        )
+        sharing.delete()
+    messages.success(
+        request,
+        f"Progress Sharing with {other_user.username} has stopped.",
+    )
+    return redirect(next_url or reverse("habits:user_search"))
+
+
+@login_required
+@require_POST
 def remove_friend(request, request_id):
     friend_request = get_object_or_404(
         FriendRequest,
@@ -1560,7 +1747,10 @@ def remove_friend(request, request_id):
         if friend_request.from_user_id == request.user.id
         else friend_request.from_user
     )
-    friend_request.delete()
+    # ProgressSharing has a database CASCADE to this friendship, so pending and
+    # active access disappear atomically with the friendship.
+    with transaction.atomic():
+        friend_request.delete()
     messages.success(request, f"You and {other_user.username} are no longer friends.")
     return redirect(_safe_next_url(request) or reverse("habits:user_search"))
 

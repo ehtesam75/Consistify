@@ -6,6 +6,7 @@ from .models import (
     HabitCompletion,
     HabitPause,
     HabitPlanVersion,
+    ProgressSharing,
 )
 from .plan_versions import ensure_initial_plan_version
 
@@ -118,6 +119,37 @@ class FriendRequestAdmin(admin.ModelAdmin):
     list_filter = ("status", "created_at")
     search_fields = ("from_user__username", "to_user__username")
     readonly_fields = ("friendship_key", "created_at", "updated_at")
+
+
+@admin.register(ProgressSharing)
+class ProgressSharingAdmin(admin.ModelAdmin):
+    list_display = (
+        "user_one",
+        "user_two",
+        "requester",
+        "status",
+        "requested_at",
+        "accepted_at",
+    )
+    list_filter = ("status", "requested_at", "accepted_at")
+    search_fields = (
+        "user_one__username",
+        "user_two__username",
+        "requester__username",
+    )
+    readonly_fields = (
+        "friendship",
+        "user_one",
+        "user_two",
+        "requester",
+        "status",
+        "requested_at",
+        "accepted_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(HabitPause)

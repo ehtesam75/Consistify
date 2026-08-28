@@ -493,3 +493,138 @@ class FriendRequest(models.Model):
         self.status = self.STATUS_ACCEPTED
         self.updated_at = timezone.now()
         self.save(update_fields=["status", "updated_at"])
+
+
+class ProgressSharing(models.Model):
+    """Mutual yesterday-progress access for one accepted friendship.
+
+    The participants are stored in canonical id order.  Together with the
+    uniqueness and ordering constraints this makes the relationship an
+    unordered pair at the database level, rather than two directional grants.
+    Linking it to the accepted ``FriendRequest`` also means deleting a
+    friendship automatically deletes pending or active sharing.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_ACTIVE = "active"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ACTIVE, "Active"),
+    ]
+
+    friendship = models.OneToOneField(
+        FriendRequest,
+        on_delete=models.CASCADE,
+        related_name="progress_sharing",
+    )
+    user_one = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="progress_sharing_as_user_one",
+    )
+    user_two = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="progress_sharing_as_user_two",
+    )
+    requester = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="requested_progress_sharing",
+    )
+    status = models.CharField(
+        max_length=12,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["user_one", "status"]),
+            models.Index(fields=["user_two", "status"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user_one", "user_two"],
+                name="progress_sharing_users_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(user_one__lt=models.F("user_two")),
+                name="progress_sharing_users_ordered",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(requester=models.F("user_one"))
+                    | models.Q(requester=models.F("user_two"))
+                ),
+                name="progress_sharing_requester_participant",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status="pending", accepted_at__isnull=True)
+                    | models.Q(status="active", accepted_at__isnull=False)
+                ),
+                name="progress_sharing_status_timestamp",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_one} <-> {self.user_two} ({self.status})"
+
+    @classmethod
+    def ordered_user_ids(cls, first_user_id, second_user_id):
+        return tuple(sorted((int(first_user_id), int(second_user_id))))
+
+    @classmethod
+    def between(cls, first_user, second_user):
+        if not first_user.pk or not second_user.pk or first_user.pk == second_user.pk:
+            return cls.objects.none()
+        user_one_id, user_two_id = cls.ordered_user_ids(
+            first_user.pk,
+            second_user.pk,
+        )
+        return cls.objects.filter(
+            user_one_id=user_one_id,
+            user_two_id=user_two_id,
+        )
+
+    def is_participant(self, user):
+        return bool(
+            user.is_authenticated
+            and user.pk in (self.user_one_id, self.user_two_id)
+        )
+
+    def save(self, *args, **kwargs):
+        if self.user_one_id and self.user_two_id:
+            if self.user_one_id == self.user_two_id:
+                raise ValueError("Progress Sharing requires two different users.")
+            self.user_one_id, self.user_two_id = self.ordered_user_ids(
+                self.user_one_id,
+                self.user_two_id,
+            )
+
+        if self.requester_id and self.requester_id not in (
+            self.user_one_id,
+            self.user_two_id,
+        ):
+            raise ValueError("The requester must be a Progress Sharing participant.")
+
+        if self.friendship_id and self.user_one_id and self.user_two_id:
+            friendship = self.friendship
+            friendship_ids = {friendship.from_user_id, friendship.to_user_id}
+            if friendship.status != FriendRequest.STATUS_ACCEPTED:
+                raise ValueError("Progress Sharing requires an accepted friendship.")
+            if friendship_ids != {self.user_one_id, self.user_two_id}:
+                raise ValueError("Progress Sharing participants must match the friendship.")
+
+        super().save(*args, **kwargs)
+
+    def accept(self):
+        self.status = self.STATUS_ACTIVE
+        self.accepted_at = timezone.now()
+        self.updated_at = self.accepted_at
+        self.save(update_fields=["status", "accepted_at", "updated_at"])
