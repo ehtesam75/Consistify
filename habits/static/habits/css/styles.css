@@ -2449,6 +2449,42 @@ html {
     width: auto;
 }
 
+.progress-sharing-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 0 0 auto;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink-soft);
+    background: transparent;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.progress-sharing-toggle::after {
+    content: "↓";
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.progress-sharing-toggle[aria-expanded="false"]::after {
+    content: "↑";
+}
+
+.progress-sharing-toggle:hover,
+.progress-sharing-toggle:focus-visible {
+    border-color: var(--teal);
+    color: var(--teal);
+}
+
+[data-progress-sharing-details][hidden] {
+    display: none;
+}
+
 .progress-sharing-stop-form {
     flex: 0 0 auto;
     margin: 0;

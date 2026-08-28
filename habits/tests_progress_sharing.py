@@ -1045,6 +1045,9 @@ class ProgressSharingProfileStateTests(ProgressSharingTestMixin, TestCase):
         sharing.accept()
         active_response = self.get_profile(self.alice, self.bob)
         self.assertContains(active_response, "Stop Progress Sharing")
+        self.assertContains(active_response, "Collapse details")
+        self.assertContains(active_response, "data-progress-sharing-toggle")
+        self.assertContains(active_response, "data-progress-sharing-details")
         self.assertContains(active_response, "data-confirm-action")
         self.assertContains(
             active_response,

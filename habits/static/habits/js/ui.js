@@ -797,6 +797,24 @@ window.ConsistifyUI = (() => {
         });
     }
 
+    function initProgressSharingToggles() {
+        const toggles = document.querySelectorAll("[data-progress-sharing-toggle]");
+        toggles.forEach((toggle) => {
+            const details = document.getElementById(toggle.getAttribute("aria-controls"));
+            const label = toggle.querySelector("[data-progress-sharing-toggle-label]");
+            if (!details || !label) {
+                return;
+            }
+
+            toggle.addEventListener("click", () => {
+                const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+                toggle.setAttribute("aria-expanded", String(!isExpanded));
+                details.hidden = isExpanded;
+                label.textContent = isExpanded ? "Expand details" : "Collapse details";
+            });
+        });
+    }
+
     function initMobileNav() {
         const toggle = document.querySelector("[data-nav-toggle]");
         const panel = document.querySelector("[data-nav-panel]");
@@ -871,6 +889,7 @@ window.ConsistifyUI = (() => {
         initDeleteConfirmations();
         initNotificationMenus();
         initScoreDriverHelp();
+        initProgressSharingToggles();
         initMobileNav();
     }
 

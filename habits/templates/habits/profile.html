@@ -47,6 +47,11 @@
                     <span class="score-driver-tooltip" id="yesterday-progress-help-{{ profile_user.id }}" role="tooltip">Shows the habits this user had scheduled yesterday and how much of each habit they completed.</span>
                 </div>
             </div>
+            {% if progress_sharing_state == "active" and progress_sharing %}
+                <button class="progress-sharing-toggle" type="button" aria-expanded="true" aria-controls="yesterday-progress-details-{{ profile_user.id }}" data-progress-sharing-toggle>
+                    <span data-progress-sharing-toggle-label>Collapse details</span>
+                </button>
+            {% endif %}
         </div>
         {% if progress_sharing_state == "active" and progress_sharing %}
             <form class="progress-sharing-stop-form" method="post" action="{% url 'habits:stop_progress_sharing' progress_sharing.id %}" data-confirm-action data-confirm-message="Stopping Progress Sharing will remove access for both of you. Neither person will be able to see the other's yesterday progress.">
@@ -65,27 +70,29 @@
             <span aria-hidden="true">•</span>
             <strong>{{ yesterday_progress.completion_rate }}%</strong>
         </p>
-        {% if yesterday_progress.rows %}
-            <ul class="yesterday-progress-list">
-                {% for row in yesterday_progress.rows %}
-                    <li class="yesterday-progress-row">
-                        <span class="yesterday-progress-habit" title="{{ row.habit_name }}">{{ row.habit_name }}</span>
-                        <span class="yesterday-progress-result">
-                            {% if row.habit_type == "quantitative" %}
-                                {{ row.completed_amount|floatformat:"-2" }} / {{ row.target_amount|floatformat:"-2" }}{% if row.unit %} {{ row.unit }}{% endif %}
-                            {% elif row.habit_type == "binary" %}
-                                {% if row.completed %}Completed{% else %}Not completed{% endif %}
-                            {% else %}
-                                {{ row.completion_percentage|floatformat:"-1" }}% complete
-                            {% endif %}
-                        </span>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p class="empty progress-sharing-empty">No habits were scheduled yesterday.</p>
-        {% endif %}
-        <p class="help progress-sharing-mutual-note">Stopping sharing removes access for both people.</p>
+        <div id="yesterday-progress-details-{{ profile_user.id }}" data-progress-sharing-details>
+            {% if yesterday_progress.rows %}
+                <ul class="yesterday-progress-list">
+                    {% for row in yesterday_progress.rows %}
+                        <li class="yesterday-progress-row">
+                            <span class="yesterday-progress-habit" title="{{ row.habit_name }}">{{ row.habit_name }}</span>
+                            <span class="yesterday-progress-result">
+                                {% if row.habit_type == "quantitative" %}
+                                    {{ row.completed_amount|floatformat:"-2" }} / {{ row.target_amount|floatformat:"-2" }}{% if row.unit %} {{ row.unit }}{% endif %}
+                                {% elif row.habit_type == "binary" %}
+                                    {% if row.completed %}Completed{% else %}Not completed{% endif %}
+                                {% else %}
+                                    {{ row.completion_percentage|floatformat:"-1" }}% complete
+                                {% endif %}
+                            </span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="empty progress-sharing-empty">No habits were scheduled yesterday.</p>
+            {% endif %}
+            <p class="help progress-sharing-mutual-note">Stopping sharing removes access for both people.</p>
+        </div>
     {% elif progress_sharing_state == "outgoing_pending" and progress_sharing %}
         <div class="progress-sharing-state">
             <p><strong>Progress sharing request sent.</strong></p>
