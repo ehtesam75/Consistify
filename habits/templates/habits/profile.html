@@ -9,10 +9,16 @@
         <div class="profile-title-row">
             <h1>{{ profile_user.username }}</h1>
             {% if not is_own_profile and friend_status == "accepted" and friend_request %}
-                <form class="profile-unfriend-form profile-unfriend-mobile" method="post" action="{% url 'habits:remove_friend' friend_request.id %}">
+                <form class="profile-unfriend-form profile-unfriend-mobile" method="post" action="{% url 'habits:remove_friend' friend_request.id %}" data-confirm-action data-confirm-message="Removing this friend will also remove any mutual progress-sharing access.">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                     <button class="btn danger" type="submit">Unfriend</button>
+                </form>
+            {% elif not is_own_profile and friend_status == "none" %}
+                <form class="profile-header-action" method="post" action="{% url 'habits:send_friend_request' profile_user.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="btn primary" type="submit">Add friend</button>
                 </form>
             {% endif %}
         </div>
@@ -28,16 +34,10 @@
     <div class="hero-actions">
         <a class="btn ghost mobile-hide-find-users" href="{% url 'habits:user_search' %}">Find users</a>
         {% if not is_own_profile and friend_status == "accepted" and friend_request %}
-            <form class="profile-unfriend-form profile-unfriend-desktop" method="post" action="{% url 'habits:remove_friend' friend_request.id %}">
+            <form class="profile-unfriend-form profile-unfriend-desktop" method="post" action="{% url 'habits:remove_friend' friend_request.id %}" data-confirm-action data-confirm-message="Removing this friend will also remove any mutual progress-sharing access.">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <button class="btn danger" type="submit">Unfriend</button>
-            </form>
-        {% elif not is_own_profile and friend_status == "none" %}
-            <form method="post" action="{% url 'habits:send_friend_request' profile_user.id %}">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button class="btn primary" type="submit">Add friend</button>
             </form>
         {% elif not is_own_profile and friend_status == "outgoing_pending" %}
             <span class="tag">Friend request pending</span>

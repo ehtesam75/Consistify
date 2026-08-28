@@ -2780,6 +2780,24 @@ class FriendRequestFeatureTests(TestCase):
         self.assertContains(response, "bob")
         self.assertContains(response, "Accept")
 
+    def test_profile_unfriend_requires_confirmation(self):
+        friend_request = FriendRequest.objects.create(
+            from_user=self.alice,
+            to_user=self.bob,
+            status=FriendRequest.STATUS_ACCEPTED,
+        )
+        self.client.force_login(self.alice)
+
+        response = self.client.get(reverse("habits:user_profile", args=[self.bob.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-confirm-action")
+        self.assertContains(
+            response,
+            "Removing this friend will also remove any mutual progress-sharing access.",
+        )
+        self.assertContains(response, reverse("habits:remove_friend", args=[friend_request.id]))
+
     def test_username_profile_url_renders_target_profile(self):
         self.client.force_login(self.alice)
 

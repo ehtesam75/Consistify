@@ -573,11 +573,18 @@ main > section + section {
 .profile-title-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.8rem;
+    width: 100%;
 }
 
 .profile-title-row h1 {
     margin: 0;
+}
+
+.profile-header-action,
+.profile-unfriend-form {
+    margin-left: auto;
 }
 
 .profile-unfriend-form {

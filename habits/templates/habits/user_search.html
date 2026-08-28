@@ -52,7 +52,7 @@
                         <div class="user-result-actions">
                             {% if result.status == "accepted" %}
                                 <span class="tag">Friends</span>
-                                <form method="post" action="{% url 'habits:remove_friend' result.friend_request.id %}">
+                                <form method="post" action="{% url 'habits:remove_friend' result.friend_request.id %}" data-confirm-action data-confirm-message="Removing this friend will also remove any mutual progress-sharing access.">
                                     {% csrf_token %}
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                                     <button class="btn danger small" type="submit">Unfriend</button>
