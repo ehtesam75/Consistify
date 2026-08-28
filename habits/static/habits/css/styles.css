@@ -2534,6 +2534,10 @@ html {
     align-self: flex-end;
 }
 
+.progress-sharing-mobile-action {
+    display: none;
+}
+
 .progress-sharing-state {
     display: grid;
     justify-items: start;
@@ -4474,12 +4478,15 @@ body.auth-page main {
     }
 
     .progress-sharing-header-action {
-        width: 100%;
-        margin-left: 0;
-        align-self: stretch;
+        display: none;
     }
 
-    .progress-sharing-header-action .btn {
+    .progress-sharing-mobile-action {
+        display: block;
+        width: 100%;
+    }
+
+    .progress-sharing-mobile-action .btn {
         width: 100%;
     }
 

@@ -76,13 +76,13 @@
             </div>
         </div>
         {% if progress_sharing_state == "none" %}
-            <form class="progress-sharing-header-action" method="post" action="{% url 'habits:request_progress_sharing' profile_user.id %}">
+            <form class="progress-sharing-header-action progress-sharing-desktop-action" method="post" action="{% url 'habits:request_progress_sharing' profile_user.id %}">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <button class="btn primary small" type="submit">Request Progress Sharing</button>
             </form>
         {% elif progress_sharing_state == "outgoing_pending" and progress_sharing %}
-            <form class="progress-sharing-header-action" method="post" action="{% url 'habits:cancel_progress_sharing' progress_sharing.id %}">
+            <form class="progress-sharing-header-action progress-sharing-desktop-action" method="post" action="{% url 'habits:cancel_progress_sharing' progress_sharing.id %}">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <button class="btn ghost small" type="submit">Cancel Request</button>
@@ -136,6 +136,11 @@
     {% elif progress_sharing_state == "outgoing_pending" and progress_sharing %}
         <div class="progress-sharing-state">
             <p><strong>Progress sharing request sent.</strong></p>
+            <form class="progress-sharing-mobile-action" method="post" action="{% url 'habits:cancel_progress_sharing' progress_sharing.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn ghost small" type="submit">Cancel Request</button>
+            </form>
         </div>
     {% elif progress_sharing_state == "incoming_pending" and progress_sharing %}
         <div class="progress-sharing-state">
@@ -157,6 +162,11 @@
     {% else %}
         <div class="progress-sharing-state">
             <p><strong>Progress is private.</strong></p>
+            <form class="progress-sharing-mobile-action" method="post" action="{% url 'habits:request_progress_sharing' profile_user.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn primary small" type="submit">Request Progress Sharing</button>
+            </form>
         </div>
     {% endif %}
 </section>
