@@ -556,6 +556,24 @@ main > section + section {
     flex-wrap: wrap;
 }
 
+.profile-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.profile-title-row h1 {
+    margin: 0;
+}
+
+.profile-unfriend-form {
+    margin: 0;
+}
+
+.profile-unfriend-mobile {
+    display: none;
+}
+
 .today-page .today-create-inline {
     display: none;
 }
@@ -2510,6 +2528,12 @@ html {
     margin: 0;
 }
 
+.progress-sharing-header-action {
+    flex: 0 0 auto;
+    margin: 0 0 0 auto;
+    align-self: flex-end;
+}
+
 .progress-sharing-state {
     display: grid;
     justify-items: start;
@@ -4424,12 +4448,38 @@ body.auth-page main {
 }
 
 @media (max-width: 520px) {
+    .profile-title-row {
+        justify-content: space-between;
+    }
+
+    .profile-unfriend-desktop {
+        display: none;
+    }
+
+    .profile-unfriend-mobile {
+        display: block;
+    }
+
     .progress-sharing-card-header {
         align-items: stretch;
         flex-direction: column;
     }
 
+    .progress-sharing-title-row {
+        flex-wrap: wrap;
+    }
+
     .progress-sharing-stop-form .btn {
+        width: 100%;
+    }
+
+    .progress-sharing-header-action {
+        width: 100%;
+        margin-left: 0;
+        align-self: stretch;
+    }
+
+    .progress-sharing-header-action .btn {
         width: 100%;
     }
 

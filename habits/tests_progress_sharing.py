@@ -1061,7 +1061,7 @@ class ProgressSharingProfileStateTests(ProgressSharingTestMixin, TestCase):
         none_response = self.get_profile(self.alice, self.bob)
         self.assertContains(none_response, "Progress is private.")
         self.assertContains(none_response, "Request Progress Sharing")
-        self.assertContains(
+        self.assertNotContains(
             none_response,
             "If your friend accepts, both of you will be able to see each other's yesterday progress.",
         )
@@ -1111,7 +1111,7 @@ class ProgressSharingProfileStateTests(ProgressSharingTestMixin, TestCase):
         )
         self.assertContains(
             response,
-            "Progress Sharing lets you and a friend mutually see each other's scheduled habit progress from yesterday.",
+            "Progress sharing lets you and a friend mutually see each other's scheduled habit progress from yesterday.",
         )
         self.assertContains(
             response,
