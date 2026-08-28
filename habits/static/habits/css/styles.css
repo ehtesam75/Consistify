@@ -2477,14 +2477,15 @@ html {
 }
 
 .progress-sharing-card .score-driver-help {
-    position: static;
+    position: relative;
 }
 
 .progress-sharing-card .score-driver-tooltip {
-    top: 4.8rem;
-    right: 1.6rem;
-    left: 1.6rem;
-    width: auto;
+    top: calc(100% + 0.55rem);
+    right: 0;
+    left: auto;
+    width: min(18rem, calc(100vw - 4rem));
+    text-transform: none;
 }
 
 .progress-sharing-toggle {
@@ -4452,6 +4453,19 @@ body.auth-page main {
 }
 
 @media (max-width: 520px) {
+    .profile-page .hero {
+        margin-bottom: 0;
+    }
+
+    .profile-page .hero + .progress-sharing-card {
+        margin-top: 0.5rem;
+    }
+
+    .profile-page .hero > div:first-child,
+    .profile-title-row {
+        width: 100%;
+    }
+
     .profile-title-row {
         justify-content: space-between;
     }
