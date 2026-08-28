@@ -2798,6 +2798,36 @@ class FriendRequestFeatureTests(TestCase):
         )
         self.assertContains(response, reverse("habits:remove_friend", args=[friend_request.id]))
 
+    def test_profile_pending_friend_request_uses_single_cancel_action(self):
+        friend_request = FriendRequest.objects.create(
+            from_user=self.alice,
+            to_user=self.bob,
+            status=FriendRequest.STATUS_PENDING,
+        )
+        self.client.force_login(self.alice)
+
+        response = self.client.get(reverse("habits:user_profile", args=[self.bob.username]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Cancel Request")
+        self.assertContains(response, "profile-header-action-mobile")
+        self.assertContains(response, "profile-header-action-desktop")
+        self.assertNotContains(response, "Friend request pending")
+
+        cancel_response = self.client.post(
+            reverse("habits:cancel_friend_request", args=[friend_request.id]),
+            {"next": reverse("habits:user_profile", args=[self.bob.username])},
+        )
+
+        self.assertRedirects(
+            cancel_response,
+            reverse("habits:user_profile", args=[self.bob.username]),
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(
+            FriendRequest.objects.filter(pk=friend_request.pk).exists()
+        )
+
     def test_username_profile_url_renders_target_profile(self):
         self.client.force_login(self.alice)
 

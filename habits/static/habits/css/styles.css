@@ -587,11 +587,15 @@ main > section + section {
     margin-left: auto;
 }
 
+.profile-header-action-desktop,
+.profile-unfriend-desktop,
 .profile-unfriend-form {
     margin: 0;
 }
 
-.profile-unfriend-mobile {
+.profile-header-action-mobile,
+.profile-unfriend-mobile,
+.profile-mobile-action {
     display: none;
 }
 
@@ -4503,7 +4507,28 @@ body.auth-page main {
         margin-top: 0.5rem;
     }
 
-    .profile-page .hero > div:first-child,
+    .profile-page .hero {
+        align-items: flex-start;
+    }
+
+    .profile-page .hero > div:first-child {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .profile-page .hero .hero-actions {
+        margin-left: auto;
+        align-items: center;
+    }
+
+    .profile-page .hero .hero-actions .btn {
+        white-space: nowrap;
+    }
+
+    .profile-page .hero > div:first-child {
+        width: auto;
+    }
+
     .profile-title-row {
         width: 100%;
     }
@@ -4512,12 +4537,13 @@ body.auth-page main {
         justify-content: space-between;
     }
 
-    .profile-unfriend-desktop {
+    .profile-desktop-action {
         display: none;
     }
 
-    .profile-unfriend-mobile {
-        display: block;
+    .profile-mobile-action {
+        display: inline-flex;
+        margin-left: auto;
     }
 
     .progress-sharing-card-header {

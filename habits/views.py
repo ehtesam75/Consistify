@@ -1587,6 +1587,21 @@ def accept_friend_request(request, request_id):
 
 @login_required
 @require_POST
+def cancel_friend_request(request, request_id):
+    friend_request = get_object_or_404(
+        FriendRequest,
+        id=request_id,
+        from_user=request.user,
+        status=FriendRequest.STATUS_PENDING,
+    )
+    other_user = friend_request.to_user
+    friend_request.delete()
+    messages.success(request, f"Friend request to {other_user.username} canceled.")
+    return redirect(_safe_next_url(request) or reverse("habits:user_search"))
+
+
+@login_required
+@require_POST
 def request_progress_sharing(request, user_id):
     User = get_user_model()
     target_user = get_object_or_404(User, id=user_id)

@@ -25,6 +25,11 @@ urlpatterns = [
         name="accept_friend_request",
     ),
     path(
+        "friends/requests/<int:request_id>/cancel/",
+        views.cancel_friend_request,
+        name="cancel_friend_request",
+    ),
+    path(
         "friends/requests/<int:request_id>/remove/",
         views.remove_friend,
         name="remove_friend",
