@@ -13,7 +13,6 @@
         <p class="subtitle">{{ target_date|date:"l, F j, Y" }}</p>
     </div>
     <div class="hero-actions">
-        <a class="btn primary" href="{% url 'habits:habit_create' %}">Create habit</a>
         {% if archived_count %}
             <a class="btn ghost" href="{% url 'habits:archived_habits' %}">Archived Habits ({{ archived_count }})</a>
         {% endif %}
@@ -37,6 +36,7 @@
                 <button class="btn ghost" type="submit">Pause all habits</button>
             </form>
         {% endif %}
+        <a class="btn primary" href="{% url 'habits:habit_create' %}">Create habit</a>
     </div>
 </section>
 
