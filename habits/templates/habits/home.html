@@ -1,260 +1,383 @@
-{% extends "habits/base.html" %}
+{% extends "habits/public_base.html" %}
+
+{% block title %}Consistify — Understand your habits. Build your momentum.{% endblock %}
+
+{% block public_head %}
+<meta name="description" content="Go beyond habit tracking. Explore in-depth analytics, compare habits, understand your Consistify Score, and stay accountable with friends.">
+{% endblock %}
 
 {% block content %}
-<div class="home-page">
-    <section class="home-hero" aria-labelledby="home-title">
-        <div class="home-hero-copy">
-            <p class="eyebrow">Habit tracking for steady progress</p>
-            <h1 id="home-title">Consistify</h1>
-            <p class="home-tagline">
-                Plan flexible routines, log daily progress, and see a Consistency Score that blends
-                completion quality, full completion days, consistency rhythm, and recent momentum.
-            </p>
-            <div class="hero-actions">
-                <a class="btn primary" href="{% url 'habits:signup' %}">Start tracking</a>
-                <a class="btn ghost" href="{% url 'habits:login' %}">Log in</a>
+<a class="cfy-skip" href="#analytics">Skip to features</a>
+<div class="cfy-home">
+    <section class="cfy-hero" aria-labelledby="home-title">
+        <div class="cfy-hero-copy">
+            <p class="cfy-eyebrow"><span class="cfy-spark" aria-hidden="true">✳</span> A little consistency. A lot of insight.</p>
+            <h1 id="home-title">Your habits.<br>A <em>clearer</em> picture.</h1>
+            <p class="cfy-intro">You put in the effort. See what it adds up to.</p>
+            <p class="cfy-hero-description">Understand your progress with in-depth habit analytics, compare what’s working, and stay accountable with friends.</p>
+            <div class="cfy-actions">
+                <a class="cfy-button" href="{% url 'habits:signup' %}">Create your account <span aria-hidden="true">↗</span></a>
+                <a class="cfy-text-link" href="#analytics">Explore the insights <span aria-hidden="true">↓</span></a>
             </div>
-            <div class="home-hero-points" aria-label="Platform highlights">
-                <span>Daily tracking</span>
-                <span>Streak insights</span>
-                <span>Flexible schedules</span>
+            <p class="cfy-hero-note">More than a checkmark. A way to move forward.</p>
+        </div>
+    </section>
+
+    <div class="cfy-principles" aria-label="The Consistify approach">
+        <span><small>01 /</small> Understand your patterns</span>
+        <span><small>02 /</small> Compare your performance</span>
+        <span><small>03 /</small> Keep each other going</span>
+    </div>
+
+    <section class="cfy-section cfy-analytics" id="analytics" aria-labelledby="analytics-title">
+        <div class="cfy-section-heading">
+            <div>
+                <p class="cfy-eyebrow">BUILT AROUND YOUR DATA</p>
+                <h2 id="analytics-title">Every check-in has<br>a bigger <em>story.</em></h2>
+            </div>
+            <p>Go deeper than done or not done. Consistify turns your habit history into a clear view of your completion, consistency, and momentum—so you know where to focus next.</p>
+        </div>
+        <div class="cfy-analytics-grid">
+            <article class="cfy-insight-card">
+                <div class="cfy-card-top">
+                    <span class="cfy-overline">PATTERNS, MADE VISIBLE</span>
+                    <span class="cfy-example">Example</span>
+                </div>
+                <h3>Small actions. Visible progress.</h3>
+                <div class="cfy-week-chart" role="img" aria-label="Example weekly average completion: Monday 65%, Tuesday 85%, Wednesday 75%, Thursday 95%, Friday 55%, Saturday 100%, Sunday 85%.">
+                    <div>
+                        <span>65%</span>
+                        <i style="--completion:65%"></i>
+                        <small>M</small>
+                    </div>
+                    <div>
+                        <span>85%</span>
+                        <i style="--completion:85%"></i>
+                        <small>T</small>
+                    </div>
+                    <div>
+                        <span>75%</span>
+                        <i style="--completion:75%"></i>
+                        <small>W</small>
+                    </div>
+                    <div>
+                        <span>95%</span>
+                        <i style="--completion:95%"></i>
+                        <small>T</small>
+                    </div>
+                    <div>
+                        <span>55%</span>
+                        <i style="--completion:55%"></i>
+                        <small>F</small>
+                    </div>
+                    <div>
+                        <span>100%</span>
+                        <i style="--completion:100%"></i>
+                        <small>S</small>
+                    </div>
+                    <div>
+                        <span>85%</span>
+                        <i style="--completion:85%"></i>
+                        <small>S</small>
+                    </div>
+                </div>
+                <p class="cfy-chart-footnote"><span class="cfy-dot cfy-reading"></span> Average completion across scheduled habits</p>
+            </article>
+            <div class="cfy-insight-list">
+                <article>
+                    <span class="cfy-line-icon" aria-hidden="true">↗</span>
+                    <div>
+                        <h3>Follow the trend, not just the streak.</h3>
+                        <p>See completion rates, partial progress, and changes over time. Understand the direction your habits are taking.</p>
+                    </div>
+                </article>
+                <article>
+                    <span class="cfy-line-icon" aria-hidden="true">⊞</span>
+                    <div>
+                        <h3>Find your strengths. Spot the gaps.</h3>
+                        <p>Explore category performance and see which habits lift your score, which hold it back, and which are improving.</p>
+                    </div>
+                </article>
+                <article>
+                    <span class="cfy-line-icon" aria-hidden="true">◎</span>
+                    <div>
+                        <h3>Turn reflection into your next step.</h3>
+                        <p>Review the evidence, adjust your routine, and come back with a clearer idea of what deserves your attention.</p>
+                    </div>
+                </article>
             </div>
         </div>
+        <div class="cfy-timeframes" aria-label="Four perspectives on progress">
+            <article>
+                <span>01</span>
+                <h3>Daily</h3>
+                <p>See the detail in each day’s progress.</p>
+            </article>
+            <article>
+                <span>02</span>
+                <h3>Weekly</h3>
+                <p>Find the rhythm in your routine.</p>
+            </article>
+            <article>
+                <span>03</span>
+                <h3>Monthly</h3>
+                <p>Watch patterns become progress.</p>
+            </article>
+            <article>
+                <span>04</span>
+                <h3>Yearly</h3>
+                <p>Put the last 12 months in perspective.</p>
+            </article>
+        </div>
+        <p class="cfy-data-note">Historical analytics use completed days through yesterday, giving every day time to count.</p>
+    </section>
 
-        <div class="product-preview" id="preview" aria-label="Consistify dashboard preview">
-            <div class="preview-topbar">
-                <span class="preview-window-dot"></span>
-                <span class="preview-window-dot"></span>
-                <span class="preview-window-dot"></span>
-                <span class="preview-topbar-title">Today</span>
+    <section class="cfy-section cfy-compare" id="compare" aria-labelledby="compare-title">
+        <div class="cfy-section-copy">
+            <p class="cfy-eyebrow">SIDE BY SIDE. CLEAR AS DAY.</p>
+            <h2 id="compare-title">Find what’s working.<br>And what needs<br> a little <em>work.</em></h2>
+            <p>Some habits come naturally. Others need a different approach. Compare up to four habits side by side to see the difference.</p>
+            <p>Explore completion rates, current and best streaks, and scores across the last 30 days, 90 days, or your full history.</p>
+            <a class="cfy-text-link" href="{% url 'habits:signup' %}">Get to know your habits <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="cfy-comparison-card">
+            <div class="cfy-card-top">
+                <h3>A little perspective helps.</h3>
+                <span class="cfy-example">Example · 30 days</span>
             </div>
-            <div class="preview-body">
-                <div class="preview-stats">
-                    <div class="preview-stat">
-                        <span class="stat-label">Completion</span>
-                        <strong>87%</strong>
-                    </div>
-                    <div class="preview-stat">
-                        <span class="stat-label">Streak</span>
-                        <strong>14d</strong>
-                    </div>
-                    <div class="preview-stat">
-                        <span class="stat-label">Score</span>
-                        <strong>91</strong>
-                    </div>
-                </div>
-                <div class="preview-chart" aria-hidden="true">
-                    <span style="--bar: 48%;"></span>
-                    <span style="--bar: 68%;"></span>
-                    <span style="--bar: 42%;"></span>
-                    <span style="--bar: 82%;"></span>
-                    <span style="--bar: 76%;"></span>
-                    <span style="--bar: 94%;"></span>
-                    <span style="--bar: 88%;"></span>
-                </div>
-                <div class="preview-habits">
-                    <div class="preview-habit done">
-                        <span class="preview-check"></span>
-                        <div>
-                            <strong>Morning stretch</strong>
-                            <small>Complete</small>
-                        </div>
-                        <span class="tag">Health</span>
-                    </div>
-                    <div class="preview-habit">
-                        <span class="preview-progress"><span></span></span>
-                        <div>
-                            <strong>Read 20 pages</strong>
-                            <small>65% logged</small>
-                        </div>
-                        <span class="tag">Study</span>
-                    </div>
-                    <div class="preview-habit">
-                        <span class="preview-progress alt"><span></span></span>
-                        <div>
-                            <strong>Focus block</strong>
-                            <small>Scheduled tonight</small>
-                        </div>
-                        <span class="tag">Spiritual</span>
-                    </div>
-                </div>
+            <div class="cfy-compare-table-wrap">
+                <table class="cfy-compare-table">
+                    <caption class="sr-only">Illustrative comparison of three daily habits over 30 days</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Your habits</th>
+                            <th scope="col">Completion</th>
+                            <th scope="col">Current streak</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th scope="row"><span class="cfy-habit-symbol cfy-reading" aria-hidden="true">R</span>Reading</th>
+                            <td>
+                                <strong>90%</strong>
+                                <span class="cfy-completion-track">
+                                    <i class="cfy-reading" style="width:90%"></i>
+                                </span>
+                            </td>
+                            <td>12 <small>days</small></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><span class="cfy-habit-symbol cfy-movement" aria-hidden="true">M</span>Movement</th>
+                            <td>
+                                <strong>82%</strong>
+                                <span class="cfy-completion-track">
+                                    <i class="cfy-movement" style="width:82%"></i>
+                                </span>
+                            </td>
+                            <td>8 <small>days</small></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><span class="cfy-habit-symbol cfy-focus" aria-hidden="true">D</span>Deep work</th>
+                            <td>
+                                <strong>74%</strong>
+                                <span class="cfy-completion-track">
+                                    <i class="cfy-focus" style="width:74%"></i>
+                                </span>
+                            </td>
+                            <td>4 <small>days</small></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="cfy-comparison-note">
+                <span aria-hidden="true">↗</span>
+                <p>Same time window. Different habits.<br><strong>A clearer idea of where to focus.</strong></p>
             </div>
         </div>
     </section>
 
-    <section class="home-section" id="features" aria-labelledby="features-title">
-        <div class="home-section-header">
-            <p class="eyebrow">Core features</p>
-            <h2 id="features-title">A focused system for building habits that last.</h2>
-            <p>
-                Consistify gives each habit the right amount of structure, then turns
-                your daily check-ins into patterns you can act on.
-            </p>
+    <section class="cfy-section cfy-score-section" id="score" aria-labelledby="score-title">
+        <div class="cfy-section-heading">
+            <div>
+                <p class="cfy-eyebrow">THE CONSISTIFY SCORE</p>
+                <h2 id="score-title">A meaningful number.<br>With the <em>math</em> to match.</h2>
+            </div>
+            <p>Your Consistify Score is a 0–100 measure built from your scheduled habit sessions. It’s calculated from meaningful habit data, never randomly assigned. Here’s what goes into it.</p>
         </div>
-            <div class="feature-grid core-feature-grid">
-            <article class="feature-card">
-                <span class="feature-icon">01</span>
-                <h3>Habit tracking</h3>
-                <p>Track binary, partial, and measurable habits with clean progress controls.</p>
-            </article>
-            <article class="feature-card">
-                <span class="feature-icon">02</span>
-                <h3>Streaks</h3>
-                <p>See current and best streaks so small wins stay visible.</p>
-            </article>
-            <article class="feature-card">
-                <span class="feature-icon">03</span>
-                <h3>Analytics</h3>
-                <p>Review completion rates across daily, weekly, and monthly windows.</p>
-            </article>
-            <article class="feature-card">
-                <span class="feature-icon">04</span>
-                <h3>Consistency score</h3>
-                <p>A weighted score built from completion quality, full completion ratio, consistency rhythm, and recent momentum.</p>
-            </article>
-            <article class="feature-card">
-                <span class="feature-icon">05</span>
-                <h3>Charts</h3>
-                <p>Spot trends with visual reports that make progress easier to compare.</p>
-            </article>
-            <article class="feature-card">
-                <span class="feature-icon">06</span>
-                <h3>Scheduling flexibility</h3>
-                <p>Set habits for the days that make sense instead of forcing a rigid calendar.</p>
-            </article>
-        </div>
-    </section>
-
-    <section class="home-section analytics-preview" aria-labelledby="analytics-title">
-        <div class="home-section-header">
-            <p class="eyebrow">Analytics preview</p>
-            <h2 id="analytics-title">Know what is working before motivation fades.</h2>
-        </div>
-        <div class="analytics-preview-grid">
-            <article class="analytics-card main-analytics-card">
-                <div class="card-header">
-                    <h3>Consistency trend</h3>
-                    <span class="tag">Last 14 days</span>
+        <div class="cfy-score-layout">
+            <div class="cfy-score-signals">
+                <article>
+                    <div>
+                        <span class="cfy-signal-label"><i class="cfy-signal-dot cfy-quality"></i>Completion quality</span>
+                        <strong>35<span>%</span></strong>
+                    </div>
+                    <p>How much of your scheduled work you complete on average. Partial progress counts, too.</p>
+                </article>
+                <article>
+                    <div>
+                        <span class="cfy-signal-label"><i class="cfy-signal-dot cfy-full"></i>Full completion</span>
+                        <strong>20<span>%</span></strong>
+                    </div>
+                    <p>The share of scheduled sessions you finish at 100%. Credit for following through.</p>
+                </article>
+                <article>
+                    <div>
+                        <span class="cfy-signal-label"><i class="cfy-signal-dot cfy-rhythm"></i>Consistency rhythm</span>
+                        <strong>30<span>%</span></strong>
+                    </div>
+                    <p>Your participation and continuity across your last seven scheduled sessions.</p>
+                </article>
+                <article>
+                    <div>
+                        <span class="cfy-signal-label"><i class="cfy-signal-dot cfy-momentum"></i>Recent momentum</span>
+                        <strong>15<span>%</span></strong>
+                    </div>
+                    <p>The direction of your last six scheduled sessions: improving, declining, or holding steady.</p>
+                </article>
+            </div>
+            <div class="cfy-score-example">
+                <div class="cfy-card-top">
+                    <span class="cfy-overline">LET’S PUT NUMBERS TO IT</span>
+                    <span class="cfy-example">Worked example</span>
                 </div>
-                <div class="trend-line" aria-hidden="true">
-                    <span style="--point: 42%;"></span>
-                    <span style="--point: 56%;"></span>
-                    <span style="--point: 50%;"></span>
-                    <span style="--point: 68%;"></span>
-                    <span style="--point: 78%;"></span>
-                    <span style="--point: 72%;"></span>
-                    <span style="--point: 88%;"></span>
+                <div class="cfy-score-number">
+                    <strong>76.5</strong>
+                    <span>/ 100</span>
                 </div>
-            </article>
-            <article class="analytics-card">
-                <span class="stat-label">Overall completion</span>
-                <strong>82%</strong>
-                <p>Clear completion rates across all scheduled sessions.</p>
-            </article>
-            <article class="analytics-card">
-                <span class="stat-label">Completed sessions</span>
-                <strong>126</strong>
-                <p>A running view of the work already banked.</p>
-            </article>
-            <article class="analytics-card">
-                <span class="stat-label">Flexible schedule</span>
-                <strong>4x</strong>
-                <p>Weekly cadence built around your real availability.</p>
-            </article>
+                <p>One habit. Four signals. A score you can explain.</p>
+                <div class="cfy-score-stack" role="img" aria-label="Example score contributions: completion quality 28 points, full completion 14 points, consistency rhythm 25.5 points, recent momentum 9 points; total 76.5 out of 100.">
+                    <i class="cfy-quality" style="width:28%"></i>
+                    <i class="cfy-full" style="width:14%"></i>
+                    <i class="cfy-rhythm" style="width:25.5%"></i>
+                    <i class="cfy-momentum" style="width:9%"></i>
+                </div>
+                <dl class="cfy-score-calculation">
+                    <div>
+                        <dt><i class="cfy-signal-dot cfy-quality"></i>Quality <span>80 × 35%</span></dt>
+                        <dd>28.0</dd>
+                    </div>
+                    <div>
+                        <dt><i class="cfy-signal-dot cfy-full"></i>Full completion <span>70 × 20%</span></dt>
+                        <dd>14.0</dd>
+                    </div>
+                    <div>
+                        <dt><i class="cfy-signal-dot cfy-rhythm"></i>Rhythm <span>85 × 30%</span></dt>
+                        <dd>25.5</dd>
+                    </div>
+                    <div>
+                        <dt><i class="cfy-signal-dot cfy-momentum"></i>Momentum <span>60 × 15%</span></dt>
+                        <dd>9.0</dd>
+                    </div>
+                </dl>
+                <p class="cfy-example-note">Illustrative component values with at least seven scheduled sessions in the selected period, so rhythm and momentum have full influence.</p>
+            </div>
+        </div>
+        <details class="cfy-score-details">
+            <summary>How history and habit priority affect your score <span aria-hidden="true">+</span></summary>
+            <div class="cfy-score-details-body">
+                <p>Rhythm and momentum need a history to draw on. Their influence grows with the number of scheduled sessions in your selected period, reaching full influence at seven sessions. Completion quality and full completion keep their stated weights from the start.</p>
+                <p class="cfy-formula">Habit score = 0.35 × quality + 0.20 × full completion + evidence × (0.30 × rhythm + 0.15 × momentum)</p>
+                <p>Each signal is measured from 0 to 100. The evidence factor grows from 0 to 1 as your scheduled history builds. With no scheduled sessions, the score is 0. Momentum reflects recent direction, with reduced credit when your latest session has very little progress.</p>
+                <p>Your overall score is a weighted average of your habit scores. Each habit’s weight is its average priority multiplied by the square root of its scheduled-session count. That gives your priorities and the amount of habit history a defined role in the result.</p>
+                <p>In the app, this is labeled your <strong>Consistency Score</strong>. Its breakdown shows how each signal contributes, so you can understand the number and what changes it.</p>
+            </div>
+        </details>
+    </section>
+
+    <section class="cfy-friends" id="friends" aria-labelledby="friends-title">
+        <div class="cfy-friends-copy">
+            <p class="cfy-eyebrow">PERSONAL PROGRESS. SHARED MOTIVATION.</p>
+            <h2 id="friends-title">Your journey.<br>A little <em>company.</em></h2>
+            <p>Connect with anyone who has a Consistify account. Keep an eye on each other’s progress, celebrate the effort, and bring a little friendly competition to showing up.</p>
+            <ol class="cfy-friend-steps">
+                <li>
+                    <span>01</span>
+                    <div>
+                        <h3>Find your people</h3>
+                        <p>Search by username and send a friend request.</p>
+                    </div>
+                </li>
+                <li>
+                    <span>02</span>
+                    <div>
+                        <h3>Keep each other accountable</h3>
+                        <p>Once connected, view each other’s analytics. Enable mutual progress sharing to see yesterday’s individual habit check-ins.</p>
+                    </div>
+                </li>
+                <li>
+                    <span>03</span>
+                    <div>
+                        <h3>Make consistency a friendly competition</h3>
+                        <p>Compare your place on the friends leaderboard over the last 30 days or all time.</p>
+                    </div>
+                </li>
+            </ol>
+            <a class="cfy-button cfy-button-light" href="{% url 'habits:signup' %}">Grow together <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="cfy-social-preview">
+            <div class="cfy-leaderboard">
+                <div class="cfy-card-top">
+                    <div>
+                        <span class="cfy-overline">A LITTLE FRIENDLY COMPETITION</span>
+                        <h3>Your circle, showing up.</h3>
+                    </div>
+                    <span class="cfy-example">Example</span>
+                </div>
+                <div class="cfy-leaderboard-label">
+                    <span>Friends leaderboard</span>
+                    <span>Last 30 days</span>
+                </div>
+                <ol class="cfy-ranking">
+                    <li>
+                        <span class="cfy-rank">01</span>
+                        <span class="cfy-avatar cfy-avatar-maya">M</span>
+                        <span class="cfy-person">Maya<small>Steady effort, adding up</small></span>
+                        <strong>86.2<small>score</small></strong>
+                    </li>
+                    <li class="cfy-rank-you">
+                        <span class="cfy-rank">02</span>
+                        <span class="cfy-avatar cfy-avatar-you">Y</span>
+                        <span class="cfy-person">You<small>Making your own progress</small></span>
+                        <strong>76.5<small>score</small></strong>
+                    </li>
+                    <li>
+                        <span class="cfy-rank">03</span>
+                        <span class="cfy-avatar cfy-avatar-alex">A</span>
+                        <span class="cfy-person">Alex<small>One session at a time</small></span>
+                        <strong>71.4<small>score</small></strong>
+                    </li>
+                </ol>
+                <p class="cfy-ranking-note">Rankings also account for the amount of habit history behind each score.</p>
+            </div>
+            <div class="cfy-shared-progress">
+                <div class="cfy-shared-heading">
+                    <span class="cfy-avatar cfy-avatar-maya">M</span>
+                    <div>
+                        <strong>Maya’s yesterday</strong>
+                        <small>Mutual progress sharing enabled</small>
+                    </div>
+                    <span class="cfy-shared-check" aria-hidden="true">✓</span>
+                </div>
+                <div class="cfy-shared-habit">
+                    <span>Reading</span>
+                    <strong>20 / 20 pages</strong>
+                </div>
+                <div class="cfy-shared-track">
+                    <span></span>
+                </div>
+                <p>See the effort behind the numbers.</p>
+            </div>
+            <p class="cfy-social-note">Illustrative profiles and progress.</p>
         </div>
     </section>
 
-    <section class="home-section" aria-labelledby="consistency-score-title">
-        <div class="home-section-header">
-            <p class="eyebrow">Consistency score</p>
-            <h2 id="consistency-score-title">A smarter score than raw streaks.</h2>
-            <p>
-                Consistify blends four signals &mdash; completion quality (35%),
-                full completion (20%), consistency rhythm (30%), and recent momentum
-                (15%) &mdash; so the score reflects quality and reliability, not
-                just volume.
-            </p>
-        </div>
-            <div class="feature-grid consistency-grid">
-            <article class="feature-card">
-                <span class="feature-icon">A</span>
-                <h3>Completion quality (35%)</h3>
-                <p>
-                    How much of the scheduled work you actually completed across every
-                    session, including partial progress &mdash; the longest-window
-                    signal in the score.
-                </p>
-            </article>
-            <article class="feature-card">
-                <span class="feature-icon">B</span>
-                <h3>Full completion (20%)</h3>
-                <p>
-                    How often you closed out scheduled sessions at 100%. A finishing-quality
-                    signal that prevents partial-credit gaming without duplicating
-                    completion quality.
-                </p>
-            </article>
-            <article class="feature-card">
-                <span class="feature-icon">C</span>
-                <h3>Consistency rhythm (30%)</h3>
-                <p>
-                    Reliability and continuity across your recent scheduled sessions.
-                    Participation gradually counts more around the 50% mark, reaching
-                    full Rhythm participation at 55% &mdash; so a small difference in
-                    progress only makes a small difference here. Measures reliability,
-                    not improvement or decline.
-                </p>
-            </article>
-            <article class="feature-card">
-                <span class="feature-icon">D</span>
-                <h3>Recent momentum (15%)</h3>
-                <p>
-                    Trajectory over the last six scheduled sessions. Improves the score
-                    when you're trending up, lowers it when you're slipping, and sits at
-                    neutral for flat users &mdash; without measuring reliability itself.
-                </p>
-            </article>
-        </div>
-    </section>
-
-    <section class="home-section workflow-section" id="workflow" aria-labelledby="workflow-title">
-        <div class="home-section-header">
-            <p class="eyebrow">Workflow</p>
-            <h2 id="workflow-title">From intention to insight in four simple steps.</h2>
-        </div>
-        <div class="workflow-grid">
-            <article class="workflow-step">
-                <span>1</span>
-                <h3>Create</h3>
-                <p>Name a habit, choose its type, and set the days it belongs on your schedule.</p>
-            </article>
-            <article class="workflow-step">
-                <span>2</span>
-                <h3>Check in</h3>
-                <p>Log a yes or no, a percentage, or a measurable value from the Today view.</p>
-            </article>
-            <article class="workflow-step">
-                <span>3</span>
-                <h3>Review</h3>
-                <p>Use the dashboard to compare completion, streaks, and a Consistency Score that weighs quality, stability, and momentum.</p>
-            </article>
-            <article class="workflow-step">
-                <span>4</span>
-                <h3>Adjust</h3>
-                <p>Refine your cadence with reports and keep the routine realistic.</p>
-            </article>
-        </div>
-    </section>
-
-    <section class="home-cta" aria-labelledby="home-cta-title">
-        <div>
-            <p class="eyebrow">Ready when you are</p>
-            <h2 id="home-cta-title">Start with one habit and let the data stay honest.</h2>
-        </div>
-        <div class="hero-actions">
-            <a class="btn primary" href="{% url 'habits:signup' %}">Create account</a>
-            <a class="btn ghost" href="{% url 'habits:login' %}">I already have one</a>
-        </div>
+    <section class="cfy-closing" aria-labelledby="closing-title">
+        <span class="cfy-closing-mark" aria-hidden="true">✳</span>
+        <p class="cfy-eyebrow">BUILD HABITS. UNDERSTAND PROGRESS.</p>
+        <h2 id="closing-title">Make your next check-in<br>mean a little <em>more.</em></h2>
+        <p>Your effort deserves more than a tick in a box.<br>Give it perspective, direction, and a little accountability.</p>
+        <a class="cfy-button" href="{% url 'habits:signup' %}">Start with your first habit <span aria-hidden="true">↗</span></a>
+        <span class="cfy-closing-login">Already finding your rhythm? <a href="{% url 'habits:login' %}">Log in</a></span>
     </section>
 </div>
 {% endblock %}

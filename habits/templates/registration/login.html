@@ -1,31 +1,36 @@
-{% extends "habits/base.html" %}
+{% extends "habits/public_base.html" %}
 
-{% block body_class %}auth-page{% endblock %}
+{% block title %}Log in — Consistify{% endblock %}
+{% block body_class %}landing-page cfy-auth-page{% endblock %}
 
 {% block content %}
-<section class="card narrow">
-    <div class="card-header">
-        <h1>Welcome back</h1>
+<section class="cfy-auth-section" aria-labelledby="login-title">
+    <div class="cfy-auth-heading">
+        <p class="cfy-eyebrow">YOUR PROGRESS, IN PERSPECTIVE</p>
+        <h1 id="login-title">Welcome <em>back.</em></h1>
+        <p>Log in to see how far you’ve come<br>and keep your momentum going.</p>
     </div>
-    <form method="post" class="form-grid">
-        {% csrf_token %}
-        {% if form.non_field_errors %}
-            <div class="form-error">{{ form.non_field_errors }}</div>
-        {% endif %}
-        <div class="field">
-            <label for="{{ form.username.id_for_label }}">Username</label>
-            {{ form.username }}
-            {{ form.username.errors }}
-        </div>
-        <div class="field">
-            <label for="{{ form.password.id_for_label }}">Password</label>
-            {{ form.password }}
-            {{ form.password.errors }}
-        </div>
-        <div class="form-actions">
-            <button class="btn primary" type="submit">Log in</button>
-            <a class="btn ghost" href="{% url 'habits:signup' %}">Create account</a>
-        </div>
-    </form>
+    <div class="cfy-auth-card">
+        <form method="post" class="cfy-auth-form">
+            {% csrf_token %}
+            {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+            {% if form.non_field_errors %}
+                <div class="cfy-auth-error" role="alert">{{ form.non_field_errors }}</div>
+            {% endif %}
+            <div class="cfy-auth-field">
+                <label for="{{ form.username.id_for_label }}">Username</label>
+                {{ form.username }}
+                {{ form.username.errors }}
+            </div>
+            <div class="cfy-auth-field">
+                <label for="{{ form.password.id_for_label }}">Password</label>
+                {{ form.password }}
+                {{ form.password.errors }}
+            </div>
+            <button class="cfy-button cfy-auth-submit" type="submit">Log in <span aria-hidden="true">↗</span></button>
+        </form>
+        <p class="cfy-auth-switch">New to Consistify? <a href="{% url 'habits:signup' %}">Create your account</a></p>
+    </div>
+    <a class="cfy-auth-back" href="{% url 'habits:index' %}"><span aria-hidden="true">←</span> Back to home</a>
 </section>
 {% endblock %}

@@ -1,0 +1,45 @@
+{% extends "habits/base.html" %}
+{% load static %}
+
+{% block body_class %}landing-page{% endblock %}
+{% block header_brand %}
+<a class="cfy-wordmark" href="{% url 'habits:index' %}">Consistify</a>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'habits/css/home.css' %}">
+{% block public_head %}{% endblock %}
+{% endblock %}
+
+{% block guest_navigation %}
+<nav class="cfy-nav" aria-label="Main navigation">
+    <a href="{% url 'habits:index' %}#analytics">Analytics</a>
+    <a href="{% url 'habits:index' %}#compare">Compare</a>
+    <a href="{% url 'habits:index' %}#score">The score</a>
+    <a href="{% url 'habits:index' %}#friends">With friends</a>
+</nav>
+{% endblock %}
+
+{% block guest_mobile_navigation %}
+<nav class="nav-mobile-links" aria-label="Main navigation">
+    <a class="nav-link" href="{% url 'habits:index' %}#analytics">Analytics</a>
+    <a class="nav-link" href="{% url 'habits:index' %}#compare">Compare habits</a>
+    <a class="nav-link" href="{% url 'habits:index' %}#score">The Consistify Score</a>
+    <a class="nav-link" href="{% url 'habits:index' %}#friends">With friends</a>
+</nav>
+{% endblock %}
+
+{% block footer %}
+<footer class="cfy-footer">
+    <div class="container">
+        <a class="cfy-wordmark" href="{% url 'habits:index' %}">Consistify</a>
+        <nav aria-label="Footer">
+            <a href="{% url 'habits:index' %}#analytics">Analytics</a>
+            <a href="{% url 'habits:index' %}#score">The score</a>
+            <a href="{% url 'habits:index' %}#friends">With friends</a>
+            <a href="{% url 'habits:login' %}">Log in <span aria-hidden="true">↗</span></a>
+        </nav>
+        <span>&copy; {% now "Y" %} Consistify. All rights reserved.</span>
+    </div>
+</footer>
+{% endblock %}

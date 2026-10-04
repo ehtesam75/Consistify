@@ -47,12 +47,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'habits/css/styles.css' %}">
+    {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}{% if daily_recap %} recap-open{% endif %}">
     <div class="ambient-bg"></div>
     <header class="site-header">
         <div class="container nav">
-            <a class="brand" href="{% if request.user.is_authenticated %}{% url 'habits:today' %}{% else %}{% url 'habits:index' %}{% endif %}">Consistify</a>
+            {% block header_brand %}<a class="brand" href="{% if request.user.is_authenticated %}{% url 'habits:today' %}{% else %}{% url 'habits:index' %}{% endif %}">Consistify</a>{% endblock %}
             {% if request.user.is_authenticated %}
                 <nav class="nav-primary">
                     <a class="nav-link {% if request.resolver_match.url_name == 'today' or request.resolver_match.url_name == 'habit_detail' or request.resolver_match.url_name == 'habit_edit' or request.resolver_match.url_name == 'habit_create' %}active{% endif %}" href="{% url 'habits:today' %}">Today</a>
@@ -152,6 +153,7 @@
                     </button>
                 </div>
             {% else %}
+                {% block guest_navigation %}{% endblock %}
                 <div class="nav-utility nav-utility-guest">
                     <a href="{% url 'habits:login' %}">Log in</a>
                     <a class="btn small" href="{% url 'habits:signup' %}">Sign up</a>
@@ -204,9 +206,11 @@
                     </form>
                 </div>
             {% else %}
+                {% block guest_mobile_navigation %}
                 <nav class="nav-mobile-links">
                     <a class="nav-link" href="{% url 'habits:index' %}">Home</a>
                 </nav>
+                {% endblock %}
                 <div class="nav-mobile-actions">
                     <a class="btn ghost small" href="{% url 'habits:login' %}">Log in</a>
                     <a class="btn primary small" href="{% url 'habits:signup' %}">Sign up</a>
@@ -289,6 +293,7 @@
         </div>
     {% endif %}
 
+    {% block footer %}
     {% if not request.user.is_authenticated %}
         <footer class="site-footer">
             <div class="container footer-inner">
@@ -311,6 +316,7 @@
             </div>
         </footer>
     {% endif %}
+    {% endblock %}
 
     <script src="{% static 'habits/js/charts.js' %}"></script>
     <script src="{% static 'habits/js/ui.js' %}"></script>

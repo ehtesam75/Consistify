@@ -494,7 +494,7 @@ class PwaAssetDeliveryTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("no-cache", response["Cache-Control"])
-        self.assertIn('const CACHE_NAME = "consistify-static-v6";', response.content.decode())
+        self.assertIn('const CACHE_NAME = "consistify-static-v7";', response.content.decode())
         self.assertIn("networkFirstStatic(request)", response.content.decode())
 
     def test_manifest_has_stable_identity_and_requires_revalidation(self):

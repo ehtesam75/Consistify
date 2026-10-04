@@ -1,11 +1,12 @@
 {% load static %}
-const CACHE_NAME = "consistify-static-v6";
+const CACHE_NAME = "consistify-static-v7";
 const OFFLINE_URL = "{% url 'habits:index' %}";
 const VERSIONED_STATIC_ASSET = /\.[0-9a-f]{12}\./;
 
 const PRECACHE_URLS = [
   OFFLINE_URL,
   "{% static 'habits/css/styles.css' %}",
+  "{% static 'habits/css/home.css' %}",
   "{% static 'habits/js/ui.js' %}",
   "{% static 'habits/js/charts.js' %}",
   "{% static 'habits/js/pwa-register.js' %}",
