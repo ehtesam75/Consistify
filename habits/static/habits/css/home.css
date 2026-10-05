@@ -268,7 +268,7 @@
     .landing-page .nav-utility-guest .btn { display: inline-flex; padding: 7px 15px; }.landing-page .nav-utility-guest { gap: 12px; }
     .cfy-hero { padding: 60px 0 76px; }.cfy-hero h1 { font-size: clamp(58px, 8.5vw, 72px); }
     .cfy-hero-description { max-width: 500px; }
-    .cfy-principles { gap: 15px; font-size: 12px; }.cfy-principles span { gap: 7px; }
+    .cfy-principles { display: none; }
     .cfy-section { padding: 65px 0; }.cfy-section-heading { gap: 30px; margin-bottom: 32px; }.cfy-section-heading > p { font-size: 14px; }
     .cfy-analytics-grid { gap: 28px; }.cfy-insight-card { padding: 20px; }.cfy-insight-card h3 { font-size: 20px; }.cfy-week-chart { gap: 10px; }.cfy-chart-footnote { font-size: 10px; }
     .cfy-insight-list { gap: 20px; }.cfy-insight-list article { gap: 10px; }.cfy-insight-list h3 { font-size: 17px; }.cfy-insight-list p { font-size: 12px; }
@@ -285,7 +285,6 @@
     .landing-page .nav-utility-guest { gap: 9px; }.landing-page .nav-utility-guest .btn { font-size: 12px; padding: 7px 11px; }.landing-page .theme-toggle { width: 30px; height: 30px; }
     .cfy-hero { padding: 48px 0 60px; }.cfy-hero h1 { font-size: clamp(44px, 10.5vw, 58px); margin-bottom: 24px; }.cfy-hero .cfy-eyebrow { font-size: 10px; letter-spacing: .02em; margin-bottom: 22px; }.cfy-hero .cfy-intro { font-size: 17px; }.cfy-hero-description { font-size: 15px; }
     .cfy-actions { gap: 20px; margin-top: 27px; }.cfy-button { font-size: 14px; padding: 13px 17px; gap: 20px; }.cfy-text-link { font-size: 12px; gap: 10px; }.cfy-hero-note { font-size: 11px; }.cfy-overline { font-size: 8px; }.cfy-example { font-size: 9px; padding: 3px 5px; }
-    .cfy-principles { flex-direction: column; align-items: flex-start; gap: 13px; padding: 21px 0; font-size: 13px; }.cfy-principles span { gap: 13px; }
     .cfy-section { padding: 52px 0; }.cfy-section-heading { grid-template-columns: 1fr; gap: 20px; margin-bottom: 27px; }.cfy-home h2 { font-size: 36px; }.cfy-eyebrow { font-size: 10px; margin-bottom: 15px; }
     .cfy-analytics-grid { grid-template-columns: 1fr; gap: 30px; }.cfy-insight-card { padding: 22px; }.cfy-week-chart { height: 190px; gap: 15px; }.cfy-insight-list { gap: 23px; }.cfy-insight-list article { gap: 14px; }.cfy-insight-list h3 { font-size: 18px; }.cfy-insight-list p { font-size: 14px; }
     .cfy-timeframes { grid-template-columns: repeat(2, 1fr); gap: 25px 20px; margin-top: 30px; }.cfy-timeframes article:nth-child(3) { padding-left: 0; border: 0; }.cfy-timeframes h3 { font-size: 20px; }.cfy-data-note { font-size: 10px; }
